@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ShibWallet</string>
+    <string name="title_activity_main">ShibWallet</string>
+    <string name="package_name">com.shibwallet.app</string>
+    <string name="custom_url_scheme">com.shibwallet.app</string>
+</resources>
