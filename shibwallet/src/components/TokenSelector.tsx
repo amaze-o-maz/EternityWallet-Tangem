@@ -35,38 +35,50 @@ const TokenSelectorRow: React.FC<{
   token: TokenInfo;
   balance: bigint;
   onSelect: (token: TokenInfo) => void;
-}> = ({ token, balance, onSelect }) => {
-  const [imgError, setImgError] = useState(false);
+  index: number;
+}> = ({ token, balance, onSelect, index }) => {
+  const [imgLoaded, setImgLoaded] = useState(false);
   const displayBalance = formatBalance(balance, token.decimals);
 
   return (
     <button
       onClick={() => onSelect(token)}
-      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-shib-surface-alt rounded-lg
-                 transition-colors text-left active:scale-95"
+      className="w-full flex items-center gap-3 px-4 py-3.5 transition-all duration-200 text-left
+                 hover:bg-white/[0.04] border-l-2 border-l-transparent hover:border-l-[#FF6900]
+                 border-b border-white/[0.05] last:border-b-0 active:scale-[0.98]"
+      style={{
+        animation: `slide-up-fade 0.3s ease-out ${index * 40}ms both`,
+      }}
     >
-      {imgError ? (
+      {/* Token logo */}
+      <div className="relative w-10 h-10 shrink-0">
         <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+          className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white"
           style={{ backgroundColor: stringToColor(token.symbol) }}
         >
           {token.symbol.slice(0, 2)}
         </div>
-      ) : (
+        {imgLoaded && (
+          <img
+            src={token.logoUrl}
+            alt={token.symbol}
+            className="w-10 h-10 rounded-full absolute inset-0"
+          />
+        )}
         <img
           src={token.logoUrl}
-          alt={token.symbol}
-          className="w-8 h-8 rounded-full shrink-0 bg-shib-surface-alt"
-          onError={() => setImgError(true)}
+          alt=""
+          className="hidden"
+          onLoad={() => setImgLoaded(true)}
         />
-      )}
+      </div>
 
       <div className="flex-1 min-w-0">
         <p className="text-white text-sm font-medium">{token.symbol}</p>
-        <p className="text-gray-500 text-xs truncate">{token.name}</p>
+        <p className="text-gray-500 text-xs truncate mt-0.5">{token.name}</p>
       </div>
 
-      <span className="text-gray-400 text-sm font-mono shrink-0">
+      <span className="text-gray-400 text-sm font-mono shrink-0 tabular-nums">
         {displayBalance}
       </span>
     </button>
@@ -103,50 +115,52 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-shib-surface border border-shib-border rounded-xl w-full max-w-sm mx-4 max-h-[80vh] flex flex-col animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md">
+      <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl w-full max-w-sm mx-4 max-h-[80vh] flex flex-col animate-slide-up-fade shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-shib-border shrink-0">
-          <h2 className="text-white font-semibold">Select Token</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
+          <h2 className="text-white font-semibold text-base">Select Token</h2>
           <button
             onClick={() => {
               setSearch('');
               onClose();
             }}
-            className="text-gray-400 hover:text-white transition-colors active:scale-95"
+            className="text-gray-400 hover:text-white transition-colors active:scale-95 p-1 rounded-lg hover:bg-white/[0.06]"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Search */}
-        <div className="px-4 py-3 border-b border-shib-border shrink-0">
+        <div className="px-5 py-4 border-b border-white/[0.06] shrink-0">
           <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, symbol, or address"
-              className="w-full pl-9 pr-4 py-2.5 rounded-lg bg-shib-bg border border-shib-border
-                         text-white placeholder-gray-500 text-sm focus:outline-none focus:border-shib-orange
-                         transition-colors"
+              className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]
+                         text-white placeholder-gray-500 text-sm focus:outline-none
+                         focus:border-[#FF6900]/50 focus:shadow-[0_0_15px_rgba(255,105,0,0.1)]
+                         transition-all duration-200"
               autoFocus
             />
           </div>
         </div>
 
         {/* Token list */}
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
           {filtered.length === 0 ? (
-            <p className="text-center text-gray-500 text-sm py-8">No tokens found.</p>
+            <p className="text-center text-gray-500 text-sm py-10">No tokens found.</p>
           ) : (
-            filtered.map((token) => (
+            filtered.map((token, index) => (
               <TokenSelectorRow
                 key={token.address}
                 token={token}
                 balance={balances[token.address] ?? 0n}
                 onSelect={handleSelect}
+                index={index}
               />
             ))
           )}

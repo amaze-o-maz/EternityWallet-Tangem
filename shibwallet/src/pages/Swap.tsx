@@ -18,6 +18,66 @@ import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens'
 import { ERC20_ABI } from '../lib/abis';
 import { getV1Quote, getTokenAllowance, approveToken, executeSwap } from '../lib/swap';
 
+function stringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 60%, 40%)`;
+}
+
+const TokenButton: React.FC<{
+  token: TokenInfo | null;
+  onClick: () => void;
+  label: string;
+}> = ({ token, onClick, label }) => {
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  // Reset when token changes
+  useEffect(() => {
+    setImgLoaded(false);
+  }, [token?.address]);
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                 hover:border-[#FF6900]/30 hover:shadow-[0_0_12px_rgba(255,105,0,0.08)]
+                 transition-all duration-200 shrink-0"
+    >
+      {token ? (
+        <>
+          <div className="relative w-6 h-6 shrink-0">
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+              style={{ backgroundColor: stringToColor(token.symbol) }}
+            >
+              {token.symbol.slice(0, 2)}
+            </div>
+            {imgLoaded && (
+              <img
+                src={token.logoUrl}
+                alt={token.symbol}
+                className="w-6 h-6 rounded-full absolute inset-0"
+              />
+            )}
+            <img
+              src={token.logoUrl}
+              alt=""
+              className="hidden"
+              onLoad={() => setImgLoaded(true)}
+            />
+          </div>
+          <span className="text-white text-sm font-medium">{token.symbol}</span>
+        </>
+      ) : (
+        <span className="text-gray-500 text-sm">{label}</span>
+      )}
+    </button>
+  );
+};
+
 type SlippageOption = '0.1' | '0.5' | '1.0' | 'custom';
 
 const SLIPPAGE_OPTIONS: { label: string; value: SlippageOption }[] = [
@@ -288,43 +348,72 @@ const Swap: React.FC = () => {
   if (!isUnlocked || !address) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in">
-      <div className="max-w-md mx-auto w-full px-4 py-6">
+    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
+      {/* Subtle background radial gradient */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
+        }}
+      />
+
+      <div className="max-w-md mx-auto w-full px-5 py-8 relative z-10">
         {/* Back button */}
         <button
           onClick={() => navigate('/wallet')}
-          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-6 active:scale-95"
+          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-8 active:scale-95"
         >
           <ArrowLeft size={16} />
           Back
         </button>
 
-        <h1 className="text-2xl font-bold text-white mb-6">Swap</h1>
+        <h1 className="text-2xl font-bold mb-8 bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+          Swap
+        </h1>
 
         {txHash ? (
-          <div className="animate-fade-in text-center py-8">
-            <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+          <div className="animate-slide-up-fade text-center py-8">
+            {/* Animated checkmark with green glow */}
+            <div className="relative inline-block mb-6">
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: 'radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%)',
+                  transform: 'scale(2.5)',
+                  filter: 'blur(20px)',
+                }}
+              />
+              <div className="relative w-20 h-20 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto backdrop-blur-xl">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
             </div>
-            <h2 className="text-lg font-semibold text-white mb-2">Swap Successful</h2>
-            <p className="text-sm text-gray-400 font-mono break-all mb-4">
-              {txHash}
-            </p>
+            <h2 className="text-xl font-semibold text-white mb-3">Swap Successful</h2>
+
+            {/* Glass-card tx hash */}
+            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-4 mb-6">
+              <p className="text-xs text-gray-500 mb-1.5">Transaction Hash</p>
+              <p className="text-sm text-gray-300 font-mono break-all leading-relaxed">
+                {txHash}
+              </p>
+            </div>
+
             <a
               href={getExplorerTxUrl(chainId, txHash)}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm text-shib-orange hover:text-shib-orange-hover transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm text-[#FF6900] hover:text-[#FFB800] transition-colors mb-6"
             >
               View on Explorer
               <ExternalLink size={14} />
             </a>
-            <div className="mt-6">
+            <div>
               <button
                 onClick={() => navigate('/wallet')}
-                className="w-full py-3 rounded-lg bg-shib-orange hover:bg-shib-orange-hover text-white font-semibold transition active:scale-95"
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                           text-white font-semibold transition-all duration-300 active:scale-[0.97]
+                           hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]"
               >
                 Back to Wallet
               </button>
@@ -332,33 +421,20 @@ const Swap: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* From token */}
-            <div className="bg-shib-surface border border-shib-border rounded-xl p-4 mb-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500">From</span>
+            {/* From token card */}
+            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mb-2 shadow-2xl">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-500 font-medium">From</span>
                 <span className="text-xs text-gray-500">
                   Balance: {loadingBalances ? '...' : parseFloat(formattedFromBalance).toFixed(6)}
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                <button
+                <TokenButton
+                  token={fromToken}
                   onClick={() => setSelectorOpen('from')}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-shib-bg border border-shib-border hover:border-shib-orange/50 transition-colors shrink-0"
-                >
-                  {fromToken ? (
-                    <>
-                      <img
-                        src={fromToken.logoUrl}
-                        alt={fromToken.symbol}
-                        className="w-5 h-5 rounded-full bg-shib-surface-alt"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                      <span className="text-white text-sm font-medium">{fromToken.symbol}</span>
-                    </>
-                  ) : (
-                    <span className="text-gray-500 text-sm">Select</span>
-                  )}
-                </button>
+                  label="Select"
+                />
                 <input
                   type="text"
                   value={fromAmount}
@@ -374,7 +450,7 @@ const Swap: React.FC = () => {
                   className="flex-1 bg-transparent text-white text-right text-lg font-medium placeholder-gray-600 focus:outline-none min-w-0"
                 />
               </div>
-              <div className="flex justify-end mt-1">
+              <div className="flex justify-end mt-2">
                 <button
                   onClick={() => {
                     if (fromToken) {
@@ -383,7 +459,9 @@ const Swap: React.FC = () => {
                       setToAmount('');
                     }
                   }}
-                  className="text-xs text-shib-orange hover:text-shib-orange-hover transition-colors"
+                  className="px-2 py-0.5 rounded text-[10px] font-bold
+                             bg-gradient-to-r from-[#FF6900] to-[#FF8C00] text-white
+                             hover:shadow-[0_0_10px_rgba(255,105,0,0.3)] transition-all duration-200 active:scale-95"
                 >
                   MAX
                 </button>
@@ -391,39 +469,29 @@ const Swap: React.FC = () => {
             </div>
 
             {/* Flip button */}
-            <div className="flex justify-center -my-1 relative z-10">
+            <div className="flex justify-center -my-2 relative z-10">
               <button
                 onClick={handleFlipTokens}
-                className="w-10 h-10 rounded-full bg-shib-surface border border-shib-border flex items-center justify-center hover:border-shib-orange/50 transition-colors active:scale-95"
+                className="w-12 h-12 rounded-full bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                           flex items-center justify-center transition-all duration-300 active:scale-95
+                           hover:border-[#FF6900]/40 hover:shadow-[0_0_20px_rgba(255,105,0,0.15)]
+                           hover:bg-white/[0.06]"
               >
-                <ArrowDownUp size={18} className="text-shib-orange" />
+                <ArrowDownUp size={20} className="text-[#FF6900]" />
               </button>
             </div>
 
-            {/* To token */}
-            <div className="bg-shib-surface border border-shib-border rounded-xl p-4 mt-2 mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500">To</span>
+            {/* To token card */}
+            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mt-2 mb-5 shadow-2xl">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-500 font-medium">To</span>
               </div>
               <div className="flex items-center gap-3">
-                <button
+                <TokenButton
+                  token={toToken}
                   onClick={() => setSelectorOpen('to')}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-shib-bg border border-shib-border hover:border-shib-orange/50 transition-colors shrink-0"
-                >
-                  {toToken ? (
-                    <>
-                      <img
-                        src={toToken.logoUrl}
-                        alt={toToken.symbol}
-                        className="w-5 h-5 rounded-full bg-shib-surface-alt"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                      <span className="text-white text-sm font-medium">{toToken.symbol}</span>
-                    </>
-                  ) : (
-                    <span className="text-gray-500 text-sm">Select</span>
-                  )}
-                </button>
+                  label="Select"
+                />
                 <input
                   type="text"
                   value={quoting ? '' : toAmount}
@@ -440,10 +508,11 @@ const Swap: React.FC = () => {
             </div>
 
             {/* Slippage */}
-            <div className="mb-4 relative">
+            <div className="mb-5 relative">
               <button
                 onClick={() => setSlippageDropdownOpen(!slippageDropdownOpen)}
-                className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors"
+                className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors
+                           px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06]"
               >
                 Slippage: {slippageOption === 'custom' ? `${customSlippage || '0.5'}%` : `${slippageOption}%`}
                 <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
@@ -452,7 +521,8 @@ const Swap: React.FC = () => {
               </button>
 
               {slippageDropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 bg-shib-surface border border-shib-border rounded-lg shadow-xl z-30 overflow-hidden animate-fade-in">
+                <div className="absolute top-full left-0 mt-2 bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                                rounded-xl shadow-2xl z-30 overflow-hidden animate-slide-up-fade">
                   {SLIPPAGE_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
@@ -462,17 +532,17 @@ const Swap: React.FC = () => {
                           setSlippageDropdownOpen(false);
                         }
                       }}
-                      className={`w-full px-4 py-2.5 text-sm text-left transition-colors ${
+                      className={`w-full px-4 py-2.5 text-sm text-left transition-all duration-200 ${
                         slippageOption === opt.value
-                          ? 'text-shib-orange bg-shib-surface-alt'
-                          : 'text-white hover:bg-shib-surface-alt'
+                          ? 'text-[#FF6900] bg-white/[0.04]'
+                          : 'text-white hover:bg-white/[0.04]'
                       }`}
                     >
                       {opt.label}
                     </button>
                   ))}
                   {slippageOption === 'custom' && (
-                    <div className="px-4 py-2 border-t border-shib-border">
+                    <div className="px-4 py-2.5 border-t border-white/[0.06]">
                       <input
                         type="text"
                         value={customSlippage}
@@ -483,13 +553,14 @@ const Swap: React.FC = () => {
                           }
                         }}
                         placeholder="0.5"
-                        className="w-20 px-2 py-1.5 rounded bg-shib-bg border border-shib-border text-white text-sm focus:outline-none focus:border-shib-orange transition-colors"
+                        className="w-20 px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06]
+                                   text-white text-sm focus:outline-none focus:border-[#FF6900]/50 transition-all duration-200"
                         autoFocus
                       />
                       <span className="text-gray-400 text-sm ml-1">%</span>
                       <button
                         onClick={() => setSlippageDropdownOpen(false)}
-                        className="ml-2 text-xs text-shib-orange hover:text-shib-orange-hover"
+                        className="ml-2 text-xs text-[#FF6900] hover:text-[#FFB800] transition-colors"
                       >
                         Done
                       </button>
@@ -504,7 +575,11 @@ const Swap: React.FC = () => {
               <button
                 onClick={handleGetQuote}
                 disabled={!fromToken || !toToken || !fromAmount || quoting || parseFloat(fromAmount) <= 0}
-                className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover text-white font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                           text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                           hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none
+                           flex items-center justify-center gap-2"
               >
                 {quoting && <LoadingSpinner size={18} />}
                 {quoting ? 'Getting Quote...' : 'Get Quote'}
@@ -513,12 +588,12 @@ const Swap: React.FC = () => {
 
             {/* Quote details */}
             {quoteResult && toToken && fromToken && (
-              <div className="mb-4">
-                <div className="bg-shib-surface border border-shib-border rounded-xl p-4 space-y-2.5 mb-4">
+              <div className="mb-4 animate-slide-up-fade">
+                <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 space-y-3 mb-5 shadow-2xl">
                   {exchangeRate !== null && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Exchange Rate</span>
-                      <span className="text-white">
+                      <span className="text-white font-medium">
                         1 {fromToken.symbol} = {exchangeRate.toFixed(6)} {toToken.symbol}
                       </span>
                     </div>
@@ -526,14 +601,14 @@ const Swap: React.FC = () => {
                   {minimumReceived !== null && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Minimum Received</span>
-                      <span className="text-white">
+                      <span className="text-white font-medium">
                         {parseFloat(formatUnits(minimumReceived, toToken.decimals)).toFixed(6)} {toToken.symbol}
                       </span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Price Impact</span>
-                    <span className={quoteResult.priceImpact > 5 ? 'text-shib-red' : quoteResult.priceImpact > 2 ? 'text-yellow-400' : 'text-white'}>
+                    <span className={quoteResult.priceImpact > 5 ? 'text-red-400' : quoteResult.priceImpact > 2 ? 'text-yellow-400' : 'text-white'}>
                       {quoteResult.priceImpact}%
                     </span>
                   </div>
@@ -548,7 +623,11 @@ const Swap: React.FC = () => {
                   <button
                     onClick={handleApprove}
                     disabled={approving}
-                    className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover text-white font-semibold transition active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                               text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                               hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                               disabled:opacity-70 disabled:cursor-not-allowed
+                               flex items-center justify-center gap-2"
                   >
                     {approving && <LoadingSpinner size={18} />}
                     {approving ? 'Approving...' : `Approve ${fromToken.symbol}`}
@@ -557,7 +636,11 @@ const Swap: React.FC = () => {
                   <button
                     onClick={handleSwap}
                     disabled={swapping}
-                    className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover text-white font-semibold transition active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                               text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                               hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                               disabled:opacity-70 disabled:cursor-not-allowed
+                               flex items-center justify-center gap-2"
                   >
                     {swapping && <LoadingSpinner size={18} />}
                     {swapping ? 'Swapping...' : 'Swap'}

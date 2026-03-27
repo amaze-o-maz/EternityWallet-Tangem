@@ -29,51 +29,6 @@ function tokenBalanceToNumber(raw: bigint, decimals: number): number {
   return parseFloat(str) || 0;
 }
 
-const TokenRow: React.FC<{
-  token: TokenInfo;
-  balance: bigint;
-  price: number;
-}> = ({ token, balance, price }) => {
-  const [imgError, setImgError] = useState(false);
-
-  const displayBalance = formatBalance(balance, token.decimals);
-  const numericBalance = tokenBalanceToNumber(balance, token.decimals);
-  const usdValue = numericBalance * price;
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-shib-surface-alt rounded-lg transition-colors">
-      {/* Token logo */}
-      {imgError ? (
-        <div
-          className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-          style={{ backgroundColor: stringToColor(token.symbol) }}
-        >
-          {token.symbol.slice(0, 2)}
-        </div>
-      ) : (
-        <img
-          src={token.logoUrl}
-          alt={token.symbol}
-          className="w-9 h-9 rounded-full shrink-0 bg-shib-surface-alt"
-          onError={() => setImgError(true)}
-        />
-      )}
-
-      {/* Name + symbol */}
-      <div className="flex-1 min-w-0">
-        <p className="text-white text-sm font-medium truncate">{token.name}</p>
-        <p className="text-gray-500 text-xs">{token.symbol}</p>
-      </div>
-
-      {/* Balance + USD value */}
-      <div className="text-right shrink-0">
-        <p className="text-white text-sm font-medium">{displayBalance}</p>
-        <p className="text-gray-500 text-xs">{formatUsd(usdValue)}</p>
-      </div>
-    </div>
-  );
-};
-
 function stringToColor(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -83,13 +38,74 @@ function stringToColor(str: string): string {
   return `hsl(${hue}, 60%, 40%)`;
 }
 
+const TokenRow: React.FC<{
+  token: TokenInfo;
+  balance: bigint;
+  price: number;
+  index: number;
+}> = ({ token, balance, price, index }) => {
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  const displayBalance = formatBalance(balance, token.decimals);
+  const numericBalance = tokenBalanceToNumber(balance, token.decimals);
+  const usdValue = numericBalance * price;
+  const isZero = balance === 0n;
+
+  return (
+    <div
+      className={`flex items-center gap-3 px-4 py-3.5 transition-all duration-200 group
+                   hover:bg-white/[0.03] border-l-2 border-l-transparent hover:border-l-[#FF6900]
+                   ${isZero ? 'opacity-50' : ''}
+                   border-b border-white/[0.05] last:border-b-0`}
+      style={{
+        animation: `slide-up-fade 0.4s ease-out ${index * 50}ms both`,
+      }}
+    >
+      {/* Token logo */}
+      <div className="relative w-10 h-10 shrink-0">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+          style={{ backgroundColor: stringToColor(token.symbol) }}
+        >
+          {token.symbol.slice(0, 2)}
+        </div>
+        {imgLoaded && (
+          <img
+            src={token.logoUrl}
+            alt={token.symbol}
+            className="w-10 h-10 rounded-full shrink-0 absolute inset-0"
+          />
+        )}
+        <img
+          src={token.logoUrl}
+          alt=""
+          className="hidden"
+          onLoad={() => setImgLoaded(true)}
+        />
+      </div>
+
+      {/* Name + symbol */}
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-sm font-medium truncate group-hover:text-white/90 transition-colors">{token.name}</p>
+        <p className="text-gray-500 text-xs mt-0.5">{token.symbol}</p>
+      </div>
+
+      {/* Balance + USD value */}
+      <div className="text-right shrink-0">
+        <p className="text-white text-sm font-medium tabular-nums">{displayBalance}</p>
+        <p className="text-gray-500 text-xs mt-0.5">{formatUsd(usdValue)}</p>
+      </div>
+    </div>
+  );
+};
+
 const TokenList: React.FC<TokenListProps> = ({ balances, prices }) => {
   const chainId = useNetworkStore((s) => s.chainId);
   const tokens = getTokensForChain(chainId);
 
   return (
-    <div className="space-y-1">
-      {tokens.map((token) => {
+    <div>
+      {tokens.map((token, index) => {
         const balance = balances[token.address] ?? 0n;
         const price = prices[token.symbol] ?? 0;
 
@@ -99,12 +115,13 @@ const TokenList: React.FC<TokenListProps> = ({ balances, prices }) => {
             token={token}
             balance={balance}
             price={price}
+            index={index}
           />
         );
       })}
 
       {tokens.length === 0 && (
-        <p className="text-center text-gray-500 text-sm py-8">
+        <p className="text-center text-gray-500 text-sm py-10">
           No tokens found for this network.
         </p>
       )}

@@ -2,15 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================
+   DESIGN TOKENS & CSS CUSTOM PROPERTIES
+   ========================================== */
+
 :root {
   --shib-bg: #0D0D0D;
   --shib-surface: #1A1A1A;
   --shib-surface-alt: #222222;
   --shib-orange: #FF6900;
   --shib-orange-hover: #FF8C00;
+  --shib-amber: #FFB800;
   --shib-red: #C41B0E;
   --shib-border: #2E2E2E;
+  --shib-gradient-start: #FF6900;
+  --shib-gradient-end: #FFB800;
+  --shib-glow: rgba(255, 105, 0, 0.15);
+  --shib-glow-strong: rgba(255, 105, 0, 0.35);
+  --shib-surface-glass: rgba(255, 255, 255, 0.04);
+  --shib-border-glass: rgba(255, 255, 255, 0.08);
 }
+
+/* ==========================================
+   GLOBAL RESET & BASE
+   ========================================== */
 
 * {
   margin: 0;
@@ -22,12 +37,32 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0.015em;
+  background: var(--shib-bg);
+  color: #e5e5e5;
+  overflow-x: hidden;
+}
+
+/* Subtle radial glow behind the page */
+body::before {
+  content: '';
+  position: fixed;
+  top: -30%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80vw;
+  height: 60vh;
+  background: radial-gradient(ellipse at center, rgba(255, 105, 0, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 #root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 1;
 }
 
 input::-webkit-outer-spin-button,
@@ -40,36 +75,373 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+/* ==========================================
+   GLASSMORPHISM UTILITY CLASSES
+   ========================================== */
+
+@layer utilities {
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-card-sm {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl;
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .glass-pill {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-full;
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent;
+  }
+
+  .glow-ring {
+    @apply ring-2 ring-shib-orange/30;
+    box-shadow: 0 0 20px rgba(255, 105, 0, 0.15);
+  }
+
+  .text-premium {
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
 }
 
-.animate-fade-in {
-  animation: fadeIn 150ms ease-out;
+/* ==========================================
+   SKELETON / SHIMMER LOADING
+   ========================================== */
+
+.skeleton {
+  @apply rounded-lg;
+  background: linear-gradient(
+    90deg,
+    var(--shib-surface-alt) 25%,
+    rgba(255, 255, 255, 0.06) 50%,
+    var(--shib-surface-alt) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ==========================================
+   BUTTON STYLES
+   ========================================== */
+
+.btn-primary {
+  @apply relative px-6 py-3 rounded-xl font-semibold text-white text-sm tracking-wide overflow-hidden;
+  background: linear-gradient(135deg, #FF6900 0%, #FF8C00 50%, #FFB800 100%);
+  background-size: 200% 200%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 4px 15px rgba(255, 105, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  letter-spacing: 0.03em;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 30%, rgba(255, 255, 255, 0.15) 50%, transparent 70%);
+  background-size: 200% 200%;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.btn-primary:hover {
+  box-shadow:
+    0 8px 30px rgba(255, 105, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  background-position: 100% 100%;
+}
+
+.btn-primary:hover::before {
+  opacity: 1;
+}
+
+.btn-primary:active {
+  transform: scale(0.95) translateY(0);
+  box-shadow:
+    0 2px 10px rgba(255, 105, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  background-position: 0% 0%;
+}
+
+.btn-primary:disabled::before {
+  display: none;
+}
+
+.btn-secondary {
+  @apply relative px-6 py-3 rounded-xl font-semibold text-sm tracking-wide;
+  @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  color: var(--shib-orange);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  letter-spacing: 0.03em;
+}
+
+.btn-secondary:hover {
+  @apply bg-white/10 border-white/20;
+  box-shadow:
+    0 4px 20px rgba(255, 105, 0, 0.15),
+    0 0 40px rgba(255, 105, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active {
+  transform: scale(0.95);
+}
+
+/* ==========================================
+   ANIMATIONS
+   ========================================== */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(255, 105, 0, 0.3), 0 0 40px rgba(255, 105, 0, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 105, 0, 0.55), 0 0 60px rgba(255, 105, 0, 0.15);
+  }
+}
+
+@keyframes slide-up-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes spin-slow {
   to { transform: rotate(360deg); }
 }
 
+@keyframes connected-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.8);
+  }
+}
+
+@keyframes red-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(196, 27, 14, 0.3), 0 0 30px rgba(196, 27, 14, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(196, 27, 14, 0.6), 0 0 50px rgba(196, 27, 14, 0.15);
+  }
+}
+
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes modal-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    backdrop-filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    backdrop-filter: blur(20px);
+  }
+}
+
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-slide-up-fade {
+  animation: slide-up-fade 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .animate-spin-slow {
   animation: spin-slow 1.5s linear infinite;
 }
 
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-red-pulse-glow {
+  animation: red-pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-modal-enter {
+  animation: modal-enter 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-backdrop-enter {
+  animation: backdrop-enter 250ms ease-out;
+}
+
+/* ==========================================
+   INPUT FOCUS GLOW
+   ========================================== */
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--shib-orange) !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 105, 0, 0.12),
+    0 0 20px rgba(255, 105, 0, 0.08),
+    0 0 40px rgba(255, 105, 0, 0.03);
+  transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
+}
+
+input,
+textarea {
+  transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
+}
+
+/* ==========================================
+   SCROLLBAR STYLING
+   ========================================== */
+
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--shib-bg);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--shib-border);
-  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(255, 105, 0, 0.2), rgba(255, 105, 0, 0.08));
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  background: linear-gradient(180deg, rgba(255, 105, 0, 0.35), rgba(255, 105, 0, 0.15));
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 105, 0, 0.15) transparent;
+}
+
+/* ==========================================
+   PAGE TRANSITIONS
+   ========================================== */
+
+.page-enter {
+  animation: slide-up-fade 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================
+   MODAL BACKDROP
+   ========================================== */
+
+.modal-backdrop {
+  @apply fixed inset-0 z-50 flex items-center justify-center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: backdrop-enter 250ms ease-out;
+}
+
+/* ==========================================
+   PREMIUM HOVER EFFECTS
+   ========================================== */
+
+.hover-lift {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* ==========================================
+   SELECTION STYLING
+   ========================================== */
+
+::selection {
+  background: rgba(255, 105, 0, 0.3);
+  color: #fff;
+}
+
+::-moz-selection {
+  background: rgba(255, 105, 0, 0.3);
+  color: #fff;
 }
