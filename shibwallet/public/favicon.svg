@@ -1,8 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <circle cx="50" cy="50" r="50" fill="#0D0D0D"/>
-  <path d="M30 25 L40 55 L50 35 L60 55 L70 25" fill="#FF6900" stroke="#FF6900" stroke-width="2" stroke-linejoin="round"/>
-  <ellipse cx="50" cy="62" rx="22" ry="18" fill="#FF6900"/>
-  <ellipse cx="50" cy="68" rx="10" ry="7" fill="#0D0D0D"/>
-  <circle cx="42" cy="55" r="3" fill="#0D0D0D"/>
-  <circle cx="58" cy="55" r="3" fill="#0D0D0D"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <clipPath id="c"><circle cx="100" cy="100" r="88"/></clipPath>
+    <linearGradient id="fg" x1="0%" y1="30%" x2="100%" y2="70%">
+      <stop offset="0%" stop-color="#FFB840"/>
+      <stop offset="50%" stop-color="#F7931A"/>
+      <stop offset="100%" stop-color="#E88A15"/>
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="96" fill="#E2321A"/>
+  <circle cx="100" cy="100" r="88" fill="#F23C1A"/>
+  <path d="M48 55 L68 8 L95 58 Z" fill="#F7931A"/>
+  <path d="M55 50 L70 16 L88 52 Z" fill="#E88A15"/>
+  <path d="M152 55 L132 8 L105 58 Z" fill="#F7931A"/>
+  <path d="M145 50 L130 16 L112 52 Z" fill="#E88A15"/>
+  <g clip-path="url(#c)">
+    <ellipse cx="100" cy="108" rx="68" ry="72" fill="url(#fg)"/>
+    <ellipse cx="40" cy="105" rx="22" ry="40" fill="#E88A15"/>
+    <ellipse cx="160" cy="105" rx="22" ry="40" fill="#E88A15"/>
+    <path d="M44 125 Q50 100 72 108 Q85 114 100 112 Q115 114 128 108 Q150 100 156 125 Q155 170 100 185 Q45 170 44 125 Z" fill="#FFFFFF"/>
+    <path d="M62 88 Q72 78 86 86 Q78 96 62 88 Z" fill="#1A1A1A"/>
+    <path d="M138 88 Q128 78 114 86 Q122 96 138 88 Z" fill="#1A1A1A"/>
+    <path d="M88 122 Q88 115 94 112 Q100 110 106 112 Q112 115 112 122 Q112 130 100 134 Q88 130 88 122 Z" fill="#1A1A1A"/>
+    <path d="M100 134 L100 142" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M82 142 L87 152 L92 142" fill="#1A1A1A"/>
+    <path d="M108 142 L113 152 L118 142" fill="#1A1A1A"/>
+    <path d="M78 142 Q88 148 100 142 Q112 148 122 142" stroke="#1A1A1A" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  </g>
+  <path d="M48 55 L68 8 L95 58 Z" fill="#F7931A"/>
+  <path d="M55 50 L70 16 L88 52 Z" fill="#E88A15"/>
+  <path d="M152 55 L132 8 L105 58 Z" fill="#F7931A"/>
+  <path d="M145 50 L130 16 L112 52 Z" fill="#E88A15"/>
 </svg>

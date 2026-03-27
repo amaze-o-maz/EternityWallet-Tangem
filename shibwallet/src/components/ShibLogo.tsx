@@ -11,128 +11,108 @@ const ShibLogo: React.FC<ShibLogoProps> = ({ size = 40, className = '', animated
     <svg
       width={size}
       height={size}
-      viewBox="0 0 100 100"
+      viewBox="0 0 200 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={`${animated ? 'animate-float' : ''} ${className}`}
     >
       <defs>
-        {/* Orange radial gradient for face depth */}
-        <radialGradient id="shib-face-grad" cx="50%" cy="40%" r="55%">
-          <stop offset="0%" stopColor="#FF8C00" />
-          <stop offset="100%" stopColor="#FF6900" />
-        </radialGradient>
-        {/* Snout gradient */}
-        <radialGradient id="shib-snout-grad" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="#FFE0B2" />
-          <stop offset="100%" stopColor="#FFD699" />
-        </radialGradient>
-        {/* Subtle drop shadow */}
-        <filter id="shib-shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.3" />
-        </filter>
+        <clipPath id="circleClip">
+          <circle cx="100" cy="100" r="88" />
+        </clipPath>
+        <linearGradient id="faceGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stopColor="#FFA630" />
+          <stop offset="100%" stopColor="#F7931A" />
+        </linearGradient>
+        <linearGradient id="faceGrad2" x1="0%" y1="30%" x2="100%" y2="70%">
+          <stop offset="0%" stopColor="#FFB840" />
+          <stop offset="50%" stopColor="#F7931A" />
+          <stop offset="100%" stopColor="#E88A15" />
+        </linearGradient>
       </defs>
 
-      <g filter="url(#shib-shadow)">
-        {/* Left ear - outer */}
+      {/* Red circle background */}
+      <circle cx="100" cy="100" r="96" fill="#E2321A" />
+      <circle cx="100" cy="100" r="88" fill="#F23C1A" />
+
+      {/* Ears — poke above the circle */}
+      {/* Left ear */}
+      <path d="M48 55 L68 8 L95 58 Z" fill="#F7931A" />
+      <path d="M55 52 L70 18 L88 54 Z" fill="#E88A15" />
+      {/* Right ear */}
+      <path d="M152 55 L132 8 L105 58 Z" fill="#F7931A" />
+      <path d="M145 52 L130 18 L112 54 Z" fill="#E88A15" />
+
+      {/* Main face — clipped to circle for lower portion */}
+      <g clipPath="url(#circleClip)">
+        {/* Face base — big rounded shape */}
+        <ellipse cx="100" cy="108" rx="68" ry="72" fill="url(#faceGrad2)" />
+
+        {/* Darker side fur */}
+        <ellipse cx="40" cy="105" rx="22" ry="40" fill="#E88A15" />
+        <ellipse cx="160" cy="105" rx="22" ry="40" fill="#E88A15" />
+
+        {/* White lower face / snout area */}
         <path
-          d="M22 42 L28 10 L44 36 Z"
-          fill="#FF6900"
-        />
-        {/* Left ear - inner */}
-        <path
-          d="M26 38 L30 17 L40 34 Z"
-          fill="#CC5500"
-        />
-
-        {/* Right ear - outer */}
-        <path
-          d="M78 42 L72 10 L56 36 Z"
-          fill="#FF6900"
-        />
-        {/* Right ear - inner */}
-        <path
-          d="M74 38 L70 17 L60 34 Z"
-          fill="#CC5500"
-        />
-
-        {/* Head / face - main shape */}
-        <ellipse cx="50" cy="55" rx="31" ry="33" fill="url(#shib-face-grad)" />
-
-        {/* Cheek fur / inner face */}
-        <ellipse cx="50" cy="57" rx="27" ry="28" fill="#FF8C00" />
-
-        {/* Left cheek tuft */}
-        <ellipse cx="27" cy="56" rx="9" ry="11" fill="#FF6900" />
-        {/* Right cheek tuft */}
-        <ellipse cx="73" cy="56" rx="9" ry="11" fill="#FF6900" />
-
-        {/* Snout / muzzle area - cream colored */}
-        <ellipse cx="50" cy="64" rx="17" ry="15" fill="url(#shib-snout-grad)" />
-
-        {/* Forehead mark - lighter streak */}
-        <path
-          d="M44 35 Q50 27 56 35 Q53 41 50 43 Q47 41 44 35 Z"
-          fill="#FFD699"
-          opacity="0.5"
+          d="M44 125 Q50 100 72 108 Q85 114 100 112 Q115 114 128 108 Q150 100 156 125 Q155 170 100 185 Q45 170 44 125 Z"
+          fill="#FFFFFF"
         />
 
-        {/* Nose - triangular, slightly larger for clarity */}
+        {/* Eyes — angry/squinty style like the real logo */}
+        {/* Left eye */}
         <path
-          d="M44 59 L50 54 L56 59 Q50 63 44 59 Z"
+          d="M62 88 Q72 78 86 86 Q78 96 62 88 Z"
           fill="#1A1A1A"
         />
-        {/* Nose highlight */}
-        <ellipse cx="49" cy="56.5" rx="2" ry="1.2" fill="#333" opacity="0.5" />
+        {/* Right eye */}
+        <path
+          d="M138 88 Q128 78 114 86 Q122 96 138 88 Z"
+          fill="#1A1A1A"
+        />
+
+        {/* Nose — cup/bell shape */}
+        <path
+          d="M88 122 Q88 115 94 112 Q100 110 106 112 Q112 115 112 122 Q112 130 100 134 Q88 130 88 122 Z"
+          fill="#1A1A1A"
+        />
 
         {/* Mouth line */}
         <path
-          d="M50 62 L50 65"
+          d="M100 134 L100 142"
           stroke="#1A1A1A"
-          strokeWidth="1.2"
+          strokeWidth="2.5"
           strokeLinecap="round"
         />
+
+        {/* Fangs — small triangles */}
+        <path d="M82 142 L87 152 L92 142" fill="#1A1A1A" />
+        <path d="M108 142 L113 152 L118 142" fill="#1A1A1A" />
+
+        {/* Mouth curve */}
         <path
-          d="M43 66 Q50 72 57 66"
+          d="M78 142 Q88 148 100 142 Q112 148 122 142"
           stroke="#1A1A1A"
-          strokeWidth="1.2"
+          strokeWidth="2.5"
           strokeLinecap="round"
           fill="none"
         />
 
-        {/* Left eye - outer */}
-        <ellipse cx="38" cy="48" rx="5.5" ry="6" fill="#1A1A1A" />
-        {/* Left eye - highlight */}
-        <ellipse cx="39.5" cy="46" rx="2" ry="2.5" fill="#FFFFFF" />
-        {/* Left eye - small highlight */}
-        <circle cx="36" cy="49.5" r="1" fill="#FFFFFF" opacity="0.5" />
-
-        {/* Right eye - outer */}
-        <ellipse cx="62" cy="48" rx="5.5" ry="6" fill="#1A1A1A" />
-        {/* Right eye - highlight */}
-        <ellipse cx="63.5" cy="46" rx="2" ry="2.5" fill="#FFFFFF" />
-        {/* Right eye - small highlight */}
-        <circle cx="60" cy="49.5" r="1" fill="#FFFFFF" opacity="0.5" />
-
-        {/* Eyebrow marks */}
+        {/* Cheek fur tufts */}
         <path
-          d="M30 42 Q38 36 45 42"
-          stroke="#CC5500"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          fill="none"
+          d="M38 110 Q42 95 55 100 Q48 108 38 110 Z"
+          fill="#F7931A"
         />
         <path
-          d="M55 42 Q62 36 70 42"
-          stroke="#CC5500"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          fill="none"
+          d="M162 110 Q158 95 145 100 Q152 108 162 110 Z"
+          fill="#F7931A"
         />
-
-        {/* Tongue - subtle */}
-        <ellipse cx="50" cy="71" rx="3.5" ry="3" fill="#FF8888" opacity="0.7" />
       </g>
+
+      {/* Ear tips above clip — re-draw to ensure visible */}
+      <path d="M48 55 L68 8 L95 58 Z" fill="#F7931A" />
+      <path d="M55 50 L70 16 L88 52 Z" fill="#E88A15" />
+      <path d="M152 55 L132 8 L105 58 Z" fill="#F7931A" />
+      <path d="M145 50 L130 16 L112 52 Z" fill="#E88A15" />
     </svg>
   );
 };
