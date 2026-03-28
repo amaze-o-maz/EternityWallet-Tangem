@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ExternalLink, Search, TrendingUp, Gamepad2, Image, Rocket, Coins, LayoutGrid } from 'lucide-react';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
@@ -139,15 +140,13 @@ function stringToColor(str: string): string {
   return `hsl(${hue}, 55%, 35%)`;
 }
 
-const DAppCard: React.FC<{ dapp: DApp; index: number }> = ({ dapp, index }) => {
+const DAppCard: React.FC<{ dapp: DApp; index: number; onOpen: (url: string) => void }> = ({ dapp, index, onOpen }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
-    <a
-      href={dapp.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group glass-card-sm p-4 flex items-start gap-3.5 transition-all duration-300
+    <button
+      onClick={() => onOpen(dapp.url)}
+      className="group glass-card-sm p-4 flex items-start gap-3.5 transition-all duration-300 w-full text-left
                  hover:border-[#FF6900]/30 hover:bg-white/[0.06] hover:shadow-[0_4px_30px_rgba(255,105,0,0.1)]
                  hover:-translate-y-0.5 active:scale-[0.98]"
       style={{ animation: `slide-up-fade 0.4s ease-out ${index * 60}ms both` }}
@@ -202,13 +201,18 @@ const DAppCard: React.FC<{ dapp: DApp; index: number }> = ({ dapp, index }) => {
         size={14}
         className="text-gray-600 group-hover:text-[#FF6900] transition-colors shrink-0 mt-1"
       />
-    </a>
+    </button>
   );
 };
 
 const DApps: React.FC = () => {
+  const nav = useNavigate();
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
+
+  const openDApp = (url: string) => {
+    nav(`/wallet/browser?url=${encodeURIComponent(url)}`);
+  };
 
   const filtered = DAPPS.filter((d) => {
     const matchCat = activeCategory === 'all' || d.category === activeCategory;
@@ -280,12 +284,10 @@ const DApps: React.FC = () => {
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 px-1">Featured</h2>
             <div className="grid grid-cols-2 gap-3">
               {DAPPS.filter((d) => d.featured).map((dapp, i) => (
-                <a
+                <button
                   key={dapp.name}
-                  href={dapp.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="glass-card-sm p-3.5 group hover:border-[#FF6900]/30 transition-all duration-300
+                  onClick={() => openDApp(dapp.url)}
+                  className="glass-card-sm p-3.5 group hover:border-[#FF6900]/30 transition-all duration-300 text-left
                              hover:shadow-[0_4px_30px_rgba(255,105,0,0.12)] hover:-translate-y-0.5 active:scale-[0.97]"
                   style={{ animation: `slide-up-fade 0.35s ease-out ${i * 80}ms both` }}
                 >
@@ -305,7 +307,7 @@ const DApps: React.FC = () => {
                   <p className="text-gray-500 text-[11px] mt-0.5 line-clamp-2 leading-relaxed">
                     {dapp.description}
                   </p>
-                </a>
+                </button>
               ))}
             </div>
           </div>
@@ -318,7 +320,7 @@ const DApps: React.FC = () => {
           </h2>
           <div className="space-y-2.5">
             {filtered.map((dapp, i) => (
-              <DAppCard key={dapp.name} dapp={dapp} index={i} />
+              <DAppCard key={dapp.name} dapp={dapp} index={i} onOpen={openDApp} />
             ))}
             {filtered.length === 0 && (
               <div className="text-center py-12">

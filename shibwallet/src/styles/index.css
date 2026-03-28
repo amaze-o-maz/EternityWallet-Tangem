@@ -223,6 +223,12 @@ input[type=number] {
   100% { background-position: 200% 0; }
 }
 
+@keyframes browser-loading {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(150%); }
+  100% { transform: translateX(350%); }
+}
+
 @keyframes pulse-glow {
   0%, 100% {
     box-shadow: 0 0 15px rgba(255, 105, 0, 0.3), 0 0 40px rgba(255, 105, 0, 0.05);
