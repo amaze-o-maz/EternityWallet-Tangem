@@ -7,6 +7,7 @@ import Wallet from './pages/Wallet';
 import Send from './pages/Send';
 import Receive from './pages/Receive';
 import Swap from './pages/Swap';
+import DApps from './pages/DApps';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Onboarding /> },
@@ -17,4 +18,5 @@ export const router = createBrowserRouter([
   { path: '/wallet/send', element: <Send /> },
   { path: '/wallet/receive', element: <Receive /> },
   { path: '/wallet/swap', element: <Swap /> },
+  { path: '/wallet/dapps', element: <DApps /> },
 ]);

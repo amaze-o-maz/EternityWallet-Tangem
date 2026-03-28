@@ -10,6 +10,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { ArrowLeft, ArrowDownUp, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TokenSelector from '../components/TokenSelector';
+import BottomNav from '../components/BottomNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
@@ -357,7 +358,7 @@ const Swap: React.FC = () => {
         }}
       />
 
-      <div className="max-w-md mx-auto w-full px-5 py-8 relative z-10">
+      <div className="max-w-md mx-auto w-full px-5 pt-8 pb-24 relative z-10">
         {/* Back button */}
         <button
           onClick={() => navigate('/wallet')}
@@ -681,6 +682,8 @@ const Swap: React.FC = () => {
         }}
         balances={balances}
       />
+
+      <BottomNav />
     </div>
   );
 };

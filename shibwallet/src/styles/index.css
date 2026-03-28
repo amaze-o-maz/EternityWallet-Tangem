@@ -445,3 +445,15 @@ textarea {
   background: rgba(255, 105, 0, 0.3);
   color: #fff;
 }
+
+/* ==========================================
+   SCROLLBAR HIDE UTILITY
+   ========================================== */
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

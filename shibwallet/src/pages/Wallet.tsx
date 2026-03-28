@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createPublicClient, http, formatUnits } from 'viem';
 import { ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 import Header from '../components/Header';
+import BottomNav from '../components/BottomNav';
 import TokenList from '../components/TokenList';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
@@ -191,7 +192,7 @@ const Wallet: React.FC = () => {
 
       <Header />
 
-      <main className="flex-1 max-w-md mx-auto w-full px-5 py-8 relative z-10">
+      <main className="flex-1 max-w-md mx-auto w-full px-5 pt-8 pb-24 relative z-10">
         {/* Balance section */}
         <div className="text-center mb-8">
           {loading ? (
@@ -290,6 +291,8 @@ const Wallet: React.FC = () => {
           )}
         </div>
       </main>
+
+      <BottomNav />
     </div>
   );
 };
