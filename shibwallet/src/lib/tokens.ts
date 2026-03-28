@@ -7,27 +7,25 @@ export interface TokenInfo {
   logoUrl: string;
 }
 
-// CoinGecko CDN for major tokens
+// CoinGecko CDN for major tokens (using thumb size with verified image IDs)
 const cg = 'https://assets.coingecko.com/coins/images';
-// Trust Wallet assets CDN
-const tw = 'https://raw.githubusercontent.com/AirdaoIO/trustwallet-assets/master/blockchains';
 
 const LOGOS: Record<string, string> = {
-  ETH: `${cg}/279/small/ethereum.png`,
-  SHIB: `${cg}/11939/small/shiba.png`,
-  BONE: `${cg}/15463/small/bone_shibaswap.png`,
-  LEASH: `${cg}/15802/small/doge-killer.png`,
-  TREAT: `${cg}/44690/small/treat-token.png`,
-  WETH: `${cg}/2518/small/weth.png`,
-  USDT: `${cg}/325/small/Tether.png`,
-  USDC: `${cg}/6319/small/usdc.png`,
-  DAI: `${cg}/9956/small/Badge_Dai.png`,
-  WBTC: `${cg}/7598/small/wrapped_bitcoin_wbtc.png`,
-  XFUND: `${cg}/12381/small/xfund.png`,
-  tBONE: `${cg}/15463/small/bone_shibaswap.png`,
-  xSHIB: `${cg}/11939/small/shiba.png`,
-  xLEASH: `${cg}/15802/small/doge-killer.png`,
-  WBONE: `${cg}/15463/small/bone_shibaswap.png`,
+  ETH: `${cg}/279/thumb/ethereum.png?1696501628`,
+  SHIB: `${cg}/11939/thumb/shiba.png`,
+  BONE: `${cg}/16916/thumb/bone_icon.png?1696516487`,
+  LEASH: `${cg}/15802/thumb/Leash.png?1696515425`,
+  TREAT: `${cg}/53501/thumb/Treat_blk_200x200.png?1736524245`,
+  WETH: `${cg}/2518/thumb/weth.png?1696503332`,
+  USDT: `${cg}/325/thumb/Tether.png?1696501661`,
+  USDC: `${cg}/6319/thumb/usdc.png?1696506694`,
+  DAI: `${cg}/9956/thumb/Badge_Dai.png?1696509996`,
+  WBTC: `${cg}/7598/thumb/wrapped_bitcoin_wbtc.png?1696507857`,
+  XFUND: `${cg}/13770/thumb/xfund.png?1696513512`,
+  tBONE: `${cg}/16916/thumb/bone_icon.png?1696516487`,
+  xSHIB: `${cg}/11939/thumb/shiba.png`,
+  xLEASH: `${cg}/15802/thumb/Leash.png?1696515425`,
+  WBONE: `${cg}/16916/thumb/bone_icon.png?1696516487`,
 };
 
 export const ETHEREUM_TOKENS: TokenInfo[] = [

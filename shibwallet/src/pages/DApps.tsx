@@ -81,12 +81,6 @@ const DAPPS: DApp[] = [
     category: 'defi',
   },
   {
-    name: 'PawSwap',
-    description: 'Decentralized trading platform with unique tokenomics and reward mechanisms.',
-    url: 'https://pawswap.io',
-    category: 'dex',
-  },
-  {
     name: 'DogSwap',
     description: 'Yield farming and AMM DEX with community governance on Shibarium.',
     url: 'https://dogswap.xyz',
