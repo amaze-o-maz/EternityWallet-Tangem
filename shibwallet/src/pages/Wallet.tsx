@@ -109,31 +109,41 @@ const Wallet: React.FC = () => {
     const newBalances: Record<string, bigint> = {};
 
     try {
-      const balancePromises = tokens.map(async (token) => {
-        try {
-          if (isNativeToken(token)) {
-            const bal = await publicClient.getBalance({
-              address: address as `0x${string}`,
-            });
-            newBalances[token.address] = bal;
-          } else {
-            const bal = await publicClient.readContract({
+      const nativeTokens = tokens.filter(isNativeToken);
+      const erc20Tokens = tokens.filter((t) => !isNativeToken(t));
+
+      // Fetch native balance + all ERC20 balances via multicall + prices in parallel
+      const nativePromise = nativeTokens.length > 0
+        ? publicClient.getBalance({ address: address as `0x${string}` })
+        : Promise.resolve(0n);
+
+      const multicallPromise = erc20Tokens.length > 0
+        ? publicClient.multicall({
+            contracts: erc20Tokens.map((token) => ({
               address: token.address,
               abi: ERC20_ABI,
               functionName: 'balanceOf',
               args: [address as `0x${string}`],
-            });
-            newBalances[token.address] = bal as bigint;
-          }
-        } catch {
-          newBalances[token.address] = 0n;
-        }
-      });
+            })),
+          })
+        : Promise.resolve([]);
 
-      const [, fetchedPrices] = await Promise.all([
-        Promise.all(balancePromises),
+      const [nativeBal, multicallResults, fetchedPrices] = await Promise.all([
+        nativePromise,
+        multicallPromise,
         fetchPrices(),
       ]);
+
+      // Set native balances
+      for (const token of nativeTokens) {
+        newBalances[token.address] = nativeBal;
+      }
+
+      // Set ERC20 balances from multicall
+      erc20Tokens.forEach((token, i) => {
+        const result = multicallResults[i];
+        newBalances[token.address] = result.status === 'success' ? BigInt(result.result as unknown as string) : 0n;
+      });
 
       setBalances(newBalances);
       setPrices(fetchedPrices);
