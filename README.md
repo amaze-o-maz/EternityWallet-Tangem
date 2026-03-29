@@ -104,7 +104,7 @@ shibwallet/
 
 **Ethereum:** SHIB, BONE, LEASH, TREAT
 
-**Shibarium:** SHIB, LEASH, TREAT, WBONE, WETH, DAI, USDC, USDT, WELL
+**Shibarium:** SHIB, LEASH, TREAT, WBONE, WETH, DAI, USDC, USDT
 
 ## License
 
