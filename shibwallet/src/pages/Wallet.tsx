@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPublicClient, http, formatUnits } from 'viem';
-import { ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
+import { ArrowUp, ArrowDown, RefreshCw, Plus, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 import TokenList from '../components/TokenList';
@@ -9,7 +10,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { getNetworkByChainId } from '../lib/chains';
-import { getTokensForChain, isNativeToken } from '../lib/tokens';
+import { getTokensForChain, isNativeToken, addCustomToken, TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
 import { fetchPrices } from '../lib/prices';
 
@@ -178,6 +179,77 @@ const Wallet: React.FC = () => {
 
   const network = getNetworkByChainId(chainId);
 
+  // Add token modal state
+  const [showAddToken, setShowAddToken] = useState(false);
+  const [tokenAddr, setTokenAddr] = useState('');
+  const [tokenSymbol, setTokenSymbol] = useState('');
+  const [tokenName, setTokenName] = useState('');
+  const [tokenDecimals, setTokenDecimals] = useState('18');
+  const [tokenLoading, setTokenLoading] = useState(false);
+
+  const handleLookupToken = useCallback(async () => {
+    const addr = tokenAddr.trim();
+    if (!addr.startsWith('0x') || addr.length !== 42) return;
+    if (!network) return;
+
+    setTokenLoading(true);
+    try {
+      const chain = {
+        id: network.chainId,
+        name: network.name,
+        nativeCurrency: { name: network.nativeToken.symbol, symbol: network.nativeToken.symbol, decimals: 18 },
+        rpcUrls: { default: { http: [network.rpcUrl] } },
+      } as const;
+      const client = createPublicClient({ chain, transport: http(network.rpcUrl) });
+
+      const [sym, name, dec] = await Promise.all([
+        client.readContract({ address: addr as `0x${string}`, abi: ERC20_ABI, functionName: 'symbol' }).catch(() => ''),
+        client.readContract({ address: addr as `0x${string}`, abi: ERC20_ABI, functionName: 'name' }).catch(() => ''),
+        client.readContract({ address: addr as `0x${string}`, abi: ERC20_ABI, functionName: 'decimals' }).catch(() => 18),
+      ]);
+      if (sym) setTokenSymbol(sym as string);
+      if (name) setTokenName(name as string);
+      setTokenDecimals(String(dec));
+    } catch {
+      // Ignore - user can enter manually
+    } finally {
+      setTokenLoading(false);
+    }
+  }, [tokenAddr, network]);
+
+  const handleAddToken = () => {
+    const addr = tokenAddr.trim();
+    if (!addr.startsWith('0x') || addr.length !== 42) {
+      toast.error('Invalid contract address');
+      return;
+    }
+    if (!tokenSymbol.trim()) {
+      toast.error('Symbol is required');
+      return;
+    }
+    const dec = parseInt(tokenDecimals, 10);
+    if (isNaN(dec) || dec < 0 || dec > 18) {
+      toast.error('Decimals must be 0-18');
+      return;
+    }
+    addCustomToken(chainId, {
+      symbol: tokenSymbol.trim().toUpperCase(),
+      name: tokenName.trim() || tokenSymbol.trim(),
+      address: addr as `0x${string}`,
+      decimals: dec,
+      logoUrl: '',
+    });
+    toast.success(`${tokenSymbol.trim().toUpperCase()} added`);
+    setShowAddToken(false);
+    setTokenAddr('');
+    setTokenSymbol('');
+    setTokenName('');
+    setTokenDecimals('18');
+    // Refresh balances
+    setLoading(true);
+    fetchData();
+  };
+
   if (!isUnlocked || !address) return null;
 
   return (
@@ -287,12 +359,129 @@ const Wallet: React.FC = () => {
               ))}
             </div>
           ) : (
-            <TokenList balances={balances} prices={prices} />
+            <TokenList balances={balances} prices={prices} onTokenRemoved={() => { setLoading(true); fetchData(); }} />
           )}
+
+          {/* Add Token button */}
+          <button
+            onClick={() => setShowAddToken(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm text-[#FF6900]
+                       border-t border-white/[0.06] hover:bg-white/[0.03] transition-all active:scale-[0.98]"
+          >
+            <Plus size={14} />
+            <span className="font-medium">Add Token</span>
+          </button>
         </div>
       </main>
 
       <BottomNav />
+
+      {/* Add Token Modal */}
+      {showAddToken && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-backdrop-enter">
+          <div className="glass-card w-full max-w-sm mx-4 animate-modal-enter overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <h2 className="text-white font-semibold text-sm">Add Custom Token</h2>
+              <button
+                onClick={() => { setShowAddToken(false); setTokenAddr(''); setTokenSymbol(''); setTokenName(''); setTokenDecimals('18'); }}
+                className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-3.5">
+              <div>
+                <label className="block text-[11px] text-gray-500 mb-1.5 uppercase tracking-wider font-medium">
+                  Contract Address *
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tokenAddr}
+                    onChange={(e) => setTokenAddr(e.target.value)}
+                    placeholder="0x..."
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08]
+                               text-white text-sm placeholder-gray-600 font-mono
+                               focus:border-[#FF6900]/50 transition-all"
+                  />
+                  <button
+                    onClick={handleLookupToken}
+                    disabled={tokenLoading || tokenAddr.trim().length !== 42}
+                    className="px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08]
+                               text-xs text-gray-300 font-medium hover:bg-white/[0.1] transition-all
+                               disabled:opacity-30 disabled:cursor-not-allowed active:scale-95 shrink-0"
+                  >
+                    {tokenLoading ? '...' : 'Lookup'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-1.5 uppercase tracking-wider font-medium">
+                    Symbol *
+                  </label>
+                  <input
+                    type="text"
+                    value={tokenSymbol}
+                    onChange={(e) => setTokenSymbol(e.target.value)}
+                    placeholder="e.g. SHIB"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08]
+                               text-white text-sm placeholder-gray-600
+                               focus:border-[#FF6900]/50 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-gray-500 mb-1.5 uppercase tracking-wider font-medium">
+                    Decimals
+                  </label>
+                  <input
+                    type="text"
+                    value={tokenDecimals}
+                    onChange={(e) => setTokenDecimals(e.target.value.replace(/\D/g, ''))}
+                    placeholder="18"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08]
+                               text-white text-sm placeholder-gray-600
+                               focus:border-[#FF6900]/50 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-gray-500 mb-1.5 uppercase tracking-wider font-medium">
+                  Token Name
+                </label>
+                <input
+                  type="text"
+                  value={tokenName}
+                  onChange={(e) => setTokenName(e.target.value)}
+                  placeholder="e.g. Shiba Inu"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08]
+                             text-white text-sm placeholder-gray-600
+                             focus:border-[#FF6900]/50 transition-all"
+                />
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                <p className="text-[10px] text-gray-500 leading-relaxed">
+                  Paste a contract address and hit Lookup to auto-fill token info from the blockchain.
+                </p>
+              </div>
+
+              <button
+                onClick={handleAddToken}
+                disabled={!tokenAddr.trim() || !tokenSymbol.trim()}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                           text-white text-sm font-semibold transition-all active:scale-[0.97]
+                           hover:shadow-[0_0_20px_rgba(255,105,0,0.3)]
+                           disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Add Token
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

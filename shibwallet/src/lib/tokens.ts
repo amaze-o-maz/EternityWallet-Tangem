@@ -21,7 +21,6 @@ const LOGOS: Record<string, string> = {
   USDC: `${cg}/6319/thumb/usdc.png?1696506694`,
   DAI: `${cg}/9956/thumb/Badge_Dai.png?1696509996`,
   WBTC: `${cg}/7598/thumb/wrapped_bitcoin_wbtc.png?1696507857`,
-  XFUND: `${cg}/13770/thumb/xfund.png?1696513512`,
   tBONE: `${cg}/16916/thumb/bone_icon.png?1696516487`,
   xSHIB: `${cg}/11939/thumb/shiba.png`,
   xLEASH: `${cg}/15802/thumb/Leash.png?1696515425`,
@@ -181,17 +180,51 @@ export const SHIBARIUM_TOKENS: TokenInfo[] = [
     decimals: 8,
     logoUrl: LOGOS.WBTC,
   },
-  {
-    symbol: 'XFUND',
-    name: 'xFUND',
-    address: '0x89dc93C6c12CaE47aCAf4aD9305d7A442C30dBB2',
-    decimals: 9,
-    logoUrl: LOGOS.XFUND,
-  },
 ];
 
+const CUSTOM_TOKENS_KEY = 'shibwallet_custom_tokens';
+
+function loadCustomTokens(): Record<string, TokenInfo[]> {
+  try {
+    const raw = localStorage.getItem(CUSTOM_TOKENS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function saveCustomTokens(tokens: Record<string, TokenInfo[]>) {
+  localStorage.setItem(CUSTOM_TOKENS_KEY, JSON.stringify(tokens));
+}
+
 export function getTokensForChain(chainId: number): TokenInfo[] {
-  return chainId === 109 ? SHIBARIUM_TOKENS : ETHEREUM_TOKENS;
+  const defaults = chainId === 109 ? SHIBARIUM_TOKENS : chainId === 1 ? ETHEREUM_TOKENS : [];
+  const custom = loadCustomTokens()[String(chainId)] ?? [];
+  return [...defaults, ...custom];
+}
+
+export function addCustomToken(chainId: number, token: TokenInfo): void {
+  const all = loadCustomTokens();
+  const key = String(chainId);
+  const existing = all[key] ?? [];
+  // Don't add duplicates
+  if (existing.some((t) => t.address.toLowerCase() === token.address.toLowerCase())) return;
+  all[key] = [...existing, token];
+  saveCustomTokens(all);
+}
+
+export function removeCustomToken(chainId: number, address: string): void {
+  const all = loadCustomTokens();
+  const key = String(chainId);
+  const existing = all[key] ?? [];
+  all[key] = existing.filter((t) => t.address.toLowerCase() !== address.toLowerCase());
+  saveCustomTokens(all);
+}
+
+export function isCustomToken(chainId: number, address: string): boolean {
+  const custom = loadCustomTokens()[String(chainId)] ?? [];
+  return custom.some((t) => t.address.toLowerCase() === address.toLowerCase());
 }
 
 export function isNativeToken(token: TokenInfo): boolean {

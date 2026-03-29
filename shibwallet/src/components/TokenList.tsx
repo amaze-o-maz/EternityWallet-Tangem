@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useNetworkStore } from '../store/networkStore';
-import { getTokensForChain, TokenInfo } from '../lib/tokens';
+import { getTokensForChain, isCustomToken, removeCustomToken, TokenInfo } from '../lib/tokens';
 
 interface TokenListProps {
   balances: Record<string, bigint>;
   prices: Record<string, number>;
+  onTokenRemoved?: () => void;
 }
 
 function formatBalance(raw: bigint, decimals: number): string {
@@ -43,7 +46,9 @@ const TokenRow: React.FC<{
   balance: bigint;
   price: number;
   index: number;
-}> = ({ token, balance, price, index }) => {
+  chainId: number;
+  onRemoved?: () => void;
+}> = ({ token, balance, price, index, chainId, onRemoved }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   const displayBalance = formatBalance(balance, token.decimals);
@@ -95,11 +100,28 @@ const TokenRow: React.FC<{
         <p className="text-white text-sm font-medium tabular-nums">{displayBalance}</p>
         <p className="text-gray-500 text-xs mt-0.5">{formatUsd(usdValue)}</p>
       </div>
+
+      {/* Remove button for custom tokens */}
+      {isCustomToken(chainId, token.address) && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            removeCustomToken(chainId, token.address);
+            toast.success(`${token.symbol} removed`);
+            onRemoved?.();
+          }}
+          className="p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-500/10
+                     opacity-0 group-hover:opacity-100 transition-all shrink-0"
+          title="Remove token"
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
     </div>
   );
 };
 
-const TokenList: React.FC<TokenListProps> = ({ balances, prices }) => {
+const TokenList: React.FC<TokenListProps> = ({ balances, prices, onTokenRemoved }) => {
   const chainId = useNetworkStore((s) => s.chainId);
   const tokens = getTokensForChain(chainId);
 
@@ -116,6 +138,8 @@ const TokenList: React.FC<TokenListProps> = ({ balances, prices }) => {
             balance={balance}
             price={price}
             index={index}
+            chainId={chainId}
+            onRemoved={onTokenRemoved}
           />
         );
       })}
