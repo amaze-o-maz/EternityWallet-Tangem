@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import ShibLogo from '../components/ShibLogo';
@@ -6,12 +6,18 @@ import PasswordInput from '../components/PasswordInput';
 import { useWalletStore } from '../store/walletStore';
 
 const VAULT_KEY = 'shibwallet_vault';
+const MAX_ATTEMPTS = 5;
+const BASE_DELAY_MS = 2000; // 2s base for exponential backoff
 
 const Lock: React.FC = () => {
   const navigate = useNavigate();
   const { unlock, isUnlocked } = useWalletStore();
   const [password, setPassword] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!localStorage.getItem(VAULT_KEY)) {
@@ -23,22 +29,62 @@ const Lock: React.FC = () => {
     }
   }, [navigate, isUnlocked]);
 
+  // Countdown timer for lockout
+  useEffect(() => {
+    if (lockedUntil && lockedUntil > Date.now()) {
+      const updateCountdown = () => {
+        const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
+        if (remaining <= 0) {
+          setLockedUntil(null);
+          setCountdown(0);
+          if (timerRef.current) clearInterval(timerRef.current);
+        } else {
+          setCountdown(remaining);
+        }
+      };
+      updateCountdown();
+      timerRef.current = setInterval(updateCountdown, 1000);
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    }
+  }, [lockedUntil]);
+
+  const isLockedOut = lockedUntil !== null && lockedUntil > Date.now();
+
   const handleUnlock = useCallback(async () => {
     if (!password) {
       toast.error('Please enter your password');
       return;
     }
 
+    if (isLockedOut) {
+      toast.error(`Too many attempts. Wait ${countdown}s`);
+      return;
+    }
+
     setUnlocking(true);
     try {
       unlock(password);
+      setFailedAttempts(0);
       navigate('/wallet', { replace: true });
     } catch {
-      toast.error('Wrong password. Please try again.');
+      const attempts = failedAttempts + 1;
+      setFailedAttempts(attempts);
+
+      if (attempts >= MAX_ATTEMPTS) {
+        // Exponential backoff: 2^(attempts - MAX_ATTEMPTS) * BASE_DELAY
+        const delayMs = Math.min(BASE_DELAY_MS * Math.pow(2, attempts - MAX_ATTEMPTS), 300_000); // max 5min
+        setLockedUntil(Date.now() + delayMs);
+        toast.error(`Too many failed attempts. Locked for ${Math.ceil(delayMs / 1000)}s`);
+      } else {
+        const remaining = MAX_ATTEMPTS - attempts;
+        toast.error(`Wrong password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+      }
     } finally {
       setUnlocking(false);
     }
-  }, [password, unlock, navigate]);
+  }, [password, unlock, navigate, failedAttempts, isLockedOut, countdown]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -78,6 +124,14 @@ const Lock: React.FC = () => {
         </h1>
         <p className="text-gray-500 text-sm mb-8">Enter your password to continue</p>
 
+        {isLockedOut && (
+          <div className="w-full mb-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-center">
+            <p className="text-red-400 text-sm font-medium">
+              Too many failed attempts. Try again in {countdown}s
+            </p>
+          </div>
+        )}
+
         <div className="w-full mb-6 bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5" onKeyDown={handleKeyDown}>
           <PasswordInput
             value={password}
@@ -88,13 +142,13 @@ const Lock: React.FC = () => {
 
         <button
           onClick={handleUnlock}
-          disabled={unlocking || !password}
+          disabled={unlocking || !password || isLockedOut}
           className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
                      text-white font-semibold transition-all duration-300 active:scale-[0.97]
                      hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
                      disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none"
         >
-          {unlocking ? 'Unlocking...' : 'Unlock'}
+          {unlocking ? 'Unlocking...' : isLockedOut ? `Locked (${countdown}s)` : 'Unlock'}
         </button>
       </div>
     </div>

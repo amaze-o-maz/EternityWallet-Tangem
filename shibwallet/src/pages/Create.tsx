@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import toast from 'react-hot-toast';
 import PasswordInput from '../components/PasswordInput';
-import { createWallet, encryptMnemonic, hashPassword } from '../lib/wallet';
+import { createWallet, encryptMnemonic } from '../lib/wallet';
 import { useWalletStore } from '../store/walletStore';
 
 const VAULT_KEY = 'shibwallet_vault';
-const HASH_KEY = 'shibwallet_hash';
 
 type Step = 'backup' | 'verify' | 'password';
 
@@ -99,11 +98,9 @@ const Create: React.FC = () => {
 
     setSaving(true);
     try {
-      const hashed = hashPassword(password);
-      const encrypted = encryptMnemonic(wallet.mnemonic, hashed);
+      const encrypted = encryptMnemonic(wallet.mnemonic, password);
       localStorage.setItem(VAULT_KEY, encrypted);
-      localStorage.setItem(HASH_KEY, hashed);
-      setWallet(wallet.address, wallet.privateKey, wallet.mnemonic);
+      setWallet(wallet.address, wallet.privateKey, wallet.mnemonic, password);
       navigate('/wallet', { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create wallet');

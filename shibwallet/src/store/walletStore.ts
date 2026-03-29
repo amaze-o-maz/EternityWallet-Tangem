@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import {
   decryptMnemonic,
+  decryptData,
   deriveFromMnemonic,
   deriveFromPrivateKey,
-  encryptMnemonic,
+  encryptData,
   hashPassword,
 } from '../lib/wallet';
 
@@ -22,12 +23,13 @@ interface WalletState {
   lastActivity: number;
   accounts: Account[];
   activeIndex: number;
+  _password: string | null; // held in memory while unlocked for account encryption
 }
 
 interface WalletActions {
   unlock: (password: string) => void;
   lock: () => void;
-  setWallet: (address: string, privateKey: string, mnemonic: string) => void;
+  setWallet: (address: string, privateKey: string, mnemonic: string, password: string) => void;
   resetLastActivity: () => void;
   hasVault: () => boolean;
   addAccount: (account: Account) => void;
@@ -40,18 +42,20 @@ interface WalletActions {
 const VAULT_KEY = 'shibwallet_vault';
 const ACCOUNTS_KEY = 'shibwallet_accounts';
 
-function loadAccounts(): Account[] {
+function loadAccounts(password: string): Account[] {
   try {
     const raw = localStorage.getItem(ACCOUNTS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw);
+    const decrypted = decryptData(raw, password);
+    return JSON.parse(decrypted);
   } catch {
     return [];
   }
 }
 
-function saveAccounts(accounts: Account[]) {
-  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+function saveAccounts(accounts: Account[], password: string) {
+  const encrypted = encryptData(JSON.stringify(accounts), password);
+  localStorage.setItem(ACCOUNTS_KEY, encrypted);
 }
 
 export const useWalletStore = create<WalletState & WalletActions>((set, get) => ({
@@ -62,6 +66,7 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
   lastActivity: Date.now(),
   accounts: [],
   activeIndex: 0,
+  _password: null,
 
   unlock: (password: string) => {
     const vault = localStorage.getItem(VAULT_KEY);
@@ -69,8 +74,14 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       throw new Error('No vault found. Please create or import a wallet first.');
     }
 
-    const hashedPassword = hashPassword(password);
-    const decrypted = decryptMnemonic(vault, hashedPassword);
+    // Try new format first (raw password), then legacy format (hashed password)
+    let decrypted: string;
+    try {
+      decrypted = decryptMnemonic(vault, password);
+    } catch {
+      // Legacy vaults were encrypted with hashPassword(password)
+      decrypted = decryptMnemonic(vault, hashPassword(password));
+    }
 
     let wallet;
     if (decrypted.startsWith('pk:')) {
@@ -81,8 +92,8 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       wallet = deriveFromMnemonic(decrypted);
     }
 
-    // Load saved accounts, ensure primary account is first
-    const saved = loadAccounts();
+    // Load saved accounts (encrypted), ensure primary account is first
+    const saved = loadAccounts(password);
     const primary: Account = {
       address: wallet.address,
       privateKey: wallet.privateKey,
@@ -92,7 +103,6 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
 
     let accounts: Account[];
     if (saved.length > 0) {
-      // Update the primary account in saved list
       const existing = saved.findIndex((a) => a.address.toLowerCase() === primary.address.toLowerCase());
       if (existing >= 0) {
         saved[existing] = { ...saved[existing], privateKey: primary.privateKey, mnemonic: primary.mnemonic };
@@ -104,7 +114,7 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       accounts = [primary];
     }
 
-    saveAccounts(accounts);
+    saveAccounts(accounts, password);
 
     set({
       address: wallet.address,
@@ -114,6 +124,7 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       lastActivity: Date.now(),
       accounts,
       activeIndex: 0,
+      _password: password,
     });
   },
 
@@ -124,10 +135,11 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       isUnlocked: false,
       accounts: [],
       activeIndex: 0,
+      _password: null,
     });
   },
 
-  setWallet: (address: string, privateKey: string, mnemonic: string) => {
+  setWallet: (address: string, privateKey: string, mnemonic: string, password: string) => {
     const primary: Account = {
       address,
       privateKey,
@@ -135,20 +147,8 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       mnemonic: mnemonic || null,
     };
 
-    const saved = loadAccounts();
-    let accounts: Account[];
-    if (saved.length > 0) {
-      const existing = saved.findIndex((a) => a.address.toLowerCase() === primary.address.toLowerCase());
-      if (existing >= 0) {
-        saved[existing] = primary;
-        accounts = saved;
-      } else {
-        accounts = [primary, ...saved];
-      }
-    } else {
-      accounts = [primary];
-    }
-    saveAccounts(accounts);
+    const accounts = [primary];
+    saveAccounts(accounts, password);
 
     set({
       address,
@@ -158,6 +158,7 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       lastActivity: Date.now(),
       accounts,
       activeIndex: 0,
+      _password: password,
     });
   },
 
@@ -170,11 +171,11 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
   },
 
   addAccount: (account: Account) => {
-    const { accounts } = get();
-    // Don't add duplicates
+    const { accounts, _password } = get();
+    if (!_password) return;
     if (accounts.some((a) => a.address.toLowerCase() === account.address.toLowerCase())) return;
     const updated = [...accounts, account];
-    saveAccounts(updated);
+    saveAccounts(updated, _password);
     set({ accounts: updated });
   },
 
@@ -199,16 +200,15 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       label: label || `Account ${get().accounts.length + 1}`,
       mnemonic: null,
     };
-    const { accounts } = get();
-    // Check for duplicate
+    const { accounts, _password } = get();
+    if (!_password) return;
     const existing = accounts.findIndex((a) => a.address.toLowerCase() === account.address.toLowerCase());
     if (existing >= 0) {
-      // Switch to it
       get().switchAccount(existing);
       return;
     }
     const updated = [...accounts, account];
-    saveAccounts(updated);
+    saveAccounts(updated, _password);
     const newIndex = updated.length - 1;
     set({
       accounts: updated,
@@ -221,11 +221,12 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
   },
 
   removeAccount: (index: number) => {
-    const { accounts, activeIndex } = get();
-    if (accounts.length <= 1) return; // Can't remove last account
-    if (index === 0) return; // Can't remove primary
+    const { accounts, activeIndex, _password } = get();
+    if (!_password) return;
+    if (accounts.length <= 1) return;
+    if (index === 0) return;
     const updated = accounts.filter((_, i) => i !== index);
-    saveAccounts(updated);
+    saveAccounts(updated, _password);
     const newIndex = activeIndex >= updated.length ? updated.length - 1 : activeIndex;
     const active = updated[newIndex];
     set({

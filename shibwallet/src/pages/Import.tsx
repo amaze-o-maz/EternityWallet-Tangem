@@ -8,12 +8,10 @@ import {
   deriveFromMnemonic,
   deriveFromPrivateKey,
   encryptMnemonic,
-  hashPassword,
 } from '../lib/wallet';
 import { useWalletStore } from '../store/walletStore';
 
 const VAULT_KEY = 'shibwallet_vault';
-const HASH_KEY = 'shibwallet_hash';
 
 type Tab = 'mnemonic' | 'privatekey';
 
@@ -85,14 +83,10 @@ const Import: React.FC = () => {
 
     setSaving(true);
     try {
-      const hashed = hashPassword(password);
-      // For mnemonic imports, encrypt the mnemonic
-      // For private key imports, prefix with 'pk:' and encrypt the private key
       const dataToEncrypt = importedMnemonic ?? `pk:${importedPrivateKey}`;
-      const encrypted = encryptMnemonic(dataToEncrypt, hashed);
+      const encrypted = encryptMnemonic(dataToEncrypt, password);
       localStorage.setItem(VAULT_KEY, encrypted);
-      localStorage.setItem(HASH_KEY, hashed);
-      setWallet(importedAddress, importedPrivateKey, importedMnemonic ?? '');
+      setWallet(importedAddress, importedPrivateKey, importedMnemonic ?? '', password);
       navigate('/wallet', { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to import wallet');
