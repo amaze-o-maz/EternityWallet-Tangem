@@ -55,12 +55,15 @@ const Import: React.FC = () => {
       }
     } else {
       const trimmed = privateKeyInput.trim();
-      if (!trimmed.startsWith('0x') || trimmed.length !== 66) {
-        toast.error('Private key must be a 66-character hex string starting with 0x');
+      const isHex64 = /^[0-9a-fA-F]{64}$/.test(trimmed);
+      const isHex66 = /^0x[0-9a-fA-F]{64}$/.test(trimmed);
+      if (!isHex64 && !isHex66) {
+        toast.error('Private key must be 64 hex characters (with or without 0x prefix)');
         return;
       }
+      const keyWithPrefix = isHex64 ? `0x${trimmed}` : trimmed;
       try {
-        const wallet = deriveFromPrivateKey(trimmed);
+        const wallet = deriveFromPrivateKey(keyWithPrefix);
         setImportedAddress(wallet.address);
         setImportedPrivateKey(wallet.privateKey);
         setImportedMnemonic(null);

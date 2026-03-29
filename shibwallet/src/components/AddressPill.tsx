@@ -41,12 +41,15 @@ const AddressPill: React.FC = () => {
 
   const handleImport = () => {
     const trimmed = pkInput.trim();
-    if (!trimmed.startsWith('0x') || trimmed.length !== 66) {
-      toast.error('Invalid private key (66-char hex starting with 0x)');
+    const isHex64 = /^[0-9a-fA-F]{64}$/.test(trimmed);
+    const isHex66 = /^0x[0-9a-fA-F]{64}$/.test(trimmed);
+    if (!isHex64 && !isHex66) {
+      toast.error('Invalid private key (64 hex chars, with or without 0x)');
       return;
     }
+    const keyWithPrefix = isHex64 ? `0x${trimmed}` : trimmed;
     try {
-      importPrivateKey(trimmed, labelInput.trim() || undefined);
+      importPrivateKey(keyWithPrefix, labelInput.trim() || undefined);
       toast.success('Account imported');
       setPkInput('');
       setLabelInput('');
