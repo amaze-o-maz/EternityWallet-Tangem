@@ -371,9 +371,9 @@ const Swap: React.FC = () => {
         {/* ShibaSwap branding */}
         <div className="flex items-center gap-3 mb-8">
           <img
-            src="/shibaswap-logo.svg"
+            src="https://assets.coingecko.com/coins/images/11939/standard/shiba.png"
             alt="ShibaSwap"
-            className="w-9 h-9"
+            className="w-9 h-9 rounded-full"
           />
           <div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent leading-tight">
