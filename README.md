@@ -111,4 +111,4 @@ shibwallet/
 
 ## License
 
-This project is proprietary software. All rights reserved.
+This project is for SHIBARMYSTRONGAF only all rights reserved
