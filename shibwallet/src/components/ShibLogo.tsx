@@ -15,10 +15,11 @@ const ShibLogo: React.FC<ShibLogoProps> = ({ size = 40, className = '', animated
       alt="ShibWallet"
       width={size}
       height={size}
-      className={`rounded-full ${animated ? 'animate-float' : ''} ${className}`}
+      className={`${animated ? 'animate-float' : ''} ${className}`}
       style={{
         width: size,
         height: size,
+        objectFit: 'contain',
         imageRendering: 'auto',
         WebkitBackfaceVisibility: 'hidden',
         backfaceVisibility: 'hidden',
