@@ -44,6 +44,8 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 
 ## Getting Started
 
+Android simply install the APK
+
 ### Prerequisites
 - Node.js 18+
 - Android SDK (for mobile builds)
