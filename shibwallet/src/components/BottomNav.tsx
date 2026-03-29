@@ -4,7 +4,7 @@ import { Wallet, Globe, RefreshCw } from 'lucide-react';
 
 const NAV_ITEMS = [
   { path: '/wallet', label: 'Wallet', icon: Wallet },
-  { path: '/wallet/swap', label: 'Swap', icon: RefreshCw },
+  { path: '/wallet/swap', label: 'ShibaSwap', icon: RefreshCw },
   { path: '/wallet/dapps', label: 'dApps', icon: Globe },
 ];
 

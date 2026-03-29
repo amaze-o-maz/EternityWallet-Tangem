@@ -368,9 +368,20 @@ const Swap: React.FC = () => {
           Back
         </button>
 
-        <h1 className="text-2xl font-bold mb-8 bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
-          Swap
-        </h1>
+        {/* ShibaSwap branding */}
+        <div className="flex items-center gap-3 mb-8">
+          <img
+            src="/shibaswap-logo.svg"
+            alt="ShibaSwap"
+            className="w-9 h-9"
+          />
+          <div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent leading-tight">
+              ShibaSwap
+            </h1>
+            <p className="text-[11px] text-gray-500 mt-0.5">Powered by ShibaSwap DEX</p>
+          </div>
+        </div>
 
         {txHash ? (
           <div className="animate-slide-up-fade text-center py-8">
