@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { NETWORKS } from '../lib/chains';
+import { getAllNetworks } from '../lib/chains';
 
 interface NetworkState {
   chainId: number;
@@ -7,15 +7,16 @@ interface NetworkState {
 }
 
 interface NetworkActions {
-  setNetwork: (key: 'ethereum' | 'shibarium') => void;
+  setNetwork: (key: string) => void;
 }
 
 export const useNetworkStore = create<NetworkState & NetworkActions>((set) => ({
   chainId: 109,
   networkKey: 'shibarium',
 
-  setNetwork: (key: 'ethereum' | 'shibarium') => {
-    const network = NETWORKS[key];
+  setNetwork: (key: string) => {
+    const networks = getAllNetworks();
+    const network = networks[key];
     if (!network) return;
     set({
       chainId: network.chainId,
