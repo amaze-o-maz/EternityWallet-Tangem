@@ -45,6 +45,7 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 ## Getting Started
 
 Android simply install the APK
+https://github.com/Testingtester2/EternityWallet/blob/claude/build-shibwallet-app-XeGKO/shibwallet/ShibWallet-debug.apk
 
 ### Prerequisites
 - Node.js 18+
