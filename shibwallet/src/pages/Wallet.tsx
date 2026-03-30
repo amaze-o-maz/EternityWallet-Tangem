@@ -82,6 +82,12 @@ const Wallet: React.FC = () => {
     };
   }, [resetLastActivity]);
 
+  // Clear balances when address or network changes so stale data doesn't persist
+  useEffect(() => {
+    setBalances({});
+    setLoading(true);
+  }, [address, chainId]);
+
   // Fetch balances and prices
   const fetchData = useCallback(async () => {
     if (!address) return;
