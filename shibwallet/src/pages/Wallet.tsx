@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createPublicClient, http, formatUnits } from 'viem';
+import { createPublicClient, http, fallback, formatUnits } from 'viem';
 import { ArrowUp, ArrowDown, RefreshCw, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Header from '../components/Header';
@@ -95,6 +95,7 @@ const Wallet: React.FC = () => {
     const network = getNetworkByChainId(chainId);
     if (!network) return;
 
+    const allRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
     const chain = {
       id: network.chainId,
       name: network.name,
@@ -104,13 +105,15 @@ const Wallet: React.FC = () => {
         decimals: 18,
       },
       rpcUrls: {
-        default: { http: [network.rpcUrl] },
+        default: { http: allRpcs },
       },
     } as const;
 
     const publicClient = createPublicClient({
       chain,
-      transport: http(network.rpcUrl),
+      transport: allRpcs.length > 1
+        ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
+        : http(allRpcs[0], { timeout: 10_000 }),
     });
 
     const tokens = getTokensForChain(chainId);
@@ -206,7 +209,13 @@ const Wallet: React.FC = () => {
         nativeCurrency: { name: network.nativeToken.symbol, symbol: network.nativeToken.symbol, decimals: 18 },
         rpcUrls: { default: { http: [network.rpcUrl] } },
       } as const;
-      const client = createPublicClient({ chain, transport: http(network.rpcUrl) });
+      const lookupRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
+      const client = createPublicClient({
+        chain,
+        transport: lookupRpcs.length > 1
+          ? fallback(lookupRpcs.map((url) => http(url, { timeout: 10_000 })))
+          : http(lookupRpcs[0], { timeout: 10_000 }),
+      });
 
       const [sym, name, dec] = await Promise.all([
         client.readContract({ address: addr as `0x${string}`, abi: ERC20_ABI, functionName: 'symbol' }).catch(() => ''),

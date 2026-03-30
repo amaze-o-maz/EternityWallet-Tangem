@@ -2,6 +2,7 @@ export interface NetworkConfig {
   chainId: number;
   name: string;
   rpcUrl: string;
+  rpcFallbacks?: string[];
   explorerUrl: string;
   nativeToken: { symbol: string; decimals: number };
   logoUrl: string;
@@ -11,6 +12,7 @@ export interface NetworkConfig {
     v1Router: `0x${string}`;
     v1Factory: `0x${string}`;
     v2SwapRouter: `0x${string}`;
+    v2Factory: `0x${string}`;
     v2Quoter: `0x${string}`;
   };
 }
@@ -30,13 +32,15 @@ export const DEFAULT_NETWORKS: Record<string, NetworkConfig> = {
       v1Router: '0x03f7724180AA6b939894B5Ca4314783B0b36b329',
       v1Factory: '0x115934131916C8b277DD010Ee02de363c09d037c',
       v2SwapRouter: '0xB2eCc25C0B3af0039d4d9dDDfCeC19e958618963',
+      v2Factory: '0xD9CE49caf7299DaF18ffFcB2b84a44fD33412509',
       v2Quoter: '0x486dD4Ff6abD5B2f728192cda291D2ffb611CBD1',
     },
   },
   shibarium: {
     chainId: 109,
     name: 'Shibarium',
-    rpcUrl: 'https://rpc.shibrpc.com',
+    rpcUrl: 'https://rpc.shibarium.shib.io',
+    rpcFallbacks: ['https://shibrpc.com', 'https://rpc.shibrpc.com'],
     explorerUrl: 'https://shibariumscan.io',
     nativeToken: { symbol: 'BONE', decimals: 18 },
     logoUrl: 'https://assets.coingecko.com/coins/images/16916/thumb/bone_icon.png',
@@ -45,6 +49,7 @@ export const DEFAULT_NETWORKS: Record<string, NetworkConfig> = {
       v1Router: '0xEF83bbB63E8A7442E3a4a5d28d9bBf32D7c813c8',
       v1Factory: '0xc2b4218F137e3A5A9B98ab3AE804108F0D312CBC',
       v2SwapRouter: '0xd0d020fd91aB1Ab2CbbdbfBde2Fd9C5e4D5896b8',
+      v2Factory: '0x2996B636663ddeBaE28742368ed47b57539C9600',
       v2Quoter: '0x9dab43E3DbEF5241f491818077E12E21b02D7035',
     },
   },
@@ -113,6 +118,7 @@ export function addCustomNetwork(network: {
       v1Router: ZERO_ADDR,
       v1Factory: ZERO_ADDR,
       v2SwapRouter: ZERO_ADDR,
+      v2Factory: ZERO_ADDR,
       v2Quoter: ZERO_ADDR,
     },
   };

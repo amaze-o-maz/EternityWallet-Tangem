@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   createPublicClient,
   http,
+  fallback,
   parseUnits,
   formatUnits,
 } from 'viem';
@@ -130,6 +131,7 @@ const Swap: React.FC = () => {
 
   const publicClient = useMemo(() => {
     if (!network) return null;
+    const allRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
     return createPublicClient({
       chain: {
         id: network.chainId,
@@ -140,10 +142,12 @@ const Swap: React.FC = () => {
           decimals: 18,
         },
         rpcUrls: {
-          default: { http: [network.rpcUrl] },
+          default: { http: allRpcs },
         },
       },
-      transport: http(network.rpcUrl),
+      transport: allRpcs.length > 1
+        ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
+        : http(allRpcs[0], { timeout: 10_000 }),
     });
   }, [network]);
 

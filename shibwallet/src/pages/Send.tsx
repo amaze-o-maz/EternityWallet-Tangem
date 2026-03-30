@@ -4,6 +4,7 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  fallback,
   parseUnits,
   formatUnits,
   type Chain,
@@ -60,16 +61,19 @@ const Send: React.FC = () => {
         decimals: 18,
       },
       rpcUrls: {
-        default: { http: [network.rpcUrl] },
+        default: { http: [network.rpcUrl, ...(network.rpcFallbacks ?? [])] },
       },
     };
   }, [network]);
 
   const publicClient = useMemo(() => {
     if (!network || !viemChain) return null;
+    const allRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
     return createPublicClient({
       chain: viemChain,
-      transport: http(network.rpcUrl),
+      transport: allRpcs.length > 1
+        ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
+        : http(allRpcs[0], { timeout: 10_000 }),
     });
   }, [network, viemChain]);
 
@@ -229,9 +233,12 @@ const Send: React.FC = () => {
     setSending(true);
     try {
       const account = privateKeyToAccount(privateKey as `0x${string}`);
+      const sendRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
       const walletClient = createWalletClient({
         chain: viemChain,
-        transport: http(network.rpcUrl),
+        transport: sendRpcs.length > 1
+          ? fallback(sendRpcs.map((url) => http(url, { timeout: 10_000 })))
+          : http(sendRpcs[0], { timeout: 10_000 }),
         account,
       });
 
