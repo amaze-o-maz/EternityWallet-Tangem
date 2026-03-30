@@ -36,7 +36,7 @@ export const DEFAULT_NETWORKS: Record<string, NetworkConfig> = {
   shibarium: {
     chainId: 109,
     name: 'Shibarium',
-    rpcUrl: 'https://www.shibrpc.com',
+    rpcUrl: 'https://rpc.shibrpc.com',
     explorerUrl: 'https://shibariumscan.io',
     nativeToken: { symbol: 'BONE', decimals: 18 },
     logoUrl: 'https://assets.coingecko.com/coins/images/16916/thumb/bone_icon.png',

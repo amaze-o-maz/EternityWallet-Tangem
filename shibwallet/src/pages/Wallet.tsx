@@ -155,8 +155,8 @@ const Wallet: React.FC = () => {
 
       setBalances(newBalances);
       setPrices(fetchedPrices);
-    } catch {
-      // Silently fail; keep existing data
+    } catch (err) {
+      console.error('[ShibWallet] Balance fetch failed:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
