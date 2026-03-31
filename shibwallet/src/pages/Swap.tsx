@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   createPublicClient,
@@ -8,7 +8,7 @@ import {
   formatUnits,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { ArrowLeft, ArrowDownUp, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ArrowDownUp, ExternalLink, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TokenSelector from '../components/TokenSelector';
 import BottomNav from '../components/BottomNav';
@@ -120,6 +120,8 @@ const Swap: React.FC = () => {
   const [swapping, setSwapping] = useState(false);
   const [needsApproval, setNeedsApproval] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const slippagePercent = useMemo(() => {
     if (slippageOption === 'custom') {
@@ -244,23 +246,19 @@ const Swap: React.FC = () => {
     setQuoteResult(null);
   };
 
-  const handleGetQuote = useCallback(async () => {
+  const fetchQuote = useCallback(async (silent = false) => {
     if (!fromToken || !toToken || !fromAmount || !network) return;
 
     let parsedAmount: bigint;
     try {
       parsedAmount = parseUnits(fromAmount, fromToken.decimals);
-      if (parsedAmount <= 0n) {
-        toast.error('Enter an amount greater than zero');
-        return;
-      }
+      if (parsedAmount <= 0n) return;
     } catch {
-      toast.error('Invalid amount');
       return;
     }
 
     if (parsedAmount > fromBalance) {
-      toast.error('Insufficient balance');
+      if (!silent) toast.error('Insufficient balance');
       return;
     }
 
@@ -273,11 +271,28 @@ const Swap: React.FC = () => {
       setQuoteResult(result);
       setToAmount(formatUnits(result.amountOut, toToken.decimals));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to get quote');
+      if (!silent) toast.error(err instanceof Error ? err.message : 'Failed to get quote');
     } finally {
       setQuoting(false);
     }
   }, [fromToken, toToken, fromAmount, network, chainId, fromBalance]);
+
+  // Auto-quote with 600ms debounce when amount or tokens change
+  useEffect(() => {
+    if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+    setQuoteResult(null);
+    setToAmount('');
+
+    if (!fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0) return;
+
+    quoteTimerRef.current = setTimeout(() => {
+      fetchQuote(true);
+    }, 600);
+
+    return () => {
+      if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+    };
+  }, [fromAmount, fromToken?.address, toToken?.address]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const minimumReceived = useMemo(() => {
     if (!quoteResult || !toToken) return null;
@@ -299,6 +314,15 @@ const Swap: React.FC = () => {
     }
   }, [quoteResult, fromToken, toToken, fromAmount]);
 
+  const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+      ),
+    ]);
+  };
+
   const handleApprove = useCallback(async () => {
     if (!fromToken || !privateKey || !network) return;
 
@@ -308,12 +332,10 @@ const Swap: React.FC = () => {
       const parsedAmount = parseUnits(fromAmount, fromToken.decimals);
 
       toast.loading('Approving token...', { id: 'approve' });
-      await approveToken(
-        chainId,
-        fromToken.address,
-        network.swap.v1Router,
-        parsedAmount,
-        account,
+      await withTimeout(
+        approveToken(chainId, fromToken.address, network.swap.v1Router, parsedAmount, account),
+        60_000,
+        'Approval',
       );
       toast.success('Token approved!', { id: 'approve' });
       setNeedsApproval(false);
@@ -333,13 +355,10 @@ const Swap: React.FC = () => {
       const parsedAmount = parseUnits(fromAmount, fromToken.decimals);
 
       toast.loading('Swapping tokens...', { id: 'swap' });
-      const hash = await executeSwap(
-        chainId,
-        fromToken,
-        toToken,
-        parsedAmount,
-        minimumReceived,
-        account,
+      const hash = await withTimeout(
+        executeSwap(chainId, fromToken, toToken, parsedAmount, minimumReceived, account),
+        60_000,
+        'Swap',
       );
       setTxHash(hash);
       toast.success('Swap successful!', { id: 'swap' });
@@ -586,22 +605,6 @@ const Swap: React.FC = () => {
               )}
             </div>
 
-            {/* Get Quote button */}
-            {!quoteResult && (
-              <button
-                onClick={handleGetQuote}
-                disabled={!fromToken || !toToken || !fromAmount || quoting || parseFloat(fromAmount) <= 0}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
-                           text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
-                           hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
-                           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none
-                           flex items-center justify-center gap-2"
-              >
-                {quoting && <LoadingSpinner size={18} />}
-                {quoting ? 'Getting Quote...' : 'Get Quote'}
-              </button>
-            )}
-
             {/* Quote details */}
             {quoteResult && toToken && fromToken && (
               <div className="mb-4 animate-slide-up-fade">
@@ -633,37 +636,22 @@ const Swap: React.FC = () => {
                     <span className="text-white">0.3%</span>
                   </div>
                 </div>
-
-                {/* Approve or Swap button */}
-                {needsApproval ? (
-                  <button
-                    onClick={handleApprove}
-                    disabled={approving}
-                    className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
-                               text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
-                               hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
-                               disabled:opacity-70 disabled:cursor-not-allowed
-                               flex items-center justify-center gap-2"
-                  >
-                    {approving && <LoadingSpinner size={18} />}
-                    {approving ? 'Approving...' : `Approve ${fromToken.symbol}`}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSwap}
-                    disabled={swapping}
-                    className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
-                               text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
-                               hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
-                               disabled:opacity-70 disabled:cursor-not-allowed
-                               flex items-center justify-center gap-2"
-                  >
-                    {swapping && <LoadingSpinner size={18} />}
-                    {swapping ? 'Swapping...' : 'Swap'}
-                  </button>
-                )}
               </div>
             )}
+
+            {/* Swap button — opens confirmation modal */}
+            <button
+              onClick={() => setShowConfirm(true)}
+              disabled={!quoteResult || quoting || !fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                         text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                         hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                         disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none
+                         flex items-center justify-center gap-2"
+            >
+              {quoting && <LoadingSpinner size={18} />}
+              {quoting ? 'Getting Quote...' : quoteResult ? 'Review Swap' : 'Enter an amount'}
+            </button>
           </>
         )}
       </div>
@@ -699,6 +687,127 @@ const Swap: React.FC = () => {
       />
 
       <BottomNav />
+
+      {/* Confirmation Modal */}
+      {showConfirm && quoteResult && fromToken && toToken && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in" onClick={() => !approving && !swapping && setShowConfirm(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-white">Confirm Swap</h2>
+              <button
+                onClick={() => !approving && !swapping && setShowConfirm(false)}
+                className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* From → To summary */}
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                    style={{ backgroundColor: stringToColor(fromToken.symbol) }}
+                  >
+                    {fromToken.symbol.slice(0, 2)}
+                  </div>
+                  <span className="text-white text-sm font-medium">{fromToken.symbol}</span>
+                </div>
+                <span className="text-white text-base font-semibold">{fromAmount}</span>
+              </div>
+              <div className="flex justify-center my-1">
+                <ArrowDownUp size={16} className="text-gray-500" />
+              </div>
+              <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                    style={{ backgroundColor: stringToColor(toToken.symbol) }}
+                  >
+                    {toToken.symbol.slice(0, 2)}
+                  </div>
+                  <span className="text-white text-sm font-medium">{toToken.symbol}</span>
+                </div>
+                <span className="text-white text-base font-semibold">{toAmount}</span>
+              </div>
+            </div>
+
+            {/* Details */}
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-6 space-y-2.5">
+              {exchangeRate !== null && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Rate</span>
+                  <span className="text-white">1 {fromToken.symbol} = {exchangeRate.toFixed(6)} {toToken.symbol}</span>
+                </div>
+              )}
+              {minimumReceived !== null && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Min. Received</span>
+                  <span className="text-white">{parseFloat(formatUnits(minimumReceived, toToken.decimals)).toFixed(6)} {toToken.symbol}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Price Impact</span>
+                <span className={quoteResult.priceImpact > 5 ? 'text-red-400' : quoteResult.priceImpact > 2 ? 'text-yellow-400' : 'text-white'}>
+                  {quoteResult.priceImpact}%
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Slippage</span>
+                <span className="text-white">{slippagePercent}%</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-400">Fee</span>
+                <span className="text-white">0.3%</span>
+              </div>
+            </div>
+
+            {/* Action buttons: Approve → Swap */}
+            {needsApproval ? (
+              <button
+                onClick={handleApprove}
+                disabled={approving}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                           text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                           hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                           disabled:opacity-70 disabled:cursor-not-allowed
+                           flex items-center justify-center gap-2"
+              >
+                {approving && <LoadingSpinner size={18} />}
+                {approving ? 'Approving...' : `Approve ${fromToken.symbol}`}
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  await handleSwap();
+                  setShowConfirm(false);
+                }}
+                disabled={swapping}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                           text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                           hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                           disabled:opacity-70 disabled:cursor-not-allowed
+                           flex items-center justify-center gap-2"
+              >
+                {swapping && <LoadingSpinner size={18} />}
+                {swapping ? 'Swapping...' : 'Confirm Swap'}
+              </button>
+            )}
+
+            {quoteResult.priceImpact > 5 && (
+              <p className="text-red-400 text-xs text-center mt-3">
+                Warning: High price impact! You may receive significantly less than expected.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
