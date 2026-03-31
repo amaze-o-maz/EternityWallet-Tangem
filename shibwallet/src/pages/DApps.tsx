@@ -22,13 +22,16 @@ const CATEGORIES = [
   { id: 'gaming', label: 'Gaming', icon: Gamepad2 },
 ];
 
+// Google Favicon API gives reliable, high-res favicons for any domain
+const favicon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+
 const DAPPS: DApp[] = [
   {
     name: 'ShibaSwap',
     description: 'The official Shiba Inu DEX. Swap, provide liquidity, and earn yield on Shibarium.',
     url: 'https://shibaswap.com',
     category: 'dex',
-    logoUrl: 'https://assets.coingecko.com/coins/images/11939/small/shiba.png',
+    logoUrl: favicon('shibaswap.com'),
     featured: true,
   },
   {
@@ -36,7 +39,7 @@ const DAPPS: DApp[] = [
     description: 'Liquid staking protocol for BONE on Shibarium. Stake and earn with knBONE.',
     url: 'https://www.k9finance.com',
     category: 'defi',
-    logoUrl: 'https://assets.coingecko.com/coins/images/34203/small/k9finance.png',
+    logoUrl: 'https://cdn.prod.website-files.com/67074574714d522db70d2bec/67075296e2daef2758ccac30_k9%20logo.png',
     featured: true,
   },
   {
@@ -44,28 +47,28 @@ const DAPPS: DApp[] = [
     description: 'Community-driven DEX on Shibarium with competitive rates and low fees.',
     url: 'https://woofswap.finance',
     category: 'dex',
-    logoUrl: 'https://assets.coingecko.com/coins/images/33942/small/woofswap.png',
+    logoUrl: favicon('woofswap.finance'),
   },
   {
     name: 'ChewySwap',
     description: 'Fast and efficient decentralized exchange built natively on Shibarium.',
     url: 'https://chewyswap.dog',
     category: 'dex',
-    logoUrl: 'https://assets.coingecko.com/coins/images/33615/small/chewyswap.png',
+    logoUrl: favicon('chewyswap.dog'),
   },
   {
     name: 'Marswap',
     description: 'Multi-chain DEX and DeFi hub with staking, farming, and token launches.',
     url: 'https://marswap.exchange',
     category: 'dex',
-    logoUrl: 'https://assets.coingecko.com/coins/images/31663/small/marswap.png',
+    logoUrl: favicon('marswap.exchange'),
   },
   {
     name: 'DogPad',
     description: 'Premier Shibarium launchpad. Discover and invest in new ecosystem projects.',
     url: 'https://dogpad.io',
     category: 'launchpad',
-    logoUrl: 'https://assets.coingecko.com/coins/images/33589/small/dogpad.png',
+    logoUrl: favicon('dogpad.io'),
     featured: true,
   },
   {
@@ -73,42 +76,49 @@ const DAPPS: DApp[] = [
     description: 'Token launchpad for the Shiba Inu ecosystem with fair launch mechanics.',
     url: 'https://shibpad.com',
     category: 'launchpad',
+    logoUrl: favicon('shibpad.com'),
   },
   {
     name: 'Serp Finance',
     description: 'Perpetual DEX on Shibarium. Trade with leverage on your favorite pairs.',
     url: 'https://serp.finance',
     category: 'defi',
+    logoUrl: favicon('serp.finance'),
   },
   {
     name: 'DogSwap',
     description: 'Yield farming and AMM DEX with community governance on Shibarium.',
     url: 'https://dogswap.xyz',
     category: 'dex',
+    logoUrl: favicon('dogswap.xyz'),
   },
   {
     name: 'PunkSwap',
     description: 'Decentralized swap platform with NFT integrations on Shibarium.',
     url: 'https://punkswap.exchange',
     category: 'dex',
+    logoUrl: favicon('punkswap.exchange'),
   },
   {
     name: 'Shibex',
     description: 'All-in-one DeFi platform for swapping, staking, and bridging on Shibarium.',
     url: 'https://shibex.io',
     category: 'defi',
+    logoUrl: favicon('shibex.io'),
   },
   {
     name: 'Shib Chomp',
     description: 'Secure token storage and management dApp with innovative vault features.',
     url: 'https://shibchomp.com',
     category: 'defi',
+    logoUrl: favicon('shibchomp.com'),
   },
   {
     name: 'SHIB Metaverse',
     description: 'Immersive virtual world with NFT land, resource farming, and exploration.',
     url: 'https://shib.io/metaverse',
     category: 'gaming',
+    logoUrl: favicon('shib.io'),
     featured: true,
   },
   {
@@ -116,12 +126,14 @@ const DAPPS: DApp[] = [
     description: 'NFT marketplace for minting, buying, and selling digital art on Shibarium.',
     url: 'https://shibariumscan.io/apps',
     category: 'nft',
+    logoUrl: favicon('shibariumscan.io'),
   },
   {
     name: 'Shib Infra',
     description: 'Developer tools, APIs, and infrastructure for building on Shibarium.',
     url: 'https://shib.io/dapps',
     category: 'defi',
+    logoUrl: favicon('shib.io'),
   },
 ];
 
