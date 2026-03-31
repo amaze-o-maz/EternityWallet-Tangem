@@ -215,8 +215,8 @@ export async function approveToken(
     account,
   });
 
-  // Wait for the approval tx to be mined
-  await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+  // Wait for the approval tx to be mined (needed before swap can proceed)
+  await publicClient.waitForTransactionReceipt({ hash, timeout: 60_000, pollingInterval: 2_000 });
 
   return hash;
 }
@@ -263,7 +263,7 @@ export async function executeSwap(
 
   if (inputIsNative) {
     // Native -> Token: use swapExactETHForTokens
-    const hash = await walletClient.writeContract({
+    return walletClient.writeContract({
       address: routerAddress,
       abi: ROUTER_V1_ABI,
       functionName: 'swapExactETHForTokens',
@@ -273,14 +273,11 @@ export async function executeSwap(
       chain,
       account,
     });
-
-    await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
-    return hash;
   }
 
   if (outputIsNative) {
     // Token -> Native: use swapExactTokensForETH
-    const hash = await walletClient.writeContract({
+    return walletClient.writeContract({
       address: routerAddress,
       abi: ROUTER_V1_ABI,
       functionName: 'swapExactTokensForETH',
@@ -289,13 +286,10 @@ export async function executeSwap(
       chain,
       account,
     });
-
-    await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
-    return hash;
   }
 
   // Token -> Token: use swapExactTokensForTokens
-  const hash = await walletClient.writeContract({
+  return walletClient.writeContract({
     address: routerAddress,
     abi: ROUTER_V1_ABI,
     functionName: 'swapExactTokensForTokens',
@@ -304,7 +298,4 @@ export async function executeSwap(
     chain,
     account,
   });
-
-  await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
-  return hash;
 }
