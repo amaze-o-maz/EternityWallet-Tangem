@@ -20,6 +20,7 @@ import { useNetworkStore } from '../store/networkStore';
 import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
+import { fetchPrices } from '../lib/prices';
 
 function stringToColor(str: string): string {
   let hash = 0;
@@ -45,7 +46,9 @@ const Send: React.FC = () => {
   const [balances, setBalances] = useState<Record<string, bigint>>({});
   const [loadingBalances, setLoadingBalances] = useState(true);
   const [gasEstimate, setGasEstimate] = useState<bigint | null>(null);
+  const [gasPrice, setGasPrice] = useState<bigint | null>(null);
   const [estimatingGas, setEstimatingGas] = useState(false);
+  const [prices, setPrices] = useState<Record<string, number>>({});
   const [tokenImgLoaded, setTokenImgLoaded] = useState(false);
 
   const network = useMemo(() => getNetworkByChainId(chainId), [chainId]);
@@ -96,6 +99,10 @@ const Send: React.FC = () => {
   useEffect(() => {
     setTokenImgLoaded(false);
   }, [selectedToken]);
+
+  useEffect(() => {
+    fetchPrices().then(setPrices).catch(() => {});
+  }, []);
 
   // Fetch balances
   useEffect(() => {
@@ -178,6 +185,8 @@ const Send: React.FC = () => {
           });
           setGasEstimate(gas);
         }
+        const gp = await publicClient.getGasPrice();
+        setGasPrice(gp);
       } catch {
         setGasEstimate(null);
       } finally {
@@ -443,13 +452,28 @@ const Send: React.FC = () => {
             </div>
 
             {/* Gas estimate */}
-            {gasEstimate !== null && (
-              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-xl px-4 py-3">
+            {gasEstimate !== null && gasPrice !== null && (
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-xl px-4 py-3 space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Estimated Gas</span>
-                  <span className="text-white font-mono text-xs">
-                    {estimatingGas ? '...' : gasEstimate.toString()} units
-                  </span>
+                  <span className="text-gray-400">Estimated Gas Fee</span>
+                  <div className="text-right">
+                    <span className="text-white font-medium">
+                      {parseFloat(formatUnits(gasEstimate * gasPrice, 18)).toFixed(8)} {network?.nativeToken.symbol}
+                    </span>
+                    {(() => {
+                      const nativeSymbol = network?.nativeToken.symbol ?? '';
+                      const price = prices[nativeSymbol] ?? 0;
+                      if (price > 0) {
+                        const usd = parseFloat(formatUnits(gasEstimate * gasPrice, 18)) * price;
+                        return (
+                          <span className="text-gray-500 text-xs ml-2">
+                            (~${usd < 0.01 ? '<0.01' : usd.toFixed(2)})
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
                 </div>
               </div>
             )}
@@ -504,10 +528,27 @@ const Send: React.FC = () => {
               {toAddress}
             </span>
           </div>
-          {gasEstimate !== null && (
+          {gasEstimate !== null && gasPrice !== null && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Gas Estimate</span>
-              <span className="text-white font-mono">{gasEstimate.toString()} units</span>
+              <span className="text-gray-400">Gas Fee</span>
+              <div className="text-right">
+                <span className="text-white font-medium">
+                  {parseFloat(formatUnits(gasEstimate * gasPrice, 18)).toFixed(8)} {network?.nativeToken.symbol}
+                </span>
+                {(() => {
+                  const nativeSymbol = network?.nativeToken.symbol ?? '';
+                  const price = prices[nativeSymbol] ?? 0;
+                  if (price > 0) {
+                    const usd = parseFloat(formatUnits(gasEstimate * gasPrice, 18)) * price;
+                    return (
+                      <span className="text-gray-500 text-xs ml-1">
+                        (~${usd < 0.01 ? '<0.01' : usd.toFixed(2)})
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
             </div>
           )}
           <div className="border-t border-white/[0.06] pt-3 mt-3">

@@ -19,6 +19,7 @@ import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
 import { getV1Quote, getTokenAllowance, approveToken, executeSwap } from '../lib/swap';
+import { fetchPrices } from '../lib/prices';
 
 function stringToColor(str: string): string {
   let hash = 0;
@@ -121,6 +122,8 @@ const Swap: React.FC = () => {
   const [needsApproval, setNeedsApproval] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [estimatedGasCost, setEstimatedGasCost] = useState<string | null>(null);
+  const [estimatedGasUsd, setEstimatedGasUsd] = useState<string | null>(null);
   const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const slippagePercent = useMemo(() => {
@@ -231,6 +234,37 @@ const Swap: React.FC = () => {
 
     checkAllowance();
   }, [fromToken, address, network, quoteResult, fromAmount, chainId]);
+
+  useEffect(() => {
+    if (!showConfirm || !quoteResult || !publicClient || !network || !fromToken || !fromAmount) {
+      setEstimatedGasCost(null);
+      setEstimatedGasUsd(null);
+      return;
+    }
+
+    const estimateSwapGas = async () => {
+      try {
+        const gasPrice = await publicClient.getGasPrice();
+        // Use 300k as rough estimate for swap gas units
+        const gasUnits = 300_000n;
+        const gasCostWei = gasUnits * gasPrice;
+        const gasCostFormatted = parseFloat(formatUnits(gasCostWei, 18)).toFixed(8);
+        setEstimatedGasCost(`${gasCostFormatted} ${network.nativeToken.symbol}`);
+
+        const prices = await fetchPrices();
+        const nativePrice = prices[network.nativeToken.symbol] ?? 0;
+        if (nativePrice > 0) {
+          const usd = parseFloat(formatUnits(gasCostWei, 18)) * nativePrice;
+          setEstimatedGasUsd(usd < 0.01 ? '<$0.01' : `~$${usd.toFixed(2)}`);
+        }
+      } catch {
+        setEstimatedGasCost(null);
+        setEstimatedGasUsd(null);
+      }
+    };
+
+    estimateSwapGas();
+  }, [showConfirm, quoteResult, publicClient, network, fromToken, fromAmount]);
 
   const fromBalance = fromToken ? (balances[fromToken.address] ?? 0n) : 0n;
   const formattedFromBalance = fromToken
@@ -766,6 +800,17 @@ const Swap: React.FC = () => {
                 <span className="text-gray-400">Fee</span>
                 <span className="text-white">0.3%</span>
               </div>
+              {estimatedGasCost && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Est. Gas Fee</span>
+                  <div className="text-right">
+                    <span className="text-white">{estimatedGasCost}</span>
+                    {estimatedGasUsd && (
+                      <span className="text-gray-500 ml-1">({estimatedGasUsd})</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Action buttons: Approve → Swap */}

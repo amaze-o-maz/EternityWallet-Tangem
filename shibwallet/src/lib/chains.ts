@@ -24,6 +24,7 @@ export const DEFAULT_NETWORKS: Record<string, NetworkConfig> = {
     chainId: 1,
     name: 'Ethereum',
     rpcUrl: 'https://cloudflare-eth.com',
+    rpcFallbacks: ['https://eth.llamarpc.com', 'https://rpc.ankr.com/eth'],
     explorerUrl: 'https://etherscan.io',
     nativeToken: { symbol: 'ETH', decimals: 18 },
     logoUrl: 'https://assets.coingecko.com/coins/images/279/thumb/ethereum.png',
