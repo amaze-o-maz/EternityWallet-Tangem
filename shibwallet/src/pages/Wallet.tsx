@@ -123,38 +123,57 @@ const Wallet: React.FC = () => {
       const nativeTokens = tokens.filter(isNativeToken);
       const erc20Tokens = tokens.filter((t) => !isNativeToken(t));
 
-      // Fetch native balance + all ERC20 balances via multicall + prices in parallel
-      const nativePromise = nativeTokens.length > 0
-        ? publicClient.getBalance({ address: address as `0x${string}` })
-        : Promise.resolve(0n);
+      // Fetch native balance and prices (these are independent)
+      const [nativeBal, fetchedPrices] = await Promise.all([
+        nativeTokens.length > 0
+          ? publicClient.getBalance({ address: address as `0x${string}` }).catch(() => 0n)
+          : Promise.resolve(0n),
+        fetchPrices(),
+      ]);
 
-      const multicallPromise = erc20Tokens.length > 0
-        ? publicClient.multicall({
+      // Set native balances immediately
+      for (const token of nativeTokens) {
+        newBalances[token.address] = nativeBal;
+      }
+
+      // Fetch ERC20 balances — try multicall first, fall back to individual calls
+      if (erc20Tokens.length > 0) {
+        let multicallSuccess = false;
+        try {
+          const multicallResults = await publicClient.multicall({
             contracts: erc20Tokens.map((token) => ({
               address: token.address,
               abi: ERC20_ABI,
               functionName: 'balanceOf',
               args: [address as `0x${string}`],
             })),
-          })
-        : Promise.resolve([]);
+          });
+          erc20Tokens.forEach((token, i) => {
+            const result = multicallResults[i];
+            newBalances[token.address] = result.status === 'success' ? BigInt(result.result as unknown as string) : 0n;
+          });
+          multicallSuccess = true;
+        } catch {
+          // Multicall3 not available on this chain — fall back to individual calls
+        }
 
-      const [nativeBal, multicallResults, fetchedPrices] = await Promise.all([
-        nativePromise,
-        multicallPromise,
-        fetchPrices(),
-      ]);
-
-      // Set native balances
-      for (const token of nativeTokens) {
-        newBalances[token.address] = nativeBal;
+        if (!multicallSuccess) {
+          const results = await Promise.allSettled(
+            erc20Tokens.map((token) =>
+              publicClient.readContract({
+                address: token.address,
+                abi: ERC20_ABI,
+                functionName: 'balanceOf',
+                args: [address as `0x${string}`],
+              }),
+            ),
+          );
+          erc20Tokens.forEach((token, i) => {
+            const result = results[i];
+            newBalances[token.address] = result.status === 'fulfilled' ? BigInt(result.value as unknown as string) : 0n;
+          });
+        }
       }
-
-      // Set ERC20 balances from multicall
-      erc20Tokens.forEach((token, i) => {
-        const result = multicallResults[i];
-        newBalances[token.address] = result.status === 'success' ? BigInt(result.result as unknown as string) : 0n;
-      });
 
       setBalances(newBalances);
       setPrices(fetchedPrices);
