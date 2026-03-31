@@ -201,15 +201,24 @@ export async function approveToken(
     throw new Error('Wallet client not available');
   }
 
-  const { request } = await publicClient.simulateContract({
+  const chain = buildViemChain(network);
+  const gasPrice = await publicClient.getGasPrice();
+
+  // Approve max to avoid repeated approvals
+  const hash = await walletClient.writeContract({
     address: tokenAddress,
     abi: ERC20_ABI,
     functionName: 'approve',
-    args: [spenderAddress, amount],
+    args: [spenderAddress, maxUint256],
+    gas: 100_000n,
+    gasPrice,
+    chain,
     account,
   });
 
-  const hash = await walletClient.writeContract(request);
+  // Wait for the approval tx to be mined
+  await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+
   return hash;
 }
 
@@ -248,41 +257,58 @@ export async function executeSwap(
     !directPairExists,
   );
 
+  const chain = buildViemChain(network);
+
+  // Fetch gas price upfront — Shibarium uses legacy gas pricing
+  const gasPrice = await publicClient.getGasPrice();
+
   if (inputIsNative) {
     // Native -> Token: use swapExactETHForTokens
-    const { request } = await publicClient.simulateContract({
+    const hash = await walletClient.writeContract({
       address: routerAddress,
       abi: ROUTER_V1_ABI,
       functionName: 'swapExactETHForTokens',
       args: [amountOutMin, path, account.address, swapDeadline],
       value: amountIn,
+      gas: 300_000n,
+      gasPrice,
+      chain,
       account,
     });
 
-    return walletClient.writeContract(request);
+    await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+    return hash;
   }
 
   if (outputIsNative) {
     // Token -> Native: use swapExactTokensForETH
-    const { request } = await publicClient.simulateContract({
+    const hash = await walletClient.writeContract({
       address: routerAddress,
       abi: ROUTER_V1_ABI,
       functionName: 'swapExactTokensForETH',
       args: [amountIn, amountOutMin, path, account.address, swapDeadline],
+      gas: 300_000n,
+      gasPrice,
+      chain,
       account,
     });
 
-    return walletClient.writeContract(request);
+    await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+    return hash;
   }
 
   // Token -> Token: use swapExactTokensForTokens
-  const { request } = await publicClient.simulateContract({
+  const hash = await walletClient.writeContract({
     address: routerAddress,
     abi: ROUTER_V1_ABI,
     functionName: 'swapExactTokensForTokens',
     args: [amountIn, amountOutMin, path, account.address, swapDeadline],
+    gas: 300_000n,
+    gasPrice,
+    chain,
     account,
   });
 
-  return walletClient.writeContract(request);
+  await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+  return hash;
 }
