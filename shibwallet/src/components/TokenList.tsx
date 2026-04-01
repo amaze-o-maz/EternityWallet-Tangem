@@ -3,10 +3,12 @@ import { Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNetworkStore } from '../store/networkStore';
 import { getTokensForChain, isCustomToken, removeCustomToken, TokenInfo } from '../lib/tokens';
+import Sparkline from './Sparkline';
 
 interface TokenListProps {
   balances: Record<string, bigint>;
   prices: Record<string, number>;
+  sparklines?: Record<string, number[]>;
   onTokenRemoved?: () => void;
 }
 
@@ -45,10 +47,11 @@ const TokenRow: React.FC<{
   token: TokenInfo;
   balance: bigint;
   price: number;
+  sparklineData?: number[];
   index: number;
   chainId: number;
   onRemoved?: () => void;
-}> = ({ token, balance, price, index, chainId, onRemoved }) => {
+}> = ({ token, balance, price, sparklineData, index, chainId, onRemoved }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   const displayBalance = formatBalance(balance, token.decimals);
@@ -95,6 +98,11 @@ const TokenRow: React.FC<{
         <p className="text-gray-500 text-xs mt-0.5">{token.symbol}</p>
       </div>
 
+      {/* Sparkline */}
+      {sparklineData && sparklineData.length >= 2 && (
+        <Sparkline data={sparklineData} />
+      )}
+
       {/* Balance + USD value */}
       <div className="text-right shrink-0">
         <p className="text-white text-sm font-medium tabular-nums">{displayBalance}</p>
@@ -121,7 +129,7 @@ const TokenRow: React.FC<{
   );
 };
 
-const TokenList: React.FC<TokenListProps> = ({ balances, prices, onTokenRemoved }) => {
+const TokenList: React.FC<TokenListProps> = ({ balances, prices, sparklines, onTokenRemoved }) => {
   const chainId = useNetworkStore((s) => s.chainId);
   const tokens = getTokensForChain(chainId);
 
@@ -137,6 +145,7 @@ const TokenList: React.FC<TokenListProps> = ({ balances, prices, onTokenRemoved 
             token={token}
             balance={balance}
             price={price}
+            sparklineData={sparklines?.[token.symbol]}
             index={index}
             chainId={chainId}
             onRemoved={onTokenRemoved}

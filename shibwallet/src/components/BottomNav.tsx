@@ -1,10 +1,11 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Wallet, Globe, RefreshCw } from 'lucide-react';
+import { Wallet, Globe, RefreshCw, Clock } from 'lucide-react';
 
 const NAV_ITEMS = [
   { path: '/wallet', label: 'Wallet', icon: Wallet },
-  { path: '/wallet/swap', label: 'ShibaSwap', icon: RefreshCw },
+  { path: '/wallet/swap', label: 'Swap', icon: RefreshCw },
+  { path: '/wallet/history', label: 'History', icon: Clock },
   { path: '/wallet/dapps', label: 'dApps', icon: Globe },
 ];
 

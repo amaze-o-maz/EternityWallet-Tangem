@@ -6,13 +6,14 @@ import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 import TokenList from '../components/TokenList';
+import NFTGallery from '../components/NFTGallery';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { getNetworkByChainId } from '../lib/chains';
 import { getTokensForChain, isNativeToken, addCustomToken, TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
-import { fetchPrices } from '../lib/prices';
+import { fetchPrices, fetchSparklines } from '../lib/prices';
 
 const VAULT_KEY = 'shibwallet_vault';
 const AUTO_LOCK_MS = 5 * 60 * 1000; // 5 minutes
@@ -39,8 +40,10 @@ const Wallet: React.FC = () => {
   const { address, isUnlocked, lastActivity, resetLastActivity, lock } = useWalletStore();
   const chainId = useNetworkStore((s) => s.chainId);
 
+  const [activeTab, setActiveTab] = useState<'tokens' | 'nfts'>('tokens');
   const [balances, setBalances] = useState<Record<string, bigint>>({});
   const [prices, setPrices] = useState<Record<string, number>>({});
+  const [sparklines, setSparklines] = useState<Record<string, number[]>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const lockCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -123,12 +126,13 @@ const Wallet: React.FC = () => {
       const nativeTokens = tokens.filter(isNativeToken);
       const erc20Tokens = tokens.filter((t) => !isNativeToken(t));
 
-      // Fetch native balance and prices (these are independent)
-      const [nativeBal, fetchedPrices] = await Promise.all([
+      // Fetch native balance, prices, and sparklines (these are independent)
+      const [nativeBal, fetchedPrices, fetchedSparklines] = await Promise.all([
         nativeTokens.length > 0
           ? publicClient.getBalance({ address: address as `0x${string}` }).catch(() => 0n)
           : Promise.resolve(0n),
         fetchPrices(),
+        fetchSparklines(),
       ]);
 
       // Set native balances immediately
@@ -177,6 +181,7 @@ const Wallet: React.FC = () => {
 
       setBalances(newBalances);
       setPrices(fetchedPrices);
+      setSparklines(fetchedSparklines);
     } catch (err) {
       console.error('[ShibWallet] Balance fetch failed:', err);
     } finally {
@@ -368,44 +373,73 @@ const Wallet: React.FC = () => {
           </button>
         </div>
 
-        {/* Token list */}
-        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl overflow-hidden shadow-2xl">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
-            <h2 className="text-sm font-semibold bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
-              Tokens
-            </h2>
-            <button
-              onClick={() => {
-                setRefreshing(true);
-                setLoading(true);
-                fetchData();
-              }}
-              className="text-gray-400 hover:text-white transition-all duration-300 active:scale-95 p-1.5 rounded-lg hover:bg-white/[0.06]"
-              title="Refresh balances"
-            >
-              <RefreshCw size={14} className={refreshing ? 'animate-spin-slow' : ''} />
-            </button>
-          </div>
-          {loading ? (
-            <div>
-              {[0, 1, 2, 3].map((i) => (
-                <SkeletonRow key={i} index={i} />
-              ))}
-            </div>
-          ) : (
-            <TokenList balances={balances} prices={prices} onTokenRemoved={() => { setLoading(true); fetchData(); }} />
-          )}
-
-          {/* Add Token button */}
+        {/* Tab switcher */}
+        <div className="flex gap-1 mb-4 bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-xl p-1">
           <button
-            onClick={() => setShowAddToken(true)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm text-[#FF6900]
-                       border-t border-white/[0.06] hover:bg-white/[0.03] transition-all active:scale-[0.98]"
+            onClick={() => setActiveTab('tokens')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'tokens'
+                ? 'bg-gradient-to-r from-[#FF6900] to-[#FF8C00] text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
           >
-            <Plus size={14} />
-            <span className="font-medium">Add Token</span>
+            Tokens
+          </button>
+          <button
+            onClick={() => setActiveTab('nfts')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'nfts'
+                ? 'bg-gradient-to-r from-[#FF6900] to-[#FF8C00] text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            NFTs
           </button>
         </div>
+
+        {activeTab === 'tokens' ? (
+          /* Token list */
+          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <h2 className="text-sm font-semibold bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+                Tokens
+              </h2>
+              <button
+                onClick={() => {
+                  setRefreshing(true);
+                  setLoading(true);
+                  fetchData();
+                }}
+                className="text-gray-400 hover:text-white transition-all duration-300 active:scale-95 p-1.5 rounded-lg hover:bg-white/[0.06]"
+                title="Refresh balances"
+              >
+                <RefreshCw size={14} className={refreshing ? 'animate-spin-slow' : ''} />
+              </button>
+            </div>
+            {loading ? (
+              <div>
+                {[0, 1, 2, 3].map((i) => (
+                  <SkeletonRow key={i} index={i} />
+                ))}
+              </div>
+            ) : (
+              <TokenList balances={balances} prices={prices} sparklines={sparklines} onTokenRemoved={() => { setLoading(true); fetchData(); }} />
+            )}
+
+            {/* Add Token button */}
+            <button
+              onClick={() => setShowAddToken(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm text-[#FF6900]
+                         border-t border-white/[0.06] hover:bg-white/[0.03] transition-all active:scale-[0.98]"
+            >
+              <Plus size={14} />
+              <span className="font-medium">Add Token</span>
+            </button>
+          </div>
+        ) : (
+          /* NFT Gallery */
+          <NFTGallery address={address} chainId={chainId} />
+        )}
       </main>
 
       <BottomNav />
