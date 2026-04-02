@@ -15,6 +15,7 @@ import BottomNav from '../components/BottomNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
+import { useTransactionStore } from '../store/transactionStore';
 import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
@@ -94,6 +95,7 @@ const Swap: React.FC = () => {
   const navigate = useNavigate();
   const { address, privateKey, isUnlocked } = useWalletStore();
   const chainId = useNetworkStore((s) => s.chainId);
+  const addTransaction = useTransactionStore((s) => s.addTransaction);
 
   const network = useMemo(() => getNetworkByChainId(chainId), [chainId]);
   const tokens = useMemo(() => getTokensForChain(chainId), [chainId]);
@@ -394,14 +396,39 @@ const Swap: React.FC = () => {
         60_000,
         'Swap',
       );
+
+      // Swap was submitted successfully — show success toast immediately
+      // before any state updates that could trigger re-renders
+      toast.dismiss('swap');
+      toast.success('Swap successful!');
       setTxHash(hash);
-      toast.success('Swap successful!', { id: 'swap' });
+
+      // Record swap transaction in local store for history (non-critical)
+      try {
+        addTransaction({
+          hash,
+          from: address!,
+          to: network.swap.v1Router,
+          value: parsedAmount.toString(),
+          timeStamp: Math.floor(Date.now() / 1000).toString(),
+          type: 'swap',
+          chainId,
+          fromTokenSymbol: fromToken.symbol,
+          toTokenSymbol: toToken.symbol,
+          tokenSymbol: fromToken.symbol,
+          tokenDecimal: fromToken.decimals.toString(),
+          toAmount: quoteResult?.amountOut?.toString(),
+        });
+      } catch {
+        // Don't let history recording errors affect the swap result
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Swap failed', { id: 'swap' });
+      toast.dismiss('swap');
+      toast.error(err instanceof Error ? err.message : 'Swap failed');
     } finally {
       setSwapping(false);
     }
-  }, [fromToken, toToken, privateKey, network, minimumReceived, fromAmount, chainId]);
+  }, [fromToken, toToken, privateKey, network, minimumReceived, fromAmount, chainId, address, addTransaction, quoteResult]);
 
   if (!isUnlocked || !address) return null;
 

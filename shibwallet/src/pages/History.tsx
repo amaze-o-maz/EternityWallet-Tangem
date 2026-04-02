@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatUnits } from 'viem';
-import { ArrowUpRight, ArrowDownLeft, RefreshCw, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, ArrowDownUp, RefreshCw, ExternalLink } from 'lucide-react';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
+import { useTransactionStore, type StoredTransaction } from '../store/transactionStore';
 import { getNetworkByChainId } from '../lib/chains';
 
 interface Transaction {
@@ -20,6 +21,12 @@ interface Transaction {
   tokenSymbol?: string;
   tokenDecimal?: string;
   tokenName?: string;
+  // Local transaction fields
+  type?: 'send' | 'swap';
+  fromTokenSymbol?: string;
+  toTokenSymbol?: string;
+  toAmount?: string;
+  isLocal?: boolean;
 }
 
 function timeAgo(timestamp: number): string {
@@ -71,6 +78,7 @@ const History: React.FC = () => {
   const { address, isUnlocked } = useWalletStore();
   const chainId = useNetworkStore((s) => s.chainId);
   const network = getNetworkByChainId(chainId);
+  const localTransactions = useTransactionStore((s) => s.getTransactionsForChain(chainId));
 
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [txList, setTxList] = useState<Transaction[]>([]);
@@ -119,7 +127,13 @@ const History: React.FC = () => {
       }
     } catch (err) {
       console.error('[ShibWallet] Failed to fetch transaction history:', err);
-      setError('Failed to load transactions. Please try again.');
+      // Only show error if there are no local transactions to fall back on
+      const localTxs = useTransactionStore.getState().transactions.filter(
+        (t) => t.chainId === chainId,
+      );
+      if (localTxs.length === 0) {
+        setError('Failed to load transactions. Please try again.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -139,7 +153,41 @@ const History: React.FC = () => {
     fetchTransactions();
   };
 
-  const displayedTxs = activeTab === 'all' ? txList : tokenTxList;
+  // Convert local transactions to the Transaction interface and merge with API results
+  const localTxsMapped: Transaction[] = localTransactions.map((lt) => ({
+    hash: lt.hash,
+    from: lt.from,
+    to: lt.to,
+    value: lt.value,
+    timeStamp: lt.timeStamp,
+    isError: '0',
+    gasUsed: '0',
+    gasPrice: '0',
+    tokenSymbol: lt.tokenSymbol,
+    tokenDecimal: lt.tokenDecimal,
+    tokenName: lt.tokenName,
+    type: lt.type,
+    fromTokenSymbol: lt.fromTokenSymbol,
+    toTokenSymbol: lt.toTokenSymbol,
+    toAmount: lt.toAmount,
+    isLocal: true,
+  }));
+
+  const mergeWithLocal = (apiTxs: Transaction[]): Transaction[] => {
+    const apiHashes = new Set(apiTxs.map((tx) => tx.hash.toLowerCase()));
+    // Add local transactions that aren't already in the API results
+    const uniqueLocal = localTxsMapped.filter(
+      (lt) => !apiHashes.has(lt.hash.toLowerCase()),
+    );
+    const merged = [...uniqueLocal, ...apiTxs];
+    // Sort by timestamp descending (most recent first)
+    merged.sort((a, b) => parseInt(b.timeStamp, 10) - parseInt(a.timeStamp, 10));
+    return merged;
+  };
+
+  const displayedTxs = activeTab === 'all'
+    ? mergeWithLocal(txList)
+    : mergeWithLocal(tokenTxList.length > 0 ? tokenTxList : []);
 
   if (!isUnlocked || !address) return null;
 
@@ -231,6 +279,7 @@ const History: React.FC = () => {
           ) : (
             <div>
               {displayedTxs.map((tx, index) => {
+                const isSwap = tx.type === 'swap';
                 const isSent = tx.from.toLowerCase() === address.toLowerCase();
                 const counterparty = isSent ? tx.to : tx.from;
                 const timestamp = parseInt(tx.timeStamp, 10);
@@ -264,6 +313,11 @@ const History: React.FC = () => {
                   symbol = network?.nativeToken.symbol ?? 'ETH';
                 }
 
+                // Display label
+                const txLabel = isSwap
+                  ? `Swap ${tx.fromTokenSymbol ?? ''} → ${tx.toTokenSymbol ?? ''}`
+                  : isSent ? 'Sent' : 'Received';
+
                 return (
                   <div
                     key={`${tx.hash}-${index}`}
@@ -275,14 +329,18 @@ const History: React.FC = () => {
                     {/* Direction icon */}
                     <div
                       className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0
-                        ${isSent
-                          ? 'bg-orange-500/10 text-orange-400'
-                          : 'bg-green-500/10 text-green-400'
+                        ${isSwap
+                          ? 'bg-purple-500/10 text-purple-400'
+                          : isSent
+                            ? 'bg-orange-500/10 text-orange-400'
+                            : 'bg-green-500/10 text-green-400'
                         }
                         ${failed ? 'bg-red-500/10 text-red-400' : ''}
                       `}
                     >
-                      {isSent ? (
+                      {isSwap ? (
+                        <ArrowDownUp size={18} />
+                      ) : isSent ? (
                         <ArrowUpRight size={18} />
                       ) : (
                         <ArrowDownLeft size={18} />
@@ -293,7 +351,7 @@ const History: React.FC = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm text-white font-medium">
-                          {isSent ? 'Sent' : 'Received'}
+                          {txLabel}
                         </p>
                         {failed && (
                           <span className="text-[10px] font-semibold text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">
@@ -302,14 +360,14 @@ const History: React.FC = () => {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 font-mono mt-0.5">
-                        {isSent ? 'To: ' : 'From: '}{truncateAddress(counterparty)}
+                        {isSwap ? truncateAddress(tx.hash) : (isSent ? 'To: ' : 'From: ') + truncateAddress(counterparty)}
                       </p>
                     </div>
 
                     {/* Amount and time */}
                     <div className="text-right shrink-0">
-                      <p className={`text-sm font-medium ${isSent ? 'text-orange-400' : 'text-green-400'} ${failed ? 'text-red-400 line-through' : ''}`}>
-                        {isSent ? '-' : '+'}{amount} {symbol}
+                      <p className={`text-sm font-medium ${isSwap ? 'text-purple-400' : isSent ? 'text-orange-400' : 'text-green-400'} ${failed ? 'text-red-400 line-through' : ''}`}>
+                        {isSwap ? '' : isSent ? '-' : '+'}{amount} {symbol}
                       </p>
                       <div className="flex items-center gap-1 justify-end mt-0.5">
                         <span className="text-[10px] text-gray-600">{timeAgo(timestamp)}</span>

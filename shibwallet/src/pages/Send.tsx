@@ -10,13 +10,14 @@ import {
   type Chain,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, X, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TokenSelector from '../components/TokenSelector';
 import ReviewModal from '../components/ReviewModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
+import { useTransactionStore } from '../store/transactionStore';
 import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
@@ -35,6 +36,7 @@ const Send: React.FC = () => {
   const navigate = useNavigate();
   const { address, privateKey, isUnlocked } = useWalletStore();
   const chainId = useNetworkStore((s) => s.chainId);
+  const addTransaction = useTransactionStore((s) => s.addTransaction);
 
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
   const [toAddress, setToAddress] = useState('');
@@ -50,6 +52,8 @@ const Send: React.FC = () => {
   const [estimatingGas, setEstimatingGas] = useState(false);
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [tokenImgLoaded, setTokenImgLoaded] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [copiedHash, setCopiedHash] = useState(false);
 
   const network = useMemo(() => getNetworkByChainId(chainId), [chainId]);
 
@@ -270,13 +274,40 @@ const Send: React.FC = () => {
 
       setTxHash(hash);
       setReviewOpen(false);
-      toast.success('Transaction sent successfully!');
+      setShowSuccessModal(true);
+      setCopiedHash(false);
+
+      // Record transaction in local store for history
+      try {
+        addTransaction({
+          hash,
+          from: address!,
+          to: toAddress,
+          value: parseUnits(amount, selectedToken.decimals).toString(),
+          timeStamp: Math.floor(Date.now() / 1000).toString(),
+          type: 'send',
+          chainId,
+          tokenSymbol: isNativeToken(selectedToken) ? undefined : selectedToken.symbol,
+          tokenDecimal: isNativeToken(selectedToken) ? undefined : selectedToken.decimals.toString(),
+          tokenName: isNativeToken(selectedToken) ? undefined : selectedToken.name,
+        });
+      } catch {
+        // Don't let history recording errors affect the success display
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Transaction failed');
     } finally {
       setSending(false);
     }
-  }, [selectedToken, privateKey, network, viemChain, publicClient, amount, toAddress]);
+  }, [selectedToken, privateKey, network, viemChain, publicClient, amount, toAddress, address, addTransaction, chainId]);
+
+  const handleCopyHash = useCallback(() => {
+    if (!txHash) return;
+    navigator.clipboard.writeText(txHash).then(() => {
+      setCopiedHash(true);
+      setTimeout(() => setCopiedHash(false), 2000);
+    }).catch(() => {});
+  }, [txHash]);
 
   if (!isUnlocked || !address) return null;
 
