@@ -335,55 +335,7 @@ const Send: React.FC = () => {
           Send
         </h1>
 
-        {txHash ? (
-          <div className="animate-slide-up-fade text-center py-8">
-            {/* Animated checkmark with green glow */}
-            <div className="relative inline-block mb-6">
-              <div
-                className="absolute inset-0"
-                style={{
-                  background: 'radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%)',
-                  transform: 'scale(2.5)',
-                  filter: 'blur(20px)',
-                }}
-              />
-              <div className="relative w-20 h-20 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto backdrop-blur-xl">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </div>
-            </div>
-            <h2 className="text-xl font-semibold text-white mb-3">Transaction Sent</h2>
-
-            {/* Glass-card tx hash */}
-            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-4 mb-6">
-              <p className="text-xs text-gray-500 mb-1.5">Transaction Hash</p>
-              <p className="text-sm text-gray-300 font-mono break-all leading-relaxed">
-                {txHash}
-              </p>
-            </div>
-
-            <a
-              href={getExplorerTxUrl(chainId, txHash)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm text-[#FF6900] hover:text-[#FFB800] transition-colors mb-6"
-            >
-              View on Explorer
-              <ExternalLink size={14} />
-            </a>
-            <div>
-              <button
-                onClick={() => navigate('/wallet')}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
-                           text-white font-semibold transition-all duration-300 active:scale-[0.97]
-                           hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]"
-              >
-                Back to Wallet
-              </button>
-            </div>
-          </div>
-        ) : (
+        {txHash ? null : (
           <div className="space-y-5">
             {/* Token selector */}
             <div>
@@ -589,6 +541,105 @@ const Send: React.FC = () => {
           </div>
         </div>
       </ReviewModal>
+
+      {/* Success notification modal */}
+      {showSuccessModal && txHash && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in" onClick={() => navigate('/wallet')}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <div className="flex items-center justify-end mb-2">
+              <button
+                onClick={() => navigate('/wallet')}
+                className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Animated checkmark with green glow */}
+            <div className="text-center">
+              <div className="relative inline-block mb-5">
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: 'radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%)',
+                    transform: 'scale(2.5)',
+                    filter: 'blur(20px)',
+                  }}
+                />
+                <div className="relative w-16 h-16 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto backdrop-blur-xl">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+              </div>
+              <h2 className="text-lg font-semibold text-white mb-1">Transaction Sent</h2>
+              <p className="text-xs text-gray-400 mb-5">Your transaction has been submitted to the network</p>
+            </div>
+
+            {/* Transaction hash card */}
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-gray-500">Transaction Hash</p>
+                <button
+                  onClick={handleCopyHash}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  {copiedHash ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                  {copiedHash ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-sm text-gray-300 font-mono break-all leading-relaxed">
+                {txHash}
+              </p>
+            </div>
+
+            {/* Transaction details */}
+            {selectedToken && (
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-5 space-y-2.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Amount</span>
+                  <span className="text-white font-medium">{amount} {selectedToken.symbol}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">To</span>
+                  <span className="text-white font-mono text-xs">{toAddress.slice(0, 8)}...{toAddress.slice(-6)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Network</span>
+                  <span className="text-white">{network?.name}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <a
+              href={getExplorerTxUrl(chainId, txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3.5 rounded-xl border border-white/[0.08] bg-white/[0.03]
+                         text-white font-medium text-sm transition-all duration-300 active:scale-[0.97]
+                         hover:border-[#FF6900]/30 hover:shadow-[0_0_15px_rgba(255,105,0,0.08)]
+                         flex items-center justify-center gap-2 mb-3"
+            >
+              View on Explorer
+              <ExternalLink size={14} />
+            </a>
+            <button
+              onClick={() => navigate('/wallet')}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                         text-white font-semibold text-sm transition-all duration-300 active:scale-[0.97]
+                         hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]"
+            >
+              Back to Wallet
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
