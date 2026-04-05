@@ -341,6 +341,43 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     }
   };
 
+  // Group NFTs by collection (contract address)
+  const collections = useMemo(() => {
+    const map = new Map<string, { name: string; standard: string; nfts: NFTItem[] }>();
+    for (const nft of nfts) {
+      const key = nft.contractAddress.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { name: nft.contractName, standard: nft.tokenStandard, nfts: [] });
+      }
+      map.get(key)!.nfts.push(nft);
+    }
+    // Sort collections by count descending
+    return Array.from(map.entries())
+      .map(([addr, data]) => ({ address: addr, ...data }))
+      .sort((a, b) => b.nfts.length - a.nfts.length);
+  }, [nfts]);
+
+  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
+
+  // Auto-expand if only 1-2 collections
+  useEffect(() => {
+    if (collections.length <= 2 && collections.length > 0) {
+      setExpandedCollections(new Set(collections.map((c) => c.address)));
+    }
+  }, [collections.length]);
+
+  const toggleCollection = (addr: string) => {
+    setExpandedCollections((prev) => {
+      const next = new Set(prev);
+      if (next.has(addr)) {
+        next.delete(addr);
+      } else {
+        next.add(addr);
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
     fetchNFTs();
   }, [fetchNFTs]);
@@ -373,43 +410,6 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       </div>
     );
   }
-
-  // Group NFTs by collection (contract address)
-  const collections = useMemo(() => {
-    const map = new Map<string, { name: string; standard: string; nfts: NFTItem[] }>();
-    for (const nft of nfts) {
-      const key = nft.contractAddress.toLowerCase();
-      if (!map.has(key)) {
-        map.set(key, { name: nft.contractName, standard: nft.tokenStandard, nfts: [] });
-      }
-      map.get(key)!.nfts.push(nft);
-    }
-    // Sort collections by count descending
-    return Array.from(map.entries())
-      .map(([addr, data]) => ({ address: addr, ...data }))
-      .sort((a, b) => b.nfts.length - a.nfts.length);
-  }, [nfts]);
-
-  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
-
-  // Auto-expand if only 1-2 collections
-  useEffect(() => {
-    if (collections.length <= 2) {
-      setExpandedCollections(new Set(collections.map((c) => c.address)));
-    }
-  }, [collections.length]);
-
-  const toggleCollection = (addr: string) => {
-    setExpandedCollections((prev) => {
-      const next = new Set(prev);
-      if (next.has(addr)) {
-        next.delete(addr);
-      } else {
-        next.add(addr);
-      }
-      return next;
-    });
-  };
 
   if (nfts.length === 0) {
     return (
