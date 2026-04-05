@@ -213,9 +213,13 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
 
       setNfts(items);
 
-      // Try to load images via tokenURI for items without images
-      if (items.some((item) => !item.imageUrl)) {
-        loadTokenImages(items, network);
+      // For Ethereum, always fetch on-chain tokenURI to get fresh images
+      // (Blockscout can cache stale pre-reveal images for collections like Sheboshis)
+      // For other chains, only fetch for items missing images
+      if (chainId === 1 && items.length > 0) {
+        loadTokenImages(items, network, true);
+      } else if (items.some((item) => !item.imageUrl)) {
+        loadTokenImages(items, network, false);
       }
     } catch (err) {
       console.error('[NFTGallery] Fetch failed:', err);
@@ -228,6 +232,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   const loadTokenImages = async (
     items: NFTItem[],
     network: ReturnType<typeof getNetworkByChainId>,
+    forceRefresh = false,
   ) => {
     if (!network) return;
 
@@ -252,7 +257,8 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     });
 
     // Process in batches of 5 to avoid flooding the RPC
-    const needImages = items.filter((item) => !item.imageUrl);
+    // When forceRefresh is true, re-fetch all items to get fresh on-chain images
+    const needImages = forceRefresh ? items : items.filter((item) => !item.imageUrl);
     const batchSize = 5;
 
     for (let i = 0; i < needImages.length; i += batchSize) {
