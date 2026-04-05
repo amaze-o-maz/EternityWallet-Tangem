@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { createPublicClient, http, fallback } from 'viem';
 import { getNetworkByChainId } from '../lib/chains';
 
@@ -374,6 +374,43 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     );
   }
 
+  // Group NFTs by collection (contract address)
+  const collections = useMemo(() => {
+    const map = new Map<string, { name: string; standard: string; nfts: NFTItem[] }>();
+    for (const nft of nfts) {
+      const key = nft.contractAddress.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { name: nft.contractName, standard: nft.tokenStandard, nfts: [] });
+      }
+      map.get(key)!.nfts.push(nft);
+    }
+    // Sort collections by count descending
+    return Array.from(map.entries())
+      .map(([addr, data]) => ({ address: addr, ...data }))
+      .sort((a, b) => b.nfts.length - a.nfts.length);
+  }, [nfts]);
+
+  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
+
+  // Auto-expand if only 1-2 collections
+  useEffect(() => {
+    if (collections.length <= 2) {
+      setExpandedCollections(new Set(collections.map((c) => c.address)));
+    }
+  }, [collections.length]);
+
+  const toggleCollection = (addr: string) => {
+    setExpandedCollections((prev) => {
+      const next = new Set(prev);
+      if (next.has(addr)) {
+        next.delete(addr);
+      } else {
+        next.add(addr);
+      }
+      return next;
+    });
+  };
+
   if (nfts.length === 0) {
     return (
       <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-10 text-center">
@@ -392,15 +429,139 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {nfts.map((nft, i) => (
-        <div
-          key={`${nft.contractAddress}-${nft.tokenId}`}
-          style={{ animation: `slide-up-fade 0.4s ease-out ${i * 50}ms both` }}
-        >
-          <NFTCard nft={nft} />
-        </div>
-      ))}
+    <div className="space-y-3">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between px-1 mb-1">
+        <p className="text-xs text-gray-500">
+          {nfts.length} NFT{nfts.length !== 1 ? 's' : ''} in {collections.length} collection{collections.length !== 1 ? 's' : ''}
+        </p>
+        {collections.length > 2 && (
+          <button
+            onClick={() => {
+              const allExpanded = collections.every((c) => expandedCollections.has(c.address));
+              if (allExpanded) {
+                setExpandedCollections(new Set());
+              } else {
+                setExpandedCollections(new Set(collections.map((c) => c.address)));
+              }
+            }}
+            className="text-[11px] text-[#FF6900] hover:text-[#FFB800] transition-colors"
+          >
+            {collections.every((c) => expandedCollections.has(c.address)) ? 'Collapse All' : 'Expand All'}
+          </button>
+        )}
+      </div>
+
+      {collections.map((collection, ci) => {
+        const isExpanded = expandedCollections.has(collection.address);
+        // Use first NFT with an image as the collection thumbnail
+        const thumbNft = collection.nfts.find((n) => n.imageUrl) ?? collection.nfts[0];
+        const hue = parseInt(collection.address.slice(2, 8), 16) % 360;
+
+        return (
+          <div
+            key={collection.address}
+            className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl overflow-hidden transition-all duration-300"
+            style={{ animation: `slide-up-fade 0.4s ease-out ${ci * 60}ms both` }}
+          >
+            {/* Collection header - always visible, clickable */}
+            <button
+              onClick={() => toggleCollection(collection.address)}
+              className="w-full flex items-center gap-3 p-3.5 hover:bg-white/[0.02] transition-colors active:scale-[0.99]"
+            >
+              {/* Collection thumbnail */}
+              <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/[0.08]">
+                {thumbNft.imageUrl ? (
+                  <img
+                    src={thumbNft.imageUrl}
+                    alt={collection.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center"
+                    style={{
+                      background: `linear-gradient(135deg, hsl(${hue}, 60%, 20%) 0%, hsl(${(hue + 40) % 360}, 50%, 12%) 100%)`,
+                    }}
+                  >
+                    <span className="text-xs font-bold text-white/40">
+                      {collection.name.slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Collection info */}
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-semibold text-white truncate">{collection.name}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/[0.06] text-gray-400">
+                    {collection.standard}
+                  </span>
+                  <span className="text-[11px] text-gray-500">
+                    {collection.nfts.length} item{collection.nfts.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              </div>
+
+              {/* Stacked preview (when collapsed) + chevron */}
+              <div className="flex items-center gap-2 shrink-0">
+                {!isExpanded && collection.nfts.length > 1 && (
+                  <div className="flex -space-x-3">
+                    {collection.nfts.slice(0, 3).map((nft, i) => (
+                      <div
+                        key={nft.tokenId}
+                        className="w-7 h-7 rounded-lg overflow-hidden border border-[#1a1a1a] shrink-0"
+                        style={{ zIndex: 3 - i }}
+                      >
+                        {nft.imageUrl ? (
+                          <img src={nft.imageUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div
+                            className="w-full h-full"
+                            style={{
+                              background: `linear-gradient(135deg, hsl(${hue}, 60%, 25%), hsl(${(hue + 40) % 360}, 50%, 15%))`,
+                            }}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                >
+                  <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </button>
+
+            {/* Expandable NFT grid */}
+            <div
+              className="overflow-hidden transition-all duration-300 ease-in-out"
+              style={{
+                maxHeight: isExpanded ? `${Math.ceil(collection.nfts.length / 2) * 220 + 16}px` : '0px',
+                opacity: isExpanded ? 1 : 0,
+              }}
+            >
+              <div className="grid grid-cols-2 gap-2.5 px-3 pb-3">
+                {collection.nfts.map((nft, i) => (
+                  <div
+                    key={`${nft.contractAddress}-${nft.tokenId}`}
+                    style={isExpanded ? { animation: `slide-up-fade 0.3s ease-out ${i * 40}ms both` } : undefined}
+                  >
+                    <NFTCard nft={nft} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
