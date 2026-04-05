@@ -151,7 +151,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       // Shibarium uses shibariumscan.io, Ethereum uses eth.blockscout.com
       const blockscoutBase =
         chainId === 109
-          ? 'https://www.shibariumscan.io'
+          ? 'https://shibariumscan.io'
           : chainId === 1
             ? 'https://eth.blockscout.com'
             : null;

@@ -44,7 +44,7 @@ function truncateAddress(addr: string): string {
 
 function getExplorerApiUrl(chainId: number): string {
   if (chainId === 1) return 'https://api.etherscan.io/api';
-  if (chainId === 109) return 'https://www.shibariumscan.io/api';
+  if (chainId === 109) return 'https://shibariumscan.io/api';
   return 'https://api.etherscan.io/api';
 }
 
