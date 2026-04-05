@@ -147,98 +147,68 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     try {
       let items: NFTItem[] = [];
 
-      if (chainId === 109) {
-        // Shibarium - use Blockscout v2 API
-        const url = `https://www.shibariumscan.io/api/v2/addresses/${address}/tokens?type=ERC-721%2CERC-1155`;
+      // Use Blockscout v2 /nft endpoint for all chains
+      // Shibarium uses shibariumscan.io, Ethereum uses eth.blockscout.com
+      const blockscoutBase =
+        chainId === 109
+          ? 'https://www.shibariumscan.io'
+          : chainId === 1
+            ? 'https://eth.blockscout.com'
+            : null;
+
+      if (blockscoutBase) {
+        const url = `${blockscoutBase}/api/v2/addresses/${address}/nft?type=ERC-721%2CERC-1155`;
         const res = await fetch(url);
         if (!res.ok) throw new Error(`API returned ${res.status}`);
         const data = await res.json();
 
         if (data.items && Array.isArray(data.items)) {
-          items = data.items.map((item: any) => {
+          // Paginate if there are more results
+          let allItems = [...data.items];
+          let nextParams = data.next_page_params;
+
+          // Fetch up to 3 additional pages (max ~200 NFTs)
+          let page = 0;
+          while (nextParams && page < 3) {
+            const params = new URLSearchParams();
+            for (const [k, v] of Object.entries(nextParams)) {
+              params.set(k, String(v));
+            }
+            const nextUrl = `${blockscoutBase}/api/v2/addresses/${address}/nft?type=ERC-721%2CERC-1155&${params.toString()}`;
+            try {
+              const nextRes = await fetch(nextUrl);
+              if (!nextRes.ok) break;
+              const nextData = await nextRes.json();
+              if (nextData.items && Array.isArray(nextData.items)) {
+                allItems.push(...nextData.items);
+              }
+              nextParams = nextData.next_page_params;
+            } catch {
+              break;
+            }
+            page++;
+          }
+
+          items = allItems.map((item: any) => {
             let imageUrl: string | null = null;
-            const metadata = item.token?.instance?.metadata ?? item.metadata;
-            if (metadata?.image) {
-              imageUrl = resolveUri(metadata.image);
-            } else if (item.image_url) {
+            // Blockscout provides image_url directly, also check metadata
+            if (item.image_url) {
               imageUrl = resolveUri(item.image_url);
+            } else if (item.metadata?.image) {
+              imageUrl = resolveUri(item.metadata.image);
             }
             return {
-              contractAddress: item.token?.address ?? '',
-              tokenId: item.id ?? item.token_id ?? item.value ?? '0',
+              contractAddress: item.token?.address_hash ?? item.token?.address ?? '',
+              tokenId: item.id ?? '0',
               contractName: item.token?.name ?? 'Unknown',
-              tokenStandard: item.token?.type === 'ERC-1155' ? 'ERC-1155' : 'ERC-721',
+              tokenStandard: item.token_type ?? (item.token?.type === 'ERC-1155' ? 'ERC-1155' : 'ERC-721'),
               imageUrl,
             };
           });
         }
       } else {
-        // Ethereum and other chains - use Etherscan-compatible API
-        const baseUrl = chainId === 1 ? 'https://api.etherscan.io' : network.explorerUrl;
-
-        // Fetch ERC-721 and ERC-1155 transfers in parallel
-        const [erc721Url, erc1155Url] = [
-          `${baseUrl}/api?module=account&action=tokennfttx&address=${address}&page=1&offset=50&sort=desc`,
-          `${baseUrl}/api?module=account&action=token1155tx&address=${address}&page=1&offset=50&sort=desc`,
-        ];
-
-        const [res721, res1155] = await Promise.all([
-          fetch(erc721Url).catch(() => null),
-          fetch(erc1155Url).catch(() => null),
-        ]);
-
-        const allTransfers: any[] = [];
-
-        if (res721 && res721.ok) {
-          const data721 = await res721.json();
-          if (data721.result && Array.isArray(data721.result)) {
-            allTransfers.push(...data721.result.map((tx: any) => ({ ...tx, tokenType: 'ERC-721' })));
-          }
-        }
-
-        if (res1155 && res1155.ok) {
-          const data1155 = await res1155.json();
-          if (data1155.result && Array.isArray(data1155.result)) {
-            allTransfers.push(...data1155.result.map((tx: any) => ({ ...tx, tokenType: 'ERC-1155' })));
-          }
-        }
-
-        // If both requests failed, throw to show error state
-        if (!res721?.ok && !res1155?.ok) {
-          throw new Error('Failed to fetch NFT data from explorer API');
-        }
-
-        // Sort all transfers by block number descending so latest transfer comes first
-        allTransfers.sort((a, b) => Number(b.blockNumber ?? 0) - Number(a.blockNumber ?? 0));
-
-        if (allTransfers.length >= 0) {
-          // Deduplicate by contract + tokenId, keep only NFTs currently owned
-          const nftMap = new Map<string, { contractAddress: string; tokenId: string; contractName: string; tokenStandard: string; owned: boolean }>();
-
-          for (const tx of allTransfers) {
-            const key = `${tx.contractAddress.toLowerCase()}-${tx.tokenID}`;
-            const isIncoming = tx.to.toLowerCase() === address.toLowerCase();
-
-            if (!nftMap.has(key)) {
-              nftMap.set(key, {
-                contractAddress: tx.contractAddress,
-                tokenId: tx.tokenID,
-                contractName: tx.tokenName || 'Unknown',
-                tokenStandard: tx.tokenType === 'ERC-1155' ? 'ERC-1155' : 'ERC-721',
-                owned: isIncoming,
-              });
-            }
-            // The API returns sorted desc, so the first occurrence is the latest transfer
-          }
-
-          // Filter to only owned NFTs
-          items = Array.from(nftMap.values())
-            .filter((n) => n.owned)
-            .map((n) => ({
-              ...n,
-              imageUrl: null,
-            }));
-        }
+        // Unsupported chain for NFTs
+        items = [];
       }
 
       setNfts(items);
