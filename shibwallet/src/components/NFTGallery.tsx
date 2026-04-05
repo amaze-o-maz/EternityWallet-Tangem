@@ -351,32 +351,25 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       }
       map.get(key)!.nfts.push(nft);
     }
-    // Sort collections by count descending
     return Array.from(map.entries())
       .map(([addr, data]) => ({ address: addr, ...data }))
       .sort((a, b) => b.nfts.length - a.nfts.length);
   }, [nfts]);
 
-  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
+  // null = show all collections, string = show that collection's NFTs
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
 
-  // Auto-expand if only 1-2 collections
+  // Auto-select if only 1 collection
   useEffect(() => {
-    if (collections.length <= 2 && collections.length > 0) {
-      setExpandedCollections(new Set(collections.map((c) => c.address)));
+    if (collections.length === 1) {
+      setSelectedCollection(collections[0].address);
     }
   }, [collections.length]);
 
-  const toggleCollection = (addr: string) => {
-    setExpandedCollections((prev) => {
-      const next = new Set(prev);
-      if (next.has(addr)) {
-        next.delete(addr);
-      } else {
-        next.add(addr);
-      }
-      return next;
-    });
-  };
+  // Reset selection when chain/address changes
+  useEffect(() => {
+    setSelectedCollection(null);
+  }, [address, chainId]);
 
   useEffect(() => {
     fetchNFTs();
@@ -428,140 +421,162 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     );
   }
 
-  return (
-    <div className="space-y-3">
-      {/* Summary bar */}
-      <div className="flex items-center justify-between px-1 mb-1">
-        <p className="text-xs text-gray-500">
-          {nfts.length} NFT{nfts.length !== 1 ? 's' : ''} in {collections.length} collection{collections.length !== 1 ? 's' : ''}
-        </p>
-        {collections.length > 2 && (
+  // === Drilled-in: show a single collection's NFTs ===
+  const activeCollection = selectedCollection
+    ? collections.find((c) => c.address === selectedCollection)
+    : null;
+
+  if (activeCollection) {
+    return (
+      <div className="animate-fade-in">
+        {/* Back bar */}
+        {collections.length > 1 && (
           <button
-            onClick={() => {
-              const allExpanded = collections.every((c) => expandedCollections.has(c.address));
-              if (allExpanded) {
-                setExpandedCollections(new Set());
-              } else {
-                setExpandedCollections(new Set(collections.map((c) => c.address)));
-              }
-            }}
-            className="text-[11px] text-[#FF6900] hover:text-[#FFB800] transition-colors"
+            onClick={() => setSelectedCollection(null)}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors mb-4 active:scale-95"
           >
-            {collections.every((c) => expandedCollections.has(c.address)) ? 'Collapse All' : 'Expand All'}
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            All Collections
           </button>
         )}
-      </div>
 
-      {collections.map((collection, ci) => {
-        const isExpanded = expandedCollections.has(collection.address);
-        // Use first NFT with an image as the collection thumbnail
-        const thumbNft = collection.nfts.find((n) => n.imageUrl) ?? collection.nfts[0];
-        const hue = parseInt(collection.address.slice(2, 8), 16) % 360;
+        {/* Collection title bar */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-white/[0.08]">
+            {(() => {
+              const thumb = activeCollection.nfts.find((n) => n.imageUrl);
+              const hue = parseInt(activeCollection.address.slice(2, 8), 16) % 360;
+              return thumb?.imageUrl ? (
+                <img src={thumb.imageUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div
+                  className="w-full h-full flex items-center justify-center"
+                  style={{ background: `linear-gradient(135deg, hsl(${hue}, 60%, 20%), hsl(${(hue + 40) % 360}, 50%, 12%))` }}
+                >
+                  <span className="text-xs font-bold text-white/40">{activeCollection.name.slice(0, 2).toUpperCase()}</span>
+                </div>
+              );
+            })()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white truncate">{activeCollection.name}</p>
+            <p className="text-[11px] text-gray-500">
+              {activeCollection.nfts.length} item{activeCollection.nfts.length !== 1 ? 's' : ''}
+              <span className="mx-1.5 text-gray-700">·</span>
+              {activeCollection.standard}
+            </p>
+          </div>
+        </div>
 
-        return (
-          <div
-            key={collection.address}
-            className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl overflow-hidden transition-all duration-300"
-            style={{ animation: `slide-up-fade 0.4s ease-out ${ci * 60}ms both` }}
-          >
-            {/* Collection header - always visible, clickable */}
-            <button
-              onClick={() => toggleCollection(collection.address)}
-              className="w-full flex items-center gap-3 p-3.5 hover:bg-white/[0.02] transition-colors active:scale-[0.99]"
+        {/* NFT grid */}
+        <div className="grid grid-cols-2 gap-3">
+          {activeCollection.nfts.map((nft, i) => (
+            <div
+              key={`${nft.contractAddress}-${nft.tokenId}`}
+              style={{ animation: `slide-up-fade 0.3s ease-out ${i * 40}ms both` }}
             >
-              {/* Collection thumbnail */}
-              <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/[0.08]">
-                {thumbNft.imageUrl ? (
+              <NFTCard nft={nft} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // === Top-level: Collection tiles grid ===
+  return (
+    <div>
+      {/* Summary */}
+      <p className="text-xs text-gray-500 mb-3 px-1">
+        {nfts.length} NFT{nfts.length !== 1 ? 's' : ''} in {collections.length} collection{collections.length !== 1 ? 's' : ''}
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        {collections.map((collection, ci) => {
+          const hue = parseInt(collection.address.slice(2, 8), 16) % 360;
+          const previewNfts = collection.nfts.filter((n) => n.imageUrl).slice(0, 4);
+          // Fill remaining slots if we don't have 4 images
+          const gridCount = Math.min(collection.nfts.length, 4);
+
+          return (
+            <button
+              key={collection.address}
+              onClick={() => setSelectedCollection(collection.address)}
+              className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl overflow-hidden
+                         transition-all duration-300 hover:border-white/[0.12] hover:shadow-lg
+                         active:scale-[0.97] text-left group"
+              style={{ animation: `slide-up-fade 0.4s ease-out ${ci * 50}ms both` }}
+            >
+              {/* Mosaic thumbnail grid */}
+              <div className="aspect-square relative overflow-hidden">
+                {previewNfts.length >= 4 ? (
+                  // 2x2 mosaic
+                  <div className="grid grid-cols-2 w-full h-full">
+                    {previewNfts.slice(0, 4).map((nft, i) => (
+                      <img
+                        key={nft.tokenId}
+                        src={nft.imageUrl!}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        style={{
+                          borderRight: i % 2 === 0 ? '1px solid rgba(255,255,255,0.04)' : undefined,
+                          borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.04)' : undefined,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : previewNfts.length >= 1 ? (
+                  // Single featured image
                   <img
-                    src={thumbNft.imageUrl}
-                    alt={collection.name}
+                    src={previewNfts[0].imageUrl!}
+                    alt=""
                     className="w-full h-full object-cover"
                   />
                 ) : (
+                  // Gradient placeholder
                   <div
                     className="w-full h-full flex items-center justify-center"
                     style={{
-                      background: `linear-gradient(135deg, hsl(${hue}, 60%, 20%) 0%, hsl(${(hue + 40) % 360}, 50%, 12%) 100%)`,
+                      background: `linear-gradient(135deg, hsl(${hue}, 60%, 18%) 0%, hsl(${(hue + 40) % 360}, 50%, 10%) 100%)`,
                     }}
                   >
-                    <span className="text-xs font-bold text-white/40">
-                      {collection.name.slice(0, 2).toUpperCase()}
+                    <span className="text-3xl font-bold text-white/20">
+                      {collection.name.split(/[\s-_]+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')}
                     </span>
                   </div>
                 )}
+
+                {/* Count badge */}
+                <div className="absolute top-2 right-2">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/70 backdrop-blur-sm text-white border border-white/[0.1]">
+                    {collection.nfts.length}
+                  </span>
+                </div>
+
+                {/* Bottom gradient overlay for text readability */}
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
+                  style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))' }}
+                />
               </div>
 
               {/* Collection info */}
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-sm font-semibold text-white truncate">{collection.name}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/[0.06] text-gray-400">
+              <div className="p-3">
+                <p className="text-xs font-semibold text-white truncate group-hover:text-[#FF6900] transition-colors">
+                  {collection.name}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/[0.06] text-gray-500">
                     {collection.standard}
-                  </span>
-                  <span className="text-[11px] text-gray-500">
-                    {collection.nfts.length} item{collection.nfts.length !== 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
-
-              {/* Stacked preview (when collapsed) + chevron */}
-              <div className="flex items-center gap-2 shrink-0">
-                {!isExpanded && collection.nfts.length > 1 && (
-                  <div className="flex -space-x-3">
-                    {collection.nfts.slice(0, 3).map((nft, i) => (
-                      <div
-                        key={nft.tokenId}
-                        className="w-7 h-7 rounded-lg overflow-hidden border border-[#1a1a1a] shrink-0"
-                        style={{ zIndex: 3 - i }}
-                      >
-                        {nft.imageUrl ? (
-                          <img src={nft.imageUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div
-                            className="w-full h-full"
-                            style={{
-                              background: `linear-gradient(135deg, hsl(${hue}, 60%, 25%), hsl(${(hue + 40) % 360}, 50%, 15%))`,
-                            }}
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  className={`text-gray-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
-                >
-                  <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
             </button>
-
-            {/* Expandable NFT grid */}
-            <div
-              className="overflow-hidden transition-all duration-300 ease-in-out"
-              style={{
-                maxHeight: isExpanded ? `${Math.ceil(collection.nfts.length / 2) * 220 + 16}px` : '0px',
-                opacity: isExpanded ? 1 : 0,
-              }}
-            >
-              <div className="grid grid-cols-2 gap-2.5 px-3 pb-3">
-                {collection.nfts.map((nft, i) => (
-                  <div
-                    key={`${nft.contractAddress}-${nft.tokenId}`}
-                    style={isExpanded ? { animation: `slide-up-fade 0.3s ease-out ${i * 40}ms both` } : undefined}
-                  >
-                    <NFTCard nft={nft} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 };
