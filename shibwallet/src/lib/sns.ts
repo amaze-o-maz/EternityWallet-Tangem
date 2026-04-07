@@ -1,9 +1,14 @@
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, fallback } from 'viem';
 
 // D3 resolver contracts on Shibarium
 const FORWARD_RESOLVER = '0xD60D40674E678F0089736D6381071973a75B4B6f' as const;
 const REVERSE_RESOLVER = '0x91c2d22ca1028B2E55e3097096494Eb34b7fc81c' as const;
-const SHIBARIUM_RPC = 'https://rpc.shibarium.shib.io';
+// Use the same RPC list as chains.ts so we have proper fallback coverage
+const SHIBARIUM_RPCS = [
+  'https://rpc.shibarium.shib.io',
+  'https://shibrpc.com',
+  'https://rpc.shibrpc.com',
+];
 const NETWORK_PARAM = 'shibarium';
 
 const RESOLVER_ABI = [
@@ -82,9 +87,12 @@ function getClient() {
         id: 109,
         name: 'Shibarium',
         nativeCurrency: { name: 'BONE', symbol: 'BONE', decimals: 18 },
-        rpcUrls: { default: { http: [SHIBARIUM_RPC] } },
+        rpcUrls: { default: { http: SHIBARIUM_RPCS } },
       },
-      transport: http(SHIBARIUM_RPC, { timeout: 15_000 }),
+      transport: fallback(
+        SHIBARIUM_RPCS.map((url) => http(url, { timeout: 15_000 })),
+        { rank: false, retryCount: 2 },
+      ),
     });
   }
   return _client;
@@ -108,7 +116,9 @@ function toStarFormat(name: string): string {
 /**
  * Resolve a .shib name to an address.
  * Accepts "mazrael.shib" or "mazrael*shib".
- * Returns the resolved address or null.
+ * Returns the resolved address, or null if the name is not registered.
+ * Throws if the RPC call itself fails (network/timeout), so callers can
+ * show a "network error" message instead of a misleading "Name not found".
  */
 export async function resolveShibName(name: string): Promise<string | null> {
   const normalized = toStarFormat(name.trim().toLowerCase());
@@ -118,29 +128,26 @@ export async function resolveShibName(name: string): Promise<string | null> {
     return forwardCache.get(cacheKey)!;
   }
 
-  try {
-    const client = getClient();
-    const result = await client.readContract({
-      address: FORWARD_RESOLVER,
-      abi: RESOLVER_ABI,
-      functionName: 'resolve',
-      args: [normalized, NETWORK_PARAM],
-    });
+  // Let RPC errors propagate so the caller can distinguish them from
+  // "name not registered" (zero-address response).
+  const client = getClient();
+  const result = await client.readContract({
+    address: FORWARD_RESOLVER,
+    abi: RESOLVER_ABI,
+    functionName: 'resolve',
+    args: [normalized, NETWORK_PARAM],
+  });
 
-    const addr = result as string;
-    if (!addr || addr === ZERO_ADDRESS) {
-      forwardCache.set(cacheKey, null);
-      return null;
-    }
-
-    forwardCache.set(cacheKey, addr);
-    // Also populate reverse cache
-    reverseCache.set(addr.toLowerCase(), formatShibName(normalized));
-    return addr;
-  } catch (err) {
-    console.error('[SNS] Forward resolve failed:', err);
+  const addr = result as string;
+  if (!addr || addr === ZERO_ADDRESS) {
+    forwardCache.set(cacheKey, null);
     return null;
   }
+
+  forwardCache.set(cacheKey, addr);
+  // Also populate reverse cache
+  reverseCache.set(addr.toLowerCase(), formatShibName(normalized));
+  return addr;
 }
 
 /**
