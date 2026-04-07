@@ -61,6 +61,7 @@ const Send: React.FC = () => {
   const [snsResolvedAddr, setSnsResolvedAddr] = useState<string | null>(null);
   const [snsResolving, setSnsResolving] = useState(false);
   const [snsError, setSnsError] = useState(false);
+  const [snsNetworkError, setSnsNetworkError] = useState(false);
 
   const network = useMemo(() => getNetworkByChainId(chainId), [chainId]);
 
@@ -215,6 +216,7 @@ const Send: React.FC = () => {
   useEffect(() => {
     setSnsResolvedAddr(null);
     setSnsError(false);
+    setSnsNetworkError(false);
 
     if (!isShibName(toAddress)) {
       setSnsInput('');
@@ -230,14 +232,13 @@ const Send: React.FC = () => {
         const addr = await resolveShibName(toAddress);
         if (addr) {
           setSnsResolvedAddr(addr);
-          setSnsError(false);
         } else {
-          setSnsResolvedAddr(null);
+          // Contract returned zero address — name is genuinely not registered
           setSnsError(true);
         }
       } catch {
-        setSnsResolvedAddr(null);
-        setSnsError(true);
+        // RPC/network failure — distinct from "name not found"
+        setSnsNetworkError(true);
       } finally {
         setSnsResolving(false);
       }
@@ -467,7 +468,12 @@ const Send: React.FC = () => {
               )}
               {isSnsMode && snsError && !snsResolving && (
                 <p className="text-xs text-red-400 mt-1.5">
-                  Name not found — &quot;{formatShibName(toAddress)}&quot; could not be resolved
+                  Name not found — &quot;{formatShibName(toAddress)}&quot; is not registered
+                </p>
+              )}
+              {isSnsMode && snsNetworkError && !snsResolving && (
+                <p className="text-xs text-yellow-400 mt-1.5">
+                  Could not reach Shibarium network — check your connection and try again
                 </p>
               )}
 
