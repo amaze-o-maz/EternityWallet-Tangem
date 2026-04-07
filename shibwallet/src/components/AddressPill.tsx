@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Copy, Check, ChevronDown, Plus, Key, Trash2, X, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useWalletStore, Account } from '../store/walletStore';
+import { useShibName } from '../store/snsStore';
 
 const AddressPill: React.FC = () => {
   const { address, accounts, activeIndex, switchAccount, importPrivateKey, removeAccount } = useWalletStore();
@@ -11,6 +12,7 @@ const AddressPill: React.FC = () => {
   const [pkInput, setPkInput] = useState('');
   const [labelInput, setLabelInput] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const shibName = useShibName(address);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -25,7 +27,7 @@ const AddressPill: React.FC = () => {
 
   if (!address) return null;
 
-  const truncated = `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const truncated = shibName ?? `${address.slice(0, 6)}...${address.slice(-4)}`;
 
   const handleCopy = async (addr: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();

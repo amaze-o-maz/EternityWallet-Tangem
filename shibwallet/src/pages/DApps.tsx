@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, Search, TrendingUp, Gamepad2, Image, Rocket, Coins, LayoutGrid } from 'lucide-react';
+import { ExternalLink, Search, TrendingUp, Gamepad2, Image, Rocket, Coins, LayoutGrid, Fingerprint } from 'lucide-react';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 
@@ -20,6 +20,7 @@ const CATEGORIES = [
   { id: 'launchpad', label: 'Launchpad', icon: Rocket },
   { id: 'nft', label: 'NFT', icon: Image },
   { id: 'gaming', label: 'Gaming', icon: Gamepad2 },
+  { id: 'identity', label: 'Identity', icon: Fingerprint },
 ];
 
 // Google Favicon API gives reliable, high-res favicons for any domain
@@ -134,6 +135,14 @@ const DAPPS: DApp[] = [
     url: 'https://shib.io/dapps',
     category: 'defi',
     logoUrl: favicon('shib.io'),
+  },
+  {
+    name: 'Shib Name Service',
+    description: 'Register your .shib identity. Send and receive with human-readable names.',
+    url: 'https://shib.io/sns',
+    category: 'identity',
+    logoUrl: favicon('shib.io'),
+    featured: true,
   },
 ];
 

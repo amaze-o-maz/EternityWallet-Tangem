@@ -4,11 +4,13 @@ import { ArrowLeft, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import QRCode from '../components/QRCode';
 import { useWalletStore } from '../store/walletStore';
+import { useShibName } from '../store/snsStore';
 
 const Receive: React.FC = () => {
   const navigate = useNavigate();
   const { address, isUnlocked } = useWalletStore();
   const [copied, setCopied] = React.useState(false);
+  const shibName = useShibName(address);
 
   React.useEffect(() => {
     if (!isUnlocked) {
@@ -59,6 +61,17 @@ const Receive: React.FC = () => {
           <div className="mb-8">
             <QRCode value={address} size={220} />
           </div>
+
+          {/* SNS name banner */}
+          {shibName && (
+            <div className="w-full flex items-center justify-center gap-2 mb-4 px-4 py-2.5 rounded-xl bg-purple-500/10 border border-purple-500/15">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                <circle cx="8" cy="8" r="7" stroke="#a855f7" strokeWidth="1.5" />
+                <path d="M5.5 8.5L7 10l3.5-4" stroke="#a855f7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="text-sm text-purple-300 font-semibold">{shibName}</span>
+            </div>
+          )}
 
           {/* Address in glass-card */}
           <div className="w-full bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mb-5 shadow-2xl">

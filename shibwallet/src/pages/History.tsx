@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatUnits } from 'viem';
 import { ArrowUpRight, ArrowDownLeft, ArrowDownUp, RefreshCw, ExternalLink } from 'lucide-react';
+import ShibName from '../components/ShibName';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 import { useWalletStore } from '../store/walletStore';
@@ -359,9 +360,16 @@ const History: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 font-mono mt-0.5">
-                        {isSwap ? truncateAddress(tx.hash) : (isSent ? 'To: ' : 'From: ') + truncateAddress(counterparty)}
-                      </p>
+                      <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                        {isSwap ? (
+                          <span className="font-mono">{truncateAddress(tx.hash)}</span>
+                        ) : (
+                          <>
+                            <span>{isSent ? 'To: ' : 'From: '}</span>
+                            <ShibName address={counterparty} className="text-[11px]" />
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {/* Amount and time */}

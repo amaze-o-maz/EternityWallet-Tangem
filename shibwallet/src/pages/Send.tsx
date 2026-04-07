@@ -18,6 +18,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useTransactionStore } from '../store/transactionStore';
+import { isShibName, resolveShibName, formatShibName } from '../lib/sns';
 import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
@@ -54,6 +55,12 @@ const Send: React.FC = () => {
   const [tokenImgLoaded, setTokenImgLoaded] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
+
+  // SNS name resolution
+  const [snsInput, setSnsInput] = useState(''); // The raw .shib name typed
+  const [snsResolvedAddr, setSnsResolvedAddr] = useState<string | null>(null);
+  const [snsResolving, setSnsResolving] = useState(false);
+  const [snsError, setSnsError] = useState(false);
 
   const network = useMemo(() => getNetworkByChainId(chainId), [chainId]);
 
@@ -148,12 +155,14 @@ const Send: React.FC = () => {
 
   // Estimate gas when inputs change
   useEffect(() => {
-    if (!publicClient || !address || !toAddress || !amount || !selectedToken || !network) {
+    // Use effectiveAddress (resolved SNS or raw) for gas estimation
+    const gasTarget = snsResolvedAddr ?? toAddress;
+    if (!publicClient || !address || !gasTarget || !amount || !selectedToken || !network) {
       setGasEstimate(null);
       return;
     }
 
-    const isValidTo = toAddress.startsWith('0x') && toAddress.length === 42;
+    const isValidTo = gasTarget.startsWith('0x') && gasTarget.length === 42;
     if (!isValidTo) {
       setGasEstimate(null);
       return;
@@ -177,7 +186,7 @@ const Send: React.FC = () => {
         if (isNativeToken(selectedToken)) {
           const gas = await publicClient.estimateGas({
             account: address as `0x${string}`,
-            to: toAddress as `0x${string}`,
+            to: effectiveAddress as `0x${string}`,
             value: parsedAmount,
           });
           setGasEstimate(gas);
@@ -185,7 +194,7 @@ const Send: React.FC = () => {
           const gas = await publicClient.estimateGas({
             account: address as `0x${string}`,
             to: selectedToken.address,
-            data: encodeFunctionData(toAddress as `0x${string}`, parsedAmount),
+            data: encodeFunctionData(effectiveAddress as `0x${string}`, parsedAmount),
           });
           setGasEstimate(gas);
         }
@@ -200,9 +209,47 @@ const Send: React.FC = () => {
 
     const timer = setTimeout(estimate, 500);
     return () => clearTimeout(timer);
-  }, [publicClient, address, toAddress, amount, selectedToken, network]);
+  }, [publicClient, address, toAddress, snsResolvedAddr, amount, selectedToken, network]);
 
-  const isValidAddress = toAddress.startsWith('0x') && toAddress.length === 42;
+  // SNS: resolve .shib names when typed
+  useEffect(() => {
+    setSnsResolvedAddr(null);
+    setSnsError(false);
+
+    if (!isShibName(toAddress)) {
+      setSnsInput('');
+      setSnsResolving(false);
+      return;
+    }
+
+    setSnsInput(toAddress);
+    setSnsResolving(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const addr = await resolveShibName(toAddress);
+        if (addr) {
+          setSnsResolvedAddr(addr);
+          setSnsError(false);
+        } else {
+          setSnsResolvedAddr(null);
+          setSnsError(true);
+        }
+      } catch {
+        setSnsResolvedAddr(null);
+        setSnsError(true);
+      } finally {
+        setSnsResolving(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [toAddress]);
+
+  // The effective address used for transactions: resolved SNS address or raw input
+  const effectiveAddress = snsResolvedAddr ?? toAddress;
+  const isValidAddress = effectiveAddress.startsWith('0x') && effectiveAddress.length === 42;
+  const isSnsMode = isShibName(toAddress);
   const currentBalance = selectedToken ? (balances[selectedToken.address] ?? 0n) : 0n;
   const formattedBalance = selectedToken
     ? formatUnits(currentBalance, selectedToken.decimals)
@@ -260,7 +307,7 @@ const Send: React.FC = () => {
 
       if (isNativeToken(selectedToken)) {
         hash = await walletClient.sendTransaction({
-          to: toAddress as `0x${string}`,
+          to: effectiveAddress as `0x${string}`,
           value: parsedAmount,
         });
       } else {
@@ -268,7 +315,7 @@ const Send: React.FC = () => {
           address: selectedToken.address,
           abi: ERC20_ABI,
           functionName: 'transfer',
-          args: [toAddress as `0x${string}`, parsedAmount],
+          args: [effectiveAddress as `0x${string}`, parsedAmount],
         });
       }
 
@@ -282,7 +329,7 @@ const Send: React.FC = () => {
         addTransaction({
           hash,
           from: address!,
-          to: toAddress,
+          to: effectiveAddress,
           value: parseUnits(amount, selectedToken.decimals).toString(),
           timeStamp: Math.floor(Date.now() / 1000).toString(),
           type: 'send',
@@ -388,18 +435,46 @@ const Send: React.FC = () => {
                 type="text"
                 value={toAddress}
                 onChange={(e) => setToAddress(e.target.value)}
-                placeholder="0x..."
+                placeholder="0x... or name.shib"
                 className={`w-full px-4 py-3.5 rounded-xl bg-white/[0.03] backdrop-blur-xl border
                            text-white placeholder-gray-600 focus:outline-none
-                           transition-all duration-300 text-sm font-mono ${
-                  toAddress && !isValidAddress
+                           transition-all duration-300 text-sm ${isSnsMode ? '' : 'font-mono'} ${
+                  (toAddress && !isSnsMode && !isValidAddress) || snsError
                     ? 'border-red-500/50 focus:border-red-500/70 focus:shadow-[0_0_15px_rgba(239,68,68,0.1)]'
-                    : 'border-white/[0.06] focus:border-[#FF6900]/50 focus:shadow-[0_0_20px_rgba(255,105,0,0.12)]'
+                    : snsResolvedAddr
+                      ? 'border-purple-500/50 focus:border-purple-500/70 focus:shadow-[0_0_15px_rgba(168,85,247,0.12)]'
+                      : 'border-white/[0.06] focus:border-[#FF6900]/50 focus:shadow-[0_0_20px_rgba(255,105,0,0.12)]'
                 }`}
               />
-              {toAddress && !isValidAddress && (
+
+              {/* SNS resolution status */}
+              {isSnsMode && snsResolving && (
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs text-purple-400">Resolving {formatShibName(toAddress)}...</p>
+                </div>
+              )}
+              {isSnsMode && snsResolvedAddr && !snsResolving && (
+                <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/15">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                    <circle cx="8" cy="8" r="7" stroke="#a855f7" strokeWidth="1.5" />
+                    <path d="M5.5 8.5L7 10l3.5-4" stroke="#a855f7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="text-xs text-purple-300 font-semibold">{formatShibName(toAddress)}</span>
+                  <span className="text-[10px] text-gray-500 mx-1">&rarr;</span>
+                  <span className="text-[10px] text-gray-400 font-mono">{snsResolvedAddr.slice(0, 8)}...{snsResolvedAddr.slice(-6)}</span>
+                </div>
+              )}
+              {isSnsMode && snsError && !snsResolving && (
                 <p className="text-xs text-red-400 mt-1.5">
-                  Enter a valid address (0x-prefixed, 42 characters)
+                  Name not found — &quot;{formatShibName(toAddress)}&quot; could not be resolved
+                </p>
+              )}
+
+              {/* Standard address validation */}
+              {toAddress && !isSnsMode && !isValidAddress && (
+                <p className="text-xs text-red-400 mt-1.5">
+                  Enter a valid address (0x-prefixed, 42 characters) or .shib name
                 </p>
               )}
             </div>
@@ -507,8 +582,12 @@ const Send: React.FC = () => {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">To</span>
-            <span className="text-white font-mono text-xs break-all">
-              {toAddress}
+            <span className="text-white text-xs break-all">
+              {isSnsMode && snsResolvedAddr ? (
+                <span><span className="text-purple-300 font-semibold">{formatShibName(toAddress)}</span> <span className="text-gray-500 font-mono">({effectiveAddress.slice(0, 6)}...{effectiveAddress.slice(-4)})</span></span>
+              ) : (
+                <span className="font-mono">{effectiveAddress}</span>
+              )}
             </span>
           </div>
           {gasEstimate !== null && gasPrice !== null && (
@@ -607,7 +686,13 @@ const Send: React.FC = () => {
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-400">To</span>
-                  <span className="text-white font-mono text-xs">{toAddress.slice(0, 8)}...{toAddress.slice(-6)}</span>
+                  <span className="text-white text-xs">
+                    {isSnsMode && snsResolvedAddr ? (
+                      <span className="text-purple-300 font-semibold">{formatShibName(toAddress)}</span>
+                    ) : (
+                      <span className="font-mono">{effectiveAddress.slice(0, 8)}...{effectiveAddress.slice(-6)}</span>
+                    )}
+                  </span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-400">Network</span>
