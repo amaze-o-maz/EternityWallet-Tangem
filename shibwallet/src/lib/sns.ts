@@ -1,40 +1,14 @@
-import { createPublicClient, http, fallback } from 'viem';
+// SNS (Shib Name Service) resolution via D3 DNS-over-HTTPS
+// Uses Cloudflare DoH to resolve .shib names through the D3/vana DNS infrastructure.
 
-// D3 resolver contracts on Shibarium
-const FORWARD_RESOLVER = '0xD60D40674E678F0089736D6381071973a75B4B6f' as const;
-const REVERSE_RESOLVER = '0x91c2d22ca1028B2E55e3097096494Eb34b7fc81c' as const;
-// Use the same RPC list as chains.ts so we have proper fallback coverage
-const SHIBARIUM_RPCS = [
-  'https://rpc.shibarium.shib.io',
-  'https://shibrpc.com',
-  'https://rpc.shibrpc.com',
-];
-const NETWORK_PARAM = 'shibarium';
+const DOH_ENDPOINT = 'https://cloudflare-dns.com/dns-query';
+const FORWARDER_DOMAIN = 'vana';
 
-const RESOLVER_ABI = [
-  {
-    name: 'resolve',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'name', type: 'string' },
-      { name: 'network', type: 'string' },
-    ],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    name: 'reverseResolve',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'addr', type: 'address' },
-      { name: 'network', type: 'string' },
-    ],
-    outputs: [{ name: '', type: 'string' }],
-  },
-] as const;
-
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+// Network keys per chain
+const CHAIN_NETWORK: Record<number, string> = {
+  1: 'ETH',
+  109: 'BONE',
+};
 
 // LRU cache with max entries
 const MAX_CACHE = 200;
@@ -50,7 +24,6 @@ class LRUCache<V> {
   get(key: string): V | undefined {
     const val = this.map.get(key);
     if (val !== undefined) {
-      // Move to end (most recently used)
       this.map.delete(key);
       this.map.set(key, val);
     }
@@ -61,7 +34,6 @@ class LRUCache<V> {
     if (this.map.has(key)) {
       this.map.delete(key);
     } else if (this.map.size >= this.max) {
-      // Delete oldest entry
       const oldest = this.map.keys().next().value;
       if (oldest !== undefined) this.map.delete(oldest);
     }
@@ -73,114 +45,125 @@ class LRUCache<V> {
   }
 }
 
-// Caches: forward (name → address) and reverse (address → name)
 const forwardCache = new LRUCache<string | null>(MAX_CACHE);
 const reverseCache = new LRUCache<string | null>(MAX_CACHE);
 
-// Lazy client - created once on first use
-let _client: ReturnType<typeof createPublicClient> | null = null;
-
-function getClient() {
-  if (!_client) {
-    _client = createPublicClient({
-      chain: {
-        id: 109,
-        name: 'Shibarium',
-        nativeCurrency: { name: 'BONE', symbol: 'BONE', decimals: 18 },
-        rpcUrls: { default: { http: SHIBARIUM_RPCS } },
-      },
-      transport: fallback(
-        SHIBARIUM_RPCS.map((url) => http(url, { timeout: 15_000 })),
-        { rank: false, retryCount: 2 },
-      ),
-    });
-  }
-  return _client;
+/** Fetch DNS TXT or CNAME records via Cloudflare DoH */
+async function dohQuery(hostname: string, type: 'TXT' | 'CNAME'): Promise<{ data: string; ttl: number }[] | null> {
+  const url = `${DOH_ENDPOINT}?name=${encodeURIComponent(hostname)}&type=${type}`;
+  const resp = await fetch(url, { headers: { accept: 'application/dns-json' } });
+  const json = await resp.json() as { Status: number; Answer?: { type: number; data: string; TTL: number }[] };
+  if (json.Status !== 0 || !json.Answer) return null;
+  // TXT = type 16, CNAME = type 5
+  const typeNum = type === 'TXT' ? 16 : 5;
+  const records = json.Answer.filter((a: { type: number }) => a.type === typeNum);
+  if (records.length === 0) return null;
+  return records.map((a: { data: string; TTL: number }) => ({ data: a.data.replace(/"/g, ''), ttl: a.TTL }));
 }
 
-/** Returns true if input looks like a .shib name (e.g. "mazrael.shib" or "mazrael*shib") */
+/** Returns true if input looks like a .shib name */
 export function isShibName(input: string): boolean {
-  return /^[a-zA-Z0-9_-]+[.*]shib$/i.test(input.trim());
+  return /^[a-zA-Z0-9_-]+\.shib$/i.test(input.trim());
 }
 
-/** Convert star format to dot format for display: mazrael*shib → mazrael.shib */
+/** Normalize display: ensure dot format */
 export function formatShibName(name: string): string {
   return name.replace(/\*/g, '.');
 }
 
-/** Convert dot format to star format for on-chain queries: mazrael.shib → mazrael*shib */
-function toStarFormat(name: string): string {
-  return name.replace(/\./g, '*');
-}
-
 /**
- * Resolve a .shib name to an address.
- * Accepts "mazrael.shib" or "mazrael*shib".
- * Returns the resolved address, or null if the name is not registered.
- * Throws if the RPC call itself fails (network/timeout), so callers can
- * show a "network error" message instead of a misleading "Name not found".
+ * Resolve a .shib name to an address via DNS-over-HTTPS.
+ * Queries _w3addr.{name}.vana TXT records for the target network.
  */
-export async function resolveShibName(name: string): Promise<string | null> {
-  const normalized = toStarFormat(name.trim().toLowerCase());
-  const cacheKey = normalized;
+export async function resolveShibName(name: string, chainId: number = 109): Promise<string | null> {
+  const normalized = name.trim().toLowerCase();
+  const cacheKey = `${normalized}:${chainId}`;
 
   if (forwardCache.has(cacheKey)) {
     return forwardCache.get(cacheKey)!;
   }
 
-  // Let RPC errors propagate so the caller can distinguish them from
-  // "name not registered" (zero-address response).
-  const client = getClient();
-  const result = await client.readContract({
-    address: FORWARD_RESOLVER,
-    abi: RESOLVER_ABI,
-    functionName: 'resolve',
-    args: [normalized, NETWORK_PARAM],
-  });
+  const network = CHAIN_NETWORK[chainId] || 'BONE';
 
-  const addr = result as string;
-  if (!addr || addr === ZERO_ADDRESS) {
+  try {
+    // Try _w3addr first, then _web3connect (D3 standard)
+    for (const prefix of ['_w3addr', '_web3connect']) {
+      const hostname = `${prefix}.${normalized}.${FORWARDER_DOMAIN}`;
+      const records = await dohQuery(hostname, 'TXT');
+      if (!records) continue;
+
+      // Parse TXT records: "BONE:0x..." or "WALLET.BONE=0x..."
+      for (const rec of records) {
+        const txt = rec.data;
+        // Format 1: BONE:0xAddress
+        const colonParts = txt.split(':');
+        if (colonParts.length === 2 && colonParts[0].toUpperCase() === network) {
+          const addr = colonParts[1];
+          forwardCache.set(cacheKey, addr);
+          reverseCache.set(`${addr.toLowerCase()}:${chainId}`, normalized);
+          return addr;
+        }
+        // Format 2: WALLET.BONE=0xAddress
+        const eqParts = txt.split('=');
+        if (eqParts.length === 2 && eqParts[0].toUpperCase() === `WALLET.${network}`) {
+          const addr = eqParts[1];
+          forwardCache.set(cacheKey, addr);
+          reverseCache.set(`${addr.toLowerCase()}:${chainId}`, normalized);
+          return addr;
+        }
+      }
+    }
+
     forwardCache.set(cacheKey, null);
     return null;
+  } catch (err) {
+    console.error('[SNS] Forward resolve failed:', err);
+    return null;
   }
-
-  forwardCache.set(cacheKey, addr);
-  // Also populate reverse cache
-  reverseCache.set(addr.toLowerCase(), formatShibName(normalized));
-  return addr;
 }
 
 /**
- * Reverse-resolve an address to a .shib name.
- * Returns the name in dot format (mazrael.shib) or null.
+ * Reverse-resolve an address to a .shib name via DNS-over-HTTPS.
+ * Checks CNAME records at {addr}.{network}.wallet.vana and legacy TXT records.
  */
-export async function reverseResolveShibName(address: string): Promise<string | null> {
-  const cacheKey = address.toLowerCase();
+export async function reverseResolveShibName(address: string, chainId: number = 109): Promise<string | null> {
+  const cacheKey = `${address.toLowerCase()}:${chainId}`;
 
   if (reverseCache.has(cacheKey)) {
     return reverseCache.get(cacheKey)!;
   }
 
-  try {
-    const client = getClient();
-    const result = await client.readContract({
-      address: REVERSE_RESOLVER,
-      abi: RESOLVER_ABI,
-      functionName: 'reverseResolve',
-      args: [address as `0x${string}`, NETWORK_PARAM],
-    });
+  const network = (CHAIN_NETWORK[chainId] || 'BONE').toLowerCase();
+  const addrNorm = address.toLowerCase().replace('0x', '');
 
-    const name = result as string;
-    if (!name || name === '') {
-      reverseCache.set(cacheKey, null);
-      return null;
+  try {
+    // Try CNAME: {addr}.{network}.wallet.vana
+    const cnameRecords = await dohQuery(`${addrNorm}.${network}.wallet.${FORWARDER_DOMAIN}`, 'CNAME');
+    if (cnameRecords && cnameRecords.length > 0) {
+      // CNAME value ends with trailing dot, remove it
+      const name = cnameRecords[0].data.replace(/\.$/, '');
+      reverseCache.set(cacheKey, name);
+      forwardCache.set(`${name.toLowerCase()}:${chainId}`, address);
+      return name;
     }
 
-    const displayName = formatShibName(name);
-    reverseCache.set(cacheKey, displayName);
-    // Also populate forward cache
-    forwardCache.set(toStarFormat(name.toLowerCase()), address);
-    return displayName;
+    // Try legacy TXT: {addr}.web3-addr.vana
+    const txtRecords = await dohQuery(`${addrNorm}.web3-addr.${FORWARDER_DOMAIN}`, 'TXT');
+    if (txtRecords) {
+      const networkUpper = network.toUpperCase();
+      for (const rec of txtRecords) {
+        const parts = rec.data.split(/[=:]/);
+        if (parts.length === 2 && parts[0].toUpperCase() === networkUpper) {
+          const name = parts[1];
+          reverseCache.set(cacheKey, name);
+          forwardCache.set(`${name.toLowerCase()}:${chainId}`, address);
+          return name;
+        }
+      }
+    }
+
+    reverseCache.set(cacheKey, null);
+    return null;
   } catch (err) {
     console.error('[SNS] Reverse resolve failed:', err);
     reverseCache.set(cacheKey, null);

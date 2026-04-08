@@ -229,7 +229,7 @@ const Send: React.FC = () => {
 
     const timer = setTimeout(async () => {
       try {
-        const addr = await resolveShibName(toAddress);
+        const addr = await resolveShibName(toAddress, chainId);
         if (addr) {
           setSnsResolvedAddr(addr);
         } else {
@@ -473,7 +473,7 @@ const Send: React.FC = () => {
               )}
               {isSnsMode && snsNetworkError && !snsResolving && (
                 <p className="text-xs text-yellow-400 mt-1.5">
-                  Could not reach Shibarium network — check your connection and try again
+                  Could not resolve name — check your connection and try again
                 </p>
               )}
 
