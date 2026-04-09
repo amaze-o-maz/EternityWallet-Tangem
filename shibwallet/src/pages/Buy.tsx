@@ -4,7 +4,6 @@ import { CreditCard, ArrowRight } from 'lucide-react';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 import { useWalletStore } from '../store/walletStore';
-import { useNetworkStore } from '../store/networkStore';
 
 interface OnrampOption {
   token: string;
@@ -36,15 +35,12 @@ const ONRAMP_OPTIONS: OnrampOption[] = [
 
 const Buy: React.FC = () => {
   const navigate = useNavigate();
-  const { address, isUnlocked } = useWalletStore();
-  const chainId = useNetworkStore((s) => s.chainId);
+  const { isUnlocked } = useWalletStore();
 
-  if (!isUnlocked || !address) return null;
+  if (!isUnlocked) return null;
 
   const handleBuy = (option: OnrampOption) => {
-    // Append wallet address so ChangeNow can pre-fill it
-    const url = `${option.url}&address=${address}`;
-    navigate(`/wallet/browser?url=${encodeURIComponent(url)}`);
+    navigate(`/wallet/browser?url=${encodeURIComponent(option.url)}`);
   };
 
   return (
@@ -143,11 +139,6 @@ const Buy: React.FC = () => {
           </div>
         </div>
 
-        {/* Receiving address */}
-        <div className="mt-4 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-          <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1">Receiving address</p>
-          <p className="text-[11px] text-gray-400 font-mono break-all">{address}</p>
-        </div>
       </main>
 
       <BottomNav />
