@@ -11,7 +11,6 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { ArrowLeft, ArrowDownUp, ExternalLink, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TokenSelector from '../components/TokenSelector';
-import BottomNav from '../components/BottomNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
@@ -433,16 +432,8 @@ const Swap: React.FC = () => {
   if (!isUnlocked || !address) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
-      {/* Subtle background radial gradient */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
-        }}
-      />
-
-      <div className="max-w-md mx-auto w-full px-5 pt-8 pb-24 relative z-10">
+    <>
+      <div className="max-w-md mx-auto w-full px-5 pt-8 pb-28">
         {/* Back button */}
         <button
           onClick={() => navigate('/wallet')}
@@ -747,8 +738,6 @@ const Swap: React.FC = () => {
         balances={balances}
       />
 
-      <BottomNav />
-
       {/* Confirmation Modal */}
       {showConfirm && quoteResult && fromToken && toToken && (
         <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in" onClick={() => !approving && !swapping && setShowConfirm(false)}>
@@ -880,7 +869,7 @@ const Swap: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

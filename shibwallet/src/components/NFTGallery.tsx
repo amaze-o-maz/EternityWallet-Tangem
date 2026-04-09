@@ -374,7 +374,19 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   }, [address, chainId]);
 
   useEffect(() => {
-    fetchNFTs();
+    let cancelled = false;
+    fetchNFTs().catch(() => {});
+    // Retry on visibility change (fixes stale state after idle)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !cancelled) {
+        fetchNFTs().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [fetchNFTs]);
 
   if (loading) {

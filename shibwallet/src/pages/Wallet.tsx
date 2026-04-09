@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { createPublicClient, http, fallback, formatUnits } from 'viem';
 import { ArrowUp, ArrowDown, RefreshCw, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Header from '../components/Header';
-import BottomNav from '../components/BottomNav';
 import TokenList from '../components/TokenList';
 import NFTGallery from '../components/NFTGallery';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -292,18 +290,8 @@ const Wallet: React.FC = () => {
   if (!isUnlocked || !address) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
-      {/* Subtle background radial gradient */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
-        }}
-      />
-
-      <Header />
-
-      <main className="flex-1 max-w-md mx-auto w-full px-5 pt-8 pb-24 relative z-10">
+    <>
+      <main className="max-w-md mx-auto w-full px-5 pt-8 pb-28">
         {/* Balance section */}
         <div className="text-center mb-8">
           {loading ? (
@@ -442,8 +430,6 @@ const Wallet: React.FC = () => {
         )}
       </main>
 
-      <BottomNav />
-
       {/* Add Token Modal */}
       {showAddToken && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-backdrop-enter">
@@ -550,7 +536,7 @@ const Wallet: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

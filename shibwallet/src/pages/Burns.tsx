@@ -21,8 +21,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Header from '../components/Header';
-import BottomNav from '../components/BottomNav';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useBurnStore } from '../store/burnStore';
@@ -573,21 +571,10 @@ const Burns: React.FC = () => {
   const isLoading = store.loading && store.totalBurned === 0;
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
-      {/* Background */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse at center top, rgba(255,70,0,0.06) 0%, transparent 55%)',
-        }}
-      />
-
-      <Header />
-
+    <>
       {showParticles && <FireParticles onDone={() => setShowParticles(false)} />}
 
-      <main className="flex-1 max-w-md mx-auto w-full px-5 pt-6 pb-28 relative z-10">
+      <main className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
         {/* ── HERO ─────────────────────────────────────────────────────── */}
         <section className="text-center mb-6" style={{ animation: 'slide-up-fade 0.4s ease-out' }}>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 mb-3">
@@ -881,9 +868,7 @@ const Burns: React.FC = () => {
         onClose={() => setModalOpen(false)}
         onSuccess={handleBurnSuccess}
       />
-
-      <BottomNav />
-    </div>
+    </>
   );
 };
 

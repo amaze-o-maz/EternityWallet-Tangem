@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { formatUnits } from 'viem';
 import { ArrowUpRight, ArrowDownLeft, ArrowDownUp, RefreshCw, ExternalLink } from 'lucide-react';
 import ShibName from '../components/ShibName';
-import Header from '../components/Header';
-import BottomNav from '../components/BottomNav';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useTransactionStore, type StoredTransaction } from '../store/transactionStore';
@@ -193,18 +191,7 @@ const History: React.FC = () => {
   if (!isUnlocked || !address) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
-      {/* Subtle background radial gradient */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
-        }}
-      />
-
-      <Header />
-
-      <main className="flex-1 max-w-md mx-auto w-full px-5 pt-8 pb-24 relative z-10">
+      <main className="max-w-md mx-auto w-full px-5 pt-8 pb-28">
         {/* Page title and refresh */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-lg font-bold bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
@@ -389,9 +376,6 @@ const History: React.FC = () => {
           )}
         </div>
       </main>
-
-      <BottomNav />
-    </div>
   );
 };
 

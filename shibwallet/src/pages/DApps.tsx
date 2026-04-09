@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, Search, TrendingUp, Gamepad2, Image, Rocket, Coins, LayoutGrid, Fingerprint } from 'lucide-react';
-import Header from '../components/Header';
-import BottomNav from '../components/BottomNav';
-
 interface DApp {
   name: string;
   description: string;
@@ -239,17 +236,7 @@ const DApps: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
-        }}
-      />
-
-      <Header />
-
-      <main className="flex-1 max-w-md mx-auto w-full px-5 pt-6 pb-24 relative z-10">
+      <main className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
         {/* Title */}
         <div className="mb-5">
           <h1 className="text-xl font-bold gradient-text">Shibarium dApps</h1>
@@ -346,9 +333,6 @@ const DApps: React.FC = () => {
           </div>
         </div>
       </main>
-
-      <BottomNav />
-    </div>
   );
 };
 

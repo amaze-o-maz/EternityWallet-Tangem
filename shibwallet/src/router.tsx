@@ -3,6 +3,7 @@ import Onboarding from './pages/Onboarding';
 import Create from './pages/Create';
 import Import from './pages/Import';
 import Lock from './pages/Lock';
+import WalletLayout from './components/WalletLayout';
 import Wallet from './pages/Wallet';
 import Send from './pages/Send';
 import Receive from './pages/Receive';
@@ -19,14 +20,24 @@ export const router = createBrowserRouter([
   { path: '/create', element: <Create /> },
   { path: '/import', element: <Import /> },
   { path: '/lock', element: <Lock /> },
-  { path: '/wallet', element: <Wallet /> },
+
+  /* Standalone pages (no persistent chrome) */
   { path: '/wallet/send', element: <Send /> },
   { path: '/wallet/receive', element: <Receive /> },
-  { path: '/wallet/swap', element: <Swap /> },
-  { path: '/wallet/history', element: <History /> },
-  { path: '/wallet/news', element: <Magazine /> },
-  { path: '/wallet/buy', element: <Buy /> },
-  { path: '/wallet/burns', element: <Burns /> },
-  { path: '/wallet/dapps', element: <DApps /> },
   { path: '/wallet/browser', element: <DAppBrowser /> },
+
+  /* Persistent layout — Header + BottomNav stay mounted */
+  {
+    path: '/wallet',
+    element: <WalletLayout />,
+    children: [
+      { index: true, element: <Wallet /> },
+      { path: 'swap', element: <Swap /> },
+      { path: 'burns', element: <Burns /> },
+      { path: 'dapps', element: <DApps /> },
+      { path: 'buy', element: <Buy /> },
+      { path: 'news', element: <Magazine /> },
+      { path: 'history', element: <History /> },
+    ],
+  },
 ]);

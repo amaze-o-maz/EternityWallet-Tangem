@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, RefreshCw, BookOpen, Newspaper } from 'lucide-react';
-import Header from '../components/Header';
-import BottomNav from '../components/BottomNav';
 import { useWalletStore } from '../store/walletStore';
 import { useNewsStore } from '../store/newsStore';
 
@@ -69,7 +67,7 @@ const Magazine: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [imgLoaded, setImgLoaded] = useState<Set<number>>(new Set());
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isUnlocked) navigate('/lock', { replace: true });
@@ -139,18 +137,18 @@ const Magazine: React.FC = () => {
     }
   };
 
-  // Infinite scroll
+  // Infinite scroll via IntersectionObserver
   useEffect(() => {
-    const el = scrollRef.current;
+    const el = sentinelRef.current;
     if (!el) return;
-    const onScroll = () => {
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
-        const hasMore = tab === 'news' ? store.newsHasMore : tab === 'magazine' ? store.magHasMore : store.newsHasMore || store.magHasMore;
-        if (hasMore && !loadingMore) loadMore();
-      }
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    const hasMore = tab === 'news' ? store.newsHasMore : tab === 'magazine' ? store.magHasMore : store.newsHasMore || store.magHasMore;
+    if (!hasMore || loadingMore) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadMore(); },
+      { rootMargin: '300px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
   }, [tab, store.newsHasMore, store.magHasMore, loadingMore, store.newsPage, store.magPage]);
 
   const handleImgLoad = (id: number) => {
@@ -179,18 +177,7 @@ const Magazine: React.FC = () => {
   if (!isUnlocked) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
-        }}
-      />
-
-      <Header />
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto relative z-10">
-        <div className="max-w-md mx-auto w-full px-5 pt-6 pb-24">
+        <div className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
           {/* Title */}
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -398,11 +385,10 @@ const Magazine: React.FC = () => {
               )}
             </div>
           )}
-        </div>
-      </div>
 
-      <BottomNav />
-    </div>
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-1" />
+        </div>
   );
 };
 
