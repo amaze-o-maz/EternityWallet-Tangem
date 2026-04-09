@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
-import { Settings, Lock, Key, Trash2, X } from 'lucide-react';
+import { Settings, Lock, Key, Trash2, X, Palette, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ShibLogo from './ShibLogo';
 import NetworkBadge from './NetworkBadge';
 import AddressPill from './AddressPill';
 import { useWalletStore } from '../store/walletStore';
+import { useThemeStore, THEMES, type ThemeKey } from '../store/themeStore';
 
 const VAULT_KEY = 'shibwallet_vault';
 
+const THEME_ORDER: ThemeKey[] = ['shib', 'midnight', 'emerald', 'sakura', 'royal', 'amoled'];
+
 const Header: React.FC = () => {
   const { isUnlocked, privateKey, lock } = useWalletStore();
+  const { theme, setTheme } = useThemeStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -63,7 +67,7 @@ const Header: React.FC = () => {
             <div
               className="absolute inset-0 rounded-full"
               style={{
-                background: 'radial-gradient(circle, rgba(255, 105, 0, 0.2) 0%, transparent 70%)',
+                background: 'radial-gradient(circle, var(--shib-glow-strong) 0%, transparent 70%)',
                 transform: 'scale(1.8)',
                 filter: 'blur(4px)',
               }}
@@ -95,7 +99,7 @@ const Header: React.FC = () => {
         {/* Bottom gradient accent line */}
         <div className="absolute bottom-0 left-0 right-0 h-px"
           style={{
-            background: 'linear-gradient(90deg, transparent 0%, rgba(255, 105, 0, 0.3) 50%, transparent 100%)',
+            background: `linear-gradient(90deg, transparent 0%, var(--shib-glow-strong) 50%, transparent 100%)`,
           }}
         />
       </header>
@@ -141,6 +145,52 @@ const Header: React.FC = () => {
                   <div className="text-xs text-gray-500 mt-0.5">Require password to access</div>
                 </div>
               </button>
+
+              {/* Theme Picker */}
+              <div className="my-1 mx-4 border-t border-white/[0.04]" />
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <Palette size={14} className="text-shib-orange" />
+                  <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Theme</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {THEME_ORDER.map((key) => {
+                    const t = THEMES[key];
+                    const active = theme === key;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setTheme(key)}
+                        className={`relative flex flex-col items-center gap-1.5 px-2 py-2.5 rounded-xl
+                                    transition-all duration-200 active:scale-95
+                                    ${active
+                                      ? 'bg-white/[0.08] border border-white/20'
+                                      : 'hover:bg-white/[0.04] border border-transparent'
+                                    }`}
+                      >
+                        <div className="relative">
+                          <div
+                            className="w-8 h-8 rounded-full border-2"
+                            style={{
+                              background: `linear-gradient(135deg, ${t.accent}, ${t.secondary})`,
+                              borderColor: active ? '#fff' : 'rgba(255,255,255,0.1)',
+                            }}
+                          />
+                          {active && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Check size={14} className="text-white drop-shadow-lg" />
+                            </div>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-medium ${active ? 'text-white' : 'text-gray-500'}`}>
+                          {t.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="my-1 mx-4 border-t border-white/[0.04]" />
               <button
                 onClick={() => setConfirmDisconnect(true)}

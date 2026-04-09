@@ -25,7 +25,7 @@ const WalletLayout: React.FC = () => {
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
+            'radial-gradient(ellipse at center top, var(--shib-glow) 0%, transparent 60%)',
         }}
       />
 

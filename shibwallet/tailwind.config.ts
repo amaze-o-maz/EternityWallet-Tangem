@@ -6,14 +6,14 @@ export default {
     extend: {
       colors: {
         shib: {
-          bg: '#0D0D0D',
-          surface: '#1A1A1A',
-          'surface-alt': '#222222',
-          orange: '#FF6900',
-          'orange-hover': '#FF8C00',
-          amber: '#FFB800',
-          red: '#C41B0E',
-          border: '#2E2E2E',
+          bg: 'var(--shib-bg)',
+          surface: 'var(--shib-surface)',
+          'surface-alt': 'var(--shib-surface-alt)',
+          orange: 'var(--shib-orange)',
+          'orange-hover': 'var(--shib-orange-hover)',
+          amber: 'var(--shib-amber)',
+          red: 'var(--shib-red)',
+          border: 'var(--shib-border)',
         },
       },
       fontFamily: {
