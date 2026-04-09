@@ -79,20 +79,20 @@ const NetworkBadge: React.FC = () => {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => { setIsOpen(!isOpen); setShowAddForm(false); }}
-        className="flex items-center gap-2 px-3.5 py-1.5 glass-pill
+        className="flex items-center gap-1.5 px-2.5 py-1 glass-pill
                    hover:bg-white/10 hover:border-white/20
-                   transition-all duration-200 text-sm active:scale-95 group"
+                   transition-all duration-200 text-xs active:scale-95 group"
       >
-        <span className="relative flex h-2.5 w-2.5">
+        <span className="relative flex h-2 w-2 shrink-0">
           <span className="absolute inset-0 rounded-full bg-green-400 opacity-50"
             style={{ animation: 'connected-pulse 2s ease-in-out infinite' }}
           />
-          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400
                            shadow-[0_0_6px_rgba(74,222,128,0.6)]" />
         </span>
-        <span className="text-white font-medium">{currentNetwork?.name ?? 'Unknown'}</span>
+        <span className="text-white font-medium truncate max-w-[80px]">{currentNetwork?.name ?? 'Unknown'}</span>
         <svg
-          className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-2.5 h-2.5 text-gray-400 transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180' : ''}`}
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />

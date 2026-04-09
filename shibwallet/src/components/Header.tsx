@@ -55,23 +55,22 @@ const Header: React.FC = () => {
 
   return (
     <>
-      <header className="relative flex items-center justify-between px-5 py-3 sticky top-0 z-40
+      <header className="relative flex items-center justify-between px-3 py-2.5 sticky top-0 z-40
                           bg-white/[0.03] backdrop-blur-2xl border-b border-white/[0.06]">
         {/* Left: Logo + Wordmark */}
-        <div className="flex items-center gap-2.5">
-          {/* Logo glow backdrop */}
+        <div className="flex items-center gap-2 shrink-0">
           <div className="relative">
             <div
               className="absolute inset-0 rounded-full"
               style={{
                 background: 'radial-gradient(circle, rgba(255, 105, 0, 0.2) 0%, transparent 70%)',
-                transform: 'scale(2)',
+                transform: 'scale(1.8)',
                 filter: 'blur(4px)',
               }}
             />
-            <ShibLogo size={34} className="relative z-10" />
+            <ShibLogo size={26} className="relative z-10" />
           </div>
-          <span className="text-lg font-bold tracking-tight select-none">
+          <span className="text-sm font-bold tracking-tight select-none">
             <span className="text-white">Shib</span>
             <span className="gradient-text">Wallet</span>
           </span>
@@ -79,16 +78,16 @@ const Header: React.FC = () => {
 
         {/* Right: Network + Address + Settings (only when unlocked) */}
         {isUnlocked && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
             <NetworkBadge />
             <AddressPill />
             <button
               onClick={() => setSettingsOpen(true)}
-              className="relative p-2 rounded-xl glass-pill hover:bg-white/10
+              className="relative p-1.5 rounded-lg glass-pill hover:bg-white/10
                          transition-all duration-200 text-gray-400 hover:text-white
-                         active:scale-95 group"
+                         active:scale-95 group shrink-0"
             >
-              <Settings size={18} className="transition-transform duration-300 group-hover:rotate-90" />
+              <Settings size={15} className="transition-transform duration-300 group-hover:rotate-90" />
             </button>
           </div>
         )}

@@ -27,7 +27,7 @@ const AddressPill: React.FC = () => {
 
   if (!address) return null;
 
-  const truncated = shibName ?? `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const truncated = shibName ?? `${address.slice(0, 4)}...${address.slice(-3)}`;
 
   const handleCopy = async (addr: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -68,14 +68,14 @@ const AddressPill: React.FC = () => {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => { setIsOpen(!isOpen); setShowImport(false); }}
-        className="group flex items-center gap-1.5 px-3.5 py-1.5 glass-pill
+        className="group flex items-center gap-1 px-2.5 py-1 glass-pill
                    hover:bg-white/10 hover:border-white/20
                    hover:shadow-[0_0_20px_rgba(255,105,0,0.1)]
-                   transition-all duration-200 text-sm font-mono text-white
+                   transition-all duration-200 text-xs font-mono text-white
                    active:scale-95"
         title="Manage accounts"
       >
-        <span className="tracking-wide">{truncated}</span>
+        <span className="tracking-wide truncate">{truncated}</span>
         {accounts.length > 1 && (
           <ChevronDown size={12} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
         )}
