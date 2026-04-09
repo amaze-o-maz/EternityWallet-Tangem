@@ -15,7 +15,7 @@ interface NFTGalleryProps {
   chainId: number;
 }
 
-const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
+const IPFS_GATEWAY = 'https://cloudflare-ipfs.com/ipfs/';
 
 function resolveUri(uri: string): string {
   if (uri.startsWith('ipfs://')) {
@@ -100,6 +100,8 @@ const NFTCard: React.FC<{ nft: NFTItem }> = ({ nft }) => {
             <img
               src={nft.imageUrl}
               alt={`${nft.contractName} #${nft.tokenId}`}
+              loading="lazy"
+              decoding="async"
               className={`aspect-square w-full object-cover transition-opacity duration-300 ${
                 imgLoading ? 'opacity-0' : 'opacity-100'
               }`}
@@ -449,7 +451,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
               const thumb = activeCollection.nfts.find((n) => n.imageUrl);
               const hue = parseInt(activeCollection.address.slice(2, 8), 16) % 360;
               return thumb?.imageUrl ? (
-                <img src={thumb.imageUrl} alt="" className="w-full h-full object-cover" />
+                <img src={thumb.imageUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
               ) : (
                 <div
                   className="w-full h-full flex items-center justify-center"
@@ -519,6 +521,8 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
                         key={nft.tokenId}
                         src={nft.imageUrl!}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                         style={{
                           borderRight: i % 2 === 0 ? '1px solid rgba(255,255,255,0.04)' : undefined,
@@ -532,6 +536,8 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
                   <img
                     src={previewNfts[0].imageUrl!}
                     alt=""
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover"
                   />
                 ) : (

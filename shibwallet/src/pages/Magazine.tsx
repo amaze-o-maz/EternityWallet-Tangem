@@ -14,7 +14,13 @@ interface WPPost {
   date: string;
   _source: 'news' | 'magazine';
   _embedded?: {
-    'wp:featuredmedia'?: { source_url: string; alt_text?: string }[];
+    'wp:featuredmedia'?: {
+      source_url: string;
+      alt_text?: string;
+      media_details?: {
+        sizes?: Record<string, { source_url: string; width: number; height: number }>;
+      };
+    }[];
     author?: { name: string; avatar_urls?: Record<string, string> }[];
     'wp:term'?: { name: string; slug: string }[][];
   };
@@ -22,6 +28,22 @@ interface WPPost {
 
 type Source = 'news' | 'magazine';
 type Tab = 'all' | 'news' | 'magazine';
+
+/** Pick the best image size for a given max width */
+function getImageUrl(post: WPPost, maxWidth: number): string | undefined {
+  const media = post._embedded?.['wp:featuredmedia']?.[0];
+  if (!media) return undefined;
+  const sizes = media.media_details?.sizes;
+  if (sizes) {
+    // Pick smallest size that's >= maxWidth, or the largest available
+    const sorted = Object.values(sizes).sort((a, b) => a.width - b.width);
+    const fit = sorted.find((s) => s.width >= maxWidth);
+    if (fit) return fit.source_url;
+    // Fallback to largest available (still smaller than full)
+    if (sorted.length > 0) return sorted[sorted.length - 1].source_url;
+  }
+  return media.source_url;
+}
 
 const NEWS_API = 'https://news.shib.io/wp-json/wp/v2/posts';
 const MAG_API = 'https://magazine.shib.io/wp-json/wp/v2/posts';
@@ -244,11 +266,13 @@ const Magazine: React.FC = () => {
                              hover:border-[#FF6900]/20 transition-all duration-300"
                 >
                   <div className="relative w-full h-48 bg-white/[0.04] overflow-hidden">
-                    {featured._embedded?.['wp:featuredmedia']?.[0]?.source_url && (
+                    {getImageUrl(featured, 768) && (
                       <img
-                        src={featured._embedded['wp:featuredmedia'][0].source_url}
+                        src={getImageUrl(featured, 768)}
                         alt=""
-                        className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105
+                        loading="eager"
+                        decoding="async"
+                        className={`w-full h-full object-cover transition-opacity duration-300 group-hover:scale-105
                                    ${imgLoaded.has(featured.id) ? 'opacity-100' : 'opacity-0'}`}
                         onLoad={() => handleImgLoad(featured.id)}
                       />
@@ -301,11 +325,13 @@ const Magazine: React.FC = () => {
                   style={{ animation: `slide-up-fade 0.35s ease-out ${index * 40}ms both` }}
                 >
                   <div className="w-20 h-20 rounded-lg bg-white/[0.04] overflow-hidden shrink-0">
-                    {post._embedded?.['wp:featuredmedia']?.[0]?.source_url && (
+                    {getImageUrl(post, 300) && (
                       <img
-                        src={post._embedded['wp:featuredmedia'][0].source_url}
+                        src={getImageUrl(post, 300)}
                         alt=""
-                        className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105
+                        loading="lazy"
+                        decoding="async"
+                        className={`w-full h-full object-cover transition-opacity duration-300 group-hover:scale-105
                                    ${imgLoaded.has(post.id) ? 'opacity-100' : 'opacity-0'}`}
                         onLoad={() => handleImgLoad(post.id)}
                       />

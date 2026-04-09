@@ -8,7 +8,13 @@ interface WPPost {
   date: string;
   _source: 'news' | 'magazine';
   _embedded?: {
-    'wp:featuredmedia'?: { source_url: string; alt_text?: string }[];
+    'wp:featuredmedia'?: {
+      source_url: string;
+      alt_text?: string;
+      media_details?: {
+        sizes?: Record<string, { source_url: string; width: number; height: number }>;
+      };
+    }[];
     author?: { name: string; avatar_urls?: Record<string, string> }[];
     'wp:term'?: { name: string; slug: string }[][];
   };
