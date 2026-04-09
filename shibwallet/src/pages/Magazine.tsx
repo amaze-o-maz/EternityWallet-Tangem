@@ -4,6 +4,7 @@ import { ChevronRight, RefreshCw, BookOpen, Newspaper } from 'lucide-react';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 import { useWalletStore } from '../store/walletStore';
+import { useNewsStore } from '../store/newsStore';
 
 interface WPPost {
   id: number;
@@ -11,6 +12,7 @@ interface WPPost {
   excerpt: { rendered: string };
   link: string;
   date: string;
+  _source: 'news' | 'magazine';
   _embedded?: {
     'wp:featuredmedia'?: { source_url: string; alt_text?: string }[];
     author?: { name: string; avatar_urls?: Record<string, string> }[];
@@ -24,12 +26,6 @@ type Tab = 'all' | 'news' | 'magazine';
 const NEWS_API = 'https://news.shib.io/wp-json/wp/v2/posts';
 const MAG_API = 'https://magazine.shib.io/wp-json/wp/v2/posts';
 const PER_PAGE = 10;
-
-function stripHtml(html: string): string {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || div.innerText || '';
-}
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -45,15 +41,10 @@ function timeAgo(dateStr: string): string {
 const Magazine: React.FC = () => {
   const navigate = useNavigate();
   const { isUnlocked } = useWalletStore();
+  const store = useNewsStore();
   const [tab, setTab] = useState<Tab>('all');
-  const [newsPosts, setNewsPosts] = useState<(WPPost & { _source: Source })[]>([]);
-  const [magPosts, setMagPosts] = useState<(WPPost & { _source: Source })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [newsPage, setNewsPage] = useState(1);
-  const [magPage, setMagPage] = useState(1);
-  const [newsHasMore, setNewsHasMore] = useState(true);
-  const [magHasMore, setMagHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [imgLoaded, setImgLoaded] = useState<Set<number>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -68,28 +59,30 @@ const Magazine: React.FC = () => {
     if (!resp.ok) return [];
     const totalPages = parseInt(resp.headers.get('X-WP-TotalPages') || '1', 10);
     const posts: WPPost[] = await resp.json();
-    if (source === 'news') setNewsHasMore(page < totalPages);
-    else setMagHasMore(page < totalPages);
-    return posts;
-  }, []);
+    if (source === 'news') store.setNewsHasMore(page < totalPages);
+    else store.setMagHasMore(page < totalPages);
+    return posts.map((p) => ({ ...p, _source: source }));
+  }, [store]);
 
-  const loadInitial = useCallback(async () => {
+  const loadInitial = useCallback(async (force = false) => {
+    if (!force && !store.needsRefresh()) return;
     setLoading(true);
     try {
       const [news, mag] = await Promise.all([
         fetchPosts('news', 1),
         fetchPosts('magazine', 1),
       ]);
-      setNewsPosts(news.map((p) => ({ ...p, _source: 'news' as Source })));
-      setMagPosts(mag.map((p) => ({ ...p, _source: 'magazine' as Source })));
-      setNewsPage(1);
-      setMagPage(1);
+      store.setNewsPosts(news);
+      store.setMagPosts(mag);
+      store.setNewsPage(1);
+      store.setMagPage(1);
+      store.markFetched();
     } catch {
       // Silently fail - show whatever we have
     } finally {
       setLoading(false);
     }
-  }, [fetchPosts]);
+  }, [fetchPosts, store]);
 
   useEffect(() => {
     loadInitial();
@@ -97,7 +90,7 @@ const Magazine: React.FC = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadInitial();
+    await loadInitial(true);
     setRefreshing(false);
   };
 
@@ -105,17 +98,17 @@ const Magazine: React.FC = () => {
     if (loadingMore) return;
     setLoadingMore(true);
     try {
-      if ((tab === 'all' || tab === 'news') && newsHasMore) {
-        const nextPage = newsPage + 1;
+      if ((tab === 'all' || tab === 'news') && store.newsHasMore) {
+        const nextPage = store.newsPage + 1;
         const posts = await fetchPosts('news', nextPage);
-        setNewsPosts((prev) => [...prev, ...posts.map((p) => ({ ...p, _source: 'news' as Source }))]);
-        setNewsPage(nextPage);
+        store.appendNewsPosts(posts);
+        store.setNewsPage(nextPage);
       }
-      if ((tab === 'all' || tab === 'magazine') && magHasMore) {
-        const nextPage = magPage + 1;
+      if ((tab === 'all' || tab === 'magazine') && store.magHasMore) {
+        const nextPage = store.magPage + 1;
         const posts = await fetchPosts('magazine', nextPage);
-        setMagPosts((prev) => [...prev, ...posts.map((p) => ({ ...p, _source: 'magazine' as Source }))]);
-        setMagPage(nextPage);
+        store.appendMagPosts(posts);
+        store.setMagPage(nextPage);
       }
     } catch {
       // ignore
@@ -130,13 +123,13 @@ const Magazine: React.FC = () => {
     if (!el) return;
     const onScroll = () => {
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
-        const hasMore = tab === 'news' ? newsHasMore : tab === 'magazine' ? magHasMore : newsHasMore || magHasMore;
+        const hasMore = tab === 'news' ? store.newsHasMore : tab === 'magazine' ? store.magHasMore : store.newsHasMore || store.magHasMore;
         if (hasMore && !loadingMore) loadMore();
       }
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [tab, newsHasMore, magHasMore, loadingMore, newsPage, magPage]);
+  }, [tab, store.newsHasMore, store.magHasMore, loadingMore, store.newsPage, store.magPage]);
 
   const handleImgLoad = (id: number) => {
     setImgLoaded((prev) => new Set(prev).add(id));
@@ -144,15 +137,16 @@ const Magazine: React.FC = () => {
 
   // Merge and sort posts by date
   const visiblePosts = (() => {
-    let posts: (WPPost & { _source: Source })[] = [];
-    if (tab === 'all') posts = [...newsPosts, ...magPosts];
-    else if (tab === 'news') posts = newsPosts;
-    else posts = magPosts;
+    let posts: WPPost[] = [];
+    if (tab === 'all') posts = [...store.newsPosts, ...store.magPosts];
+    else if (tab === 'news') posts = store.newsPosts;
+    else posts = store.magPosts;
     return posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   })();
 
   const featured = visiblePosts[0];
   const rest = visiblePosts.slice(1);
+  const showInitialLoading = loading && store.newsPosts.length === 0 && store.magPosts.length === 0;
 
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: 'all', label: 'All', icon: RefreshCw },
@@ -215,10 +209,9 @@ const Magazine: React.FC = () => {
             })}
           </div>
 
-          {/* Loading skeleton */}
-          {loading && (
+          {/* Loading skeleton - only on first load when cache is empty */}
+          {showInitialLoading && (
             <div className="space-y-4">
-              {/* Featured skeleton */}
               <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] overflow-hidden animate-pulse">
                 <div className="w-full h-48 bg-white/[0.06]" />
                 <div className="p-4 space-y-2">
@@ -241,7 +234,7 @@ const Magazine: React.FC = () => {
           )}
 
           {/* Content */}
-          {!loading && (
+          {!showInitialLoading && (
             <div className="space-y-4">
               {/* Featured article */}
               {featured && (
@@ -260,7 +253,6 @@ const Magazine: React.FC = () => {
                         onLoad={() => handleImgLoad(featured.id)}
                       />
                     )}
-                    {/* Source badge */}
                     <div className="absolute top-3 left-3">
                       <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide backdrop-blur-xl
                                        ${featured._source === 'magazine'
@@ -270,9 +262,7 @@ const Magazine: React.FC = () => {
                         {featured._source === 'magazine' ? 'Magazine' : 'Daily'}
                       </span>
                     </div>
-                    {/* Gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                    {/* Title overlay */}
                     <div className="absolute bottom-0 left-0 right-0 p-4">
                       <h2
                         className="text-base font-bold text-white leading-snug line-clamp-2"
@@ -310,7 +300,6 @@ const Magazine: React.FC = () => {
                              hover:border-[#FF6900]/20 transition-all duration-300 group w-full text-left"
                   style={{ animation: `slide-up-fade 0.35s ease-out ${index * 40}ms both` }}
                 >
-                  {/* Thumbnail */}
                   <div className="w-20 h-20 rounded-lg bg-white/[0.04] overflow-hidden shrink-0">
                     {post._embedded?.['wp:featuredmedia']?.[0]?.source_url && (
                       <img
@@ -322,8 +311,6 @@ const Magazine: React.FC = () => {
                       />
                     )}
                   </div>
-
-                  {/* Text content */}
                   <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                     <div>
                       <h3
@@ -361,7 +348,7 @@ const Magazine: React.FC = () => {
 
               {!loadingMore && visiblePosts.length > 0 && (
                 (() => {
-                  const hasMore = tab === 'news' ? newsHasMore : tab === 'magazine' ? magHasMore : newsHasMore || magHasMore;
+                  const hasMore = tab === 'news' ? store.newsHasMore : tab === 'magazine' ? store.magHasMore : store.newsHasMore || store.magHasMore;
                   return hasMore ? (
                     <button
                       onClick={loadMore}
@@ -376,7 +363,7 @@ const Magazine: React.FC = () => {
                 })()
               )}
 
-              {!loading && visiblePosts.length === 0 && (
+              {!showInitialLoading && visiblePosts.length === 0 && (
                 <div className="text-center py-12">
                   <Newspaper size={32} className="mx-auto text-gray-600 mb-3" />
                   <p className="text-sm text-gray-400">No articles available</p>

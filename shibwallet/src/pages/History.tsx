@@ -44,9 +44,9 @@ function truncateAddress(addr: string): string {
 }
 
 function getExplorerApiUrl(chainId: number): string {
-  if (chainId === 1) return 'https://api.etherscan.io/api';
+  if (chainId === 1) return 'https://eth.blockscout.com/api';
   if (chainId === 109) return 'https://shibariumscan.io/api';
-  return 'https://api.etherscan.io/api';
+  return 'https://eth.blockscout.com/api';
 }
 
 function getExplorerTxUrl(chainId: number, hash: string): string {
