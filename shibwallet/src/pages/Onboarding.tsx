@@ -14,34 +14,103 @@ const Onboarding: React.FC = () => {
   }, [navigate]);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 bg-shib-bg min-h-screen animate-fade-in">
-      <div className="max-w-md w-full flex flex-col items-center">
-        <ShibLogo size={120} className="mb-8" />
+    <div
+      className="flex-1 flex flex-col items-center justify-center px-6 min-h-screen animate-fade-in relative overflow-hidden"
+      style={{ background: '#0A0A0A' }}
+    >
+      {/* Deep ambient glow */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(255, 105, 0, 0.08) 0%, rgba(255, 80, 0, 0.02) 50%, transparent 80%)',
+        }}
+      />
 
-        <h1 className="text-3xl font-bold text-white text-center mb-3">
-          Welcome to ShibWallet
+      <div className="max-w-sm w-full flex flex-col items-center relative z-10">
+        {/* Logo — no clipping, generous padding for ears */}
+        <div className="relative mb-12" style={{ width: 140, height: 140 }}>
+          {/* Ambient glow behind logo */}
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              top: '50%',
+              left: '50%',
+              width: 280,
+              height: 280,
+              transform: 'translate(-50%, -50%)',
+              background:
+                'radial-gradient(circle, rgba(255, 105, 0, 0.15) 0%, rgba(255, 120, 0, 0.04) 50%, transparent 70%)',
+              filter: 'blur(20px)',
+            }}
+          />
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            <ShibLogo
+              size={120}
+              animated
+              className="drop-shadow-[0_0_24px_rgba(255,105,0,0.12)]"
+            />
+          </div>
+        </div>
+
+        {/* Title */}
+        <h1
+          className="text-center mb-4 leading-none"
+          style={{
+            fontSize: '2.25rem',
+            fontWeight: 800,
+            letterSpacing: '-0.03em',
+            background:
+              'linear-gradient(135deg, #FF7A00 0%, #FFB800 50%, #FF6900 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}
+        >
+          ShibWallet
         </h1>
 
-        <p className="text-center mb-10" style={{ color: '#A0A0A0' }}>
-          The wallet built for the Shib ecosystem
+        {/* Tagline — from brand research, rank #2 */}
+        <p
+          className="text-center mb-16"
+          style={{
+            fontSize: '0.8rem',
+            color: 'rgba(255, 255, 255, 0.4)',
+            fontWeight: 600,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Shibarium unlocked.
         </p>
 
+        {/* CTA buttons */}
         <div className="w-full space-y-3">
           <button
             onClick={() => navigate('/create')}
-            className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover
-                       text-white font-semibold text-base transition active:scale-95"
+            className="w-full py-4 rounded-2xl text-white font-bold text-[0.95rem] tracking-wide
+                       transition-all duration-300 active:scale-[0.97]
+                       hover:shadow-[0_0_30px_rgba(255,105,0,0.25)]"
+            style={{
+              background: 'linear-gradient(135deg, #FF6900 0%, #FF8C00 100%)',
+            }}
           >
-            Create New Wallet
+            Create Wallet
           </button>
 
           <button
             onClick={() => navigate('/import')}
-            className="w-full py-3.5 rounded-lg bg-transparent border-2 border-shib-orange
-                       text-shib-orange font-semibold text-base hover:bg-shib-orange/10
-                       transition active:scale-95"
+            className="w-full py-4 rounded-2xl text-white/60 font-semibold text-[0.95rem] tracking-wide
+                       transition-all duration-300 active:scale-[0.97]
+                       hover:text-white hover:border-white/[0.12] hover:bg-white/[0.04]"
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.07)',
+            }}
           >
-            Import Existing Wallet
+            Import Wallet
           </button>
         </div>
       </div>

@@ -15,6 +15,49 @@ const CACHE_TTL_MS = 60_000;
 let cachedPrices: Record<string, number> = {};
 let cacheTimestamp = 0;
 
+const SPARKLINE_CACHE_TTL_MS = 300_000; // 5 minutes
+let cachedSparklines: Record<string, number[]> = {};
+let sparklineCacheTimestamp = 0;
+
+export async function fetchSparklines(): Promise<Record<string, number[]>> {
+  const now = Date.now();
+  if (now - sparklineCacheTimestamp < SPARKLINE_CACHE_TTL_MS && Object.keys(cachedSparklines).length > 0) {
+    return cachedSparklines;
+  }
+
+  const sparklines: Record<string, number[]> = {};
+
+  // Fetch in parallel for each coin
+  const fetches = COIN_IDS.map(async (coinId) => {
+    try {
+      const url = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=7`;
+      const response = await fetch(url);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.prices && Array.isArray(data.prices)) {
+        const symbol = COIN_ID_TO_SYMBOL[coinId];
+        if (symbol) {
+          // Sample to ~50 points for a clean sparkline
+          const allPrices: number[] = data.prices.map((p: [number, number]) => p[1]);
+          const step = Math.max(1, Math.floor(allPrices.length / 50));
+          sparklines[symbol] = allPrices.filter((_: number, i: number) => i % step === 0);
+        }
+      }
+    } catch {
+      // Ignore individual failures
+    }
+  });
+
+  await Promise.all(fetches);
+
+  if (Object.keys(sparklines).length > 0) {
+    cachedSparklines = sparklines;
+    sparklineCacheTimestamp = now;
+  }
+
+  return Object.keys(sparklines).length > 0 ? sparklines : cachedSparklines;
+}
+
 export async function fetchPrices(): Promise<Record<string, number>> {
   const now = Date.now();
 

@@ -1,0 +1,13 @@
+{
+  "appId": "com.shibwallet.app",
+  "appName": "ShibWallet",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "buildOptions": {
+      "signingType": "apksigner"
+    }
+  }
+}

@@ -24,39 +24,41 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-shib-surface border border-shib-border rounded-xl w-full max-w-sm mx-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md">
+      <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl w-full max-w-sm mx-4 animate-slide-up-fade shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-shib-border">
-          <h2 className="text-white font-semibold">{title}</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+          <h2 className="text-white font-semibold text-base">{title}</h2>
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="text-gray-400 hover:text-white transition-colors active:scale-95 disabled:opacity-40"
+            className="text-gray-400 hover:text-white transition-colors active:scale-95 disabled:opacity-40
+                       p-1 rounded-lg hover:bg-white/[0.06]"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-4">{children}</div>
+        <div className="p-5">{children}</div>
 
         {/* Footer */}
-        <div className="flex gap-2 px-4 pb-4">
+        <div className="flex gap-3 px-5 pb-5">
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-shib-surface-alt border border-shib-border
-                       text-white text-sm hover:bg-shib-border transition-colors active:scale-95
-                       disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]
+                       text-white text-sm font-medium hover:bg-white/[0.06] transition-all duration-200
+                       active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-shib-orange text-white text-sm font-medium
-                       hover:bg-shib-orange-hover transition-colors active:scale-95
+            className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                       text-white text-sm font-semibold transition-all duration-200
+                       hover:shadow-[0_0_25px_rgba(255,105,0,0.3)] active:scale-[0.97]
                        disabled:opacity-70 disabled:cursor-not-allowed
                        flex items-center justify-center gap-2"
           >

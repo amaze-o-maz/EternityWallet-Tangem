@@ -55,12 +55,25 @@ const Header: React.FC = () => {
 
   return (
     <>
-      <header className="flex items-center justify-between px-4 py-3 border-b border-shib-border bg-shib-bg sticky top-0 z-40">
+      <header className="relative flex items-center justify-between px-5 py-3 sticky top-0 z-40
+                          bg-white/[0.03] backdrop-blur-2xl border-b border-white/[0.06]">
         {/* Left: Logo + Wordmark */}
-        <div className="flex items-center gap-2">
-          <ShibLogo size={32} />
-          <span className="text-lg font-bold text-white tracking-tight">
-            Shib<span className="text-shib-orange">Wallet</span>
+        <div className="flex items-center gap-2.5">
+          {/* Logo glow backdrop */}
+          <div className="relative">
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: 'radial-gradient(circle, rgba(255, 105, 0, 0.2) 0%, transparent 70%)',
+                transform: 'scale(2)',
+                filter: 'blur(4px)',
+              }}
+            />
+            <ShibLogo size={34} className="relative z-10" />
+          </div>
+          <span className="text-lg font-bold tracking-tight select-none">
+            <span className="text-white">Shib</span>
+            <span className="gradient-text">Wallet</span>
           </span>
         </div>
 
@@ -71,51 +84,77 @@ const Header: React.FC = () => {
             <AddressPill />
             <button
               onClick={() => setSettingsOpen(true)}
-              className="p-2 rounded-lg hover:bg-shib-surface transition-colors text-gray-400 hover:text-white active:scale-95"
+              className="relative p-2 rounded-xl glass-pill hover:bg-white/10
+                         transition-all duration-200 text-gray-400 hover:text-white
+                         active:scale-95 group"
             >
-              <Settings size={18} />
+              <Settings size={18} className="transition-transform duration-300 group-hover:rotate-90" />
             </button>
           </div>
         )}
+
+        {/* Bottom gradient accent line */}
+        <div className="absolute bottom-0 left-0 right-0 h-px"
+          style={{
+            background: 'linear-gradient(90deg, transparent 0%, rgba(255, 105, 0, 0.3) 50%, transparent 100%)',
+          }}
+        />
       </header>
 
       {/* Settings Modal */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-shib-surface border border-shib-border rounded-xl w-full max-w-sm mx-4 animate-fade-in">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-shib-border">
-              <h2 className="text-white font-semibold">Settings</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-backdrop-enter">
+          <div className="glass-card w-full max-w-sm mx-4 animate-modal-enter overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <h2 className="text-white font-semibold tracking-wide text-sm uppercase">Settings</h2>
               <button
                 onClick={() => setSettingsOpen(false)}
-                className="text-gray-400 hover:text-white transition-colors active:scale-95"
+                className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white
+                           transition-all duration-200 active:scale-95"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
             <div className="p-2">
               <button
                 onClick={handleExportKey}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-sm
-                           text-white hover:bg-shib-surface-alt transition-colors active:scale-95"
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm
+                           text-white hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98] group"
               >
-                <Key size={16} className="text-shib-orange" />
-                Export Private Key
+                <div className="p-2 rounded-lg bg-shib-orange/10 group-hover:bg-shib-orange/20 transition-colors">
+                  <Key size={15} className="text-shib-orange" />
+                </div>
+                <div>
+                  <div className="font-medium">Export Private Key</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Copy key to clipboard</div>
+                </div>
               </button>
               <button
                 onClick={handleLock}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-sm
-                           text-white hover:bg-shib-surface-alt transition-colors active:scale-95"
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm
+                           text-white hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98] group"
               >
-                <Lock size={16} className="text-shib-orange" />
-                Lock Wallet
+                <div className="p-2 rounded-lg bg-shib-orange/10 group-hover:bg-shib-orange/20 transition-colors">
+                  <Lock size={15} className="text-shib-orange" />
+                </div>
+                <div>
+                  <div className="font-medium">Lock Wallet</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Require password to access</div>
+                </div>
               </button>
+              <div className="my-1 mx-4 border-t border-white/[0.04]" />
               <button
                 onClick={() => setConfirmDisconnect(true)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-sm
-                           text-shib-red hover:bg-shib-surface-alt transition-colors active:scale-95"
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm
+                           text-red-400 hover:bg-red-500/[0.06] transition-all duration-200 active:scale-[0.98] group"
               >
-                <Trash2 size={16} />
-                Disconnect (Clear All Data)
+                <div className="p-2 rounded-lg bg-red-500/10 group-hover:bg-red-500/20 transition-colors">
+                  <Trash2 size={15} />
+                </div>
+                <div>
+                  <div className="font-medium">Disconnect Wallet</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Clear all local data</div>
+                </div>
               </button>
             </div>
           </div>
@@ -124,50 +163,58 @@ const Header: React.FC = () => {
 
       {/* Export Private Key Warning Modal */}
       {exportOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-shib-surface border border-shib-red rounded-xl w-full max-w-sm mx-4 animate-fade-in">
-            <div className="px-4 py-3 border-b border-shib-red/50 bg-shib-red/10">
-              <h2 className="text-shib-red font-semibold text-center">Warning</h2>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md animate-backdrop-enter">
+          <div className="glass-card w-full max-w-sm mx-4 animate-modal-enter overflow-hidden
+                          border-red-500/30 animate-red-pulse-glow">
+            <div className="px-5 py-3.5 border-b border-red-500/20"
+              style={{
+                background: 'linear-gradient(135deg, rgba(196, 27, 14, 0.15) 0%, rgba(196, 27, 14, 0.05) 100%)',
+              }}
+            >
+              <h2 className="text-red-400 font-semibold text-center text-sm uppercase tracking-wider">
+                Security Warning
+              </h2>
             </div>
-            <div className="p-4 space-y-4">
-              <div className="bg-shib-red/10 border border-shib-red/30 rounded-lg p-3">
-                <p className="text-sm text-red-300 leading-relaxed">
+            <div className="p-5 space-y-4">
+              <div className="glass-card-sm p-4 border-red-500/20 bg-red-500/5">
+                <p className="text-sm text-red-300/90 leading-relaxed">
                   Your private key grants full access to your wallet and funds.
                   Never share it with anyone. Anyone with your private key can
                   steal all your assets.
                 </p>
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">
-                  Type <span className="text-white font-mono">I UNDERSTAND</span> to continue
+                <label className="block text-xs text-gray-400 mb-2 tracking-wide">
+                  Type <span className="text-white font-mono font-medium bg-white/5 px-1.5 py-0.5 rounded">I UNDERSTAND</span> to continue
                 </label>
                 <input
                   type="text"
                   value={exportConfirmText}
                   onChange={(e) => setExportConfirmText(e.target.value)}
                   placeholder="I UNDERSTAND"
-                  className="w-full px-4 py-2.5 rounded-lg bg-shib-bg border border-shib-border
-                             text-white placeholder-gray-600 focus:outline-none focus:border-shib-red
-                             transition-colors text-sm"
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/10
+                             text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50
+                             transition-all duration-200 text-sm backdrop-blur-xl"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2.5">
                 <button
                   onClick={() => {
                     setExportOpen(false);
                     setExportConfirmText('');
                   }}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-shib-surface-alt border border-shib-border
-                             text-white text-sm hover:bg-shib-border transition-colors active:scale-95"
+                  className="btn-secondary flex-1 py-2.5"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmExport}
                   disabled={exportConfirmText !== 'I UNDERSTAND'}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-shib-red text-white text-sm font-medium
-                             disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-700
-                             transition-colors active:scale-95"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium
+                             disabled:opacity-30 disabled:cursor-not-allowed hover:bg-red-500
+                             transition-all duration-200 active:scale-95
+                             shadow-[0_4px_15px_rgba(196,27,14,0.3)]
+                             hover:shadow-[0_6px_25px_rgba(196,27,14,0.45)]"
                 >
                   Export Key
                 </button>
@@ -179,29 +226,33 @@ const Header: React.FC = () => {
 
       {/* Confirm Disconnect Modal */}
       {confirmDisconnect && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-shib-surface border border-shib-red rounded-xl w-full max-w-sm mx-4 animate-fade-in">
-            <div className="p-4 space-y-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md animate-backdrop-enter">
+          <div className="glass-card w-full max-w-sm mx-4 animate-modal-enter overflow-hidden border-red-500/20">
+            <div className="p-6 space-y-5">
               <div className="text-center">
-                <Trash2 size={32} className="mx-auto text-shib-red mb-2" />
-                <h2 className="text-white font-semibold">Clear All Data?</h2>
-                <p className="text-sm text-gray-400 mt-1">
+                <div className="mx-auto w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mb-3
+                                border border-red-500/20">
+                  <Trash2 size={26} className="text-red-400" />
+                </div>
+                <h2 className="text-white font-semibold text-lg tracking-tight">Clear All Data?</h2>
+                <p className="text-sm text-gray-400 mt-2 leading-relaxed">
                   This will permanently delete your encrypted vault. Make sure you have
                   backed up your seed phrase or private key before proceeding.
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2.5">
                 <button
                   onClick={() => setConfirmDisconnect(false)}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-shib-surface-alt border border-shib-border
-                             text-white text-sm hover:bg-shib-border transition-colors active:scale-95"
+                  className="btn-secondary flex-1 py-2.5"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDisconnect}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-shib-red text-white text-sm font-medium
-                             hover:bg-red-700 transition-colors active:scale-95"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium
+                             hover:bg-red-500 transition-all duration-200 active:scale-95
+                             shadow-[0_4px_15px_rgba(196,27,14,0.3)]
+                             hover:shadow-[0_6px_25px_rgba(196,27,14,0.45)]"
                 >
                   Disconnect
                 </button>

@@ -8,12 +8,10 @@ import {
   deriveFromMnemonic,
   deriveFromPrivateKey,
   encryptMnemonic,
-  hashPassword,
 } from '../lib/wallet';
 import { useWalletStore } from '../store/walletStore';
 
 const VAULT_KEY = 'shibwallet_vault';
-const HASH_KEY = 'shibwallet_hash';
 
 type Tab = 'mnemonic' | 'privatekey';
 
@@ -57,12 +55,15 @@ const Import: React.FC = () => {
       }
     } else {
       const trimmed = privateKeyInput.trim();
-      if (!trimmed.startsWith('0x') || trimmed.length !== 66) {
-        toast.error('Private key must be a 66-character hex string starting with 0x');
+      const isHex64 = /^[0-9a-fA-F]{64}$/.test(trimmed);
+      const isHex66 = /^0x[0-9a-fA-F]{64}$/.test(trimmed);
+      if (!isHex64 && !isHex66) {
+        toast.error('Private key must be 64 hex characters (with or without 0x prefix)');
         return;
       }
+      const keyWithPrefix = isHex64 ? `0x${trimmed}` : trimmed;
       try {
-        const wallet = deriveFromPrivateKey(trimmed);
+        const wallet = deriveFromPrivateKey(keyWithPrefix);
         setImportedAddress(wallet.address);
         setImportedPrivateKey(wallet.privateKey);
         setImportedMnemonic(null);
@@ -85,14 +86,10 @@ const Import: React.FC = () => {
 
     setSaving(true);
     try {
-      const hashed = hashPassword(password);
-      // For mnemonic imports, encrypt the mnemonic
-      // For private key imports, prefix with 'pk:' and encrypt the private key
       const dataToEncrypt = importedMnemonic ?? `pk:${importedPrivateKey}`;
-      const encrypted = encryptMnemonic(dataToEncrypt, hashed);
+      const encrypted = encryptMnemonic(dataToEncrypt, password);
       localStorage.setItem(VAULT_KEY, encrypted);
-      localStorage.setItem(HASH_KEY, hashed);
-      setWallet(importedAddress, importedPrivateKey, importedMnemonic ?? '');
+      setWallet(importedAddress, importedPrivateKey, importedMnemonic ?? '', password);
       navigate('/wallet', { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to import wallet');
@@ -102,8 +99,16 @@ const Import: React.FC = () => {
   }, [password, confirmPassword, importedAddress, importedPrivateKey, importedMnemonic, setWallet, navigate]);
 
   return (
-    <div className="flex-1 flex flex-col items-center bg-shib-bg min-h-screen py-8 px-4 animate-fade-in">
-      <div className="max-w-md w-full">
+    <div className="flex-1 flex flex-col items-center bg-shib-bg min-h-screen py-8 px-5 animate-fade-in relative overflow-hidden">
+      {/* Subtle background radial gradient */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
+        }}
+      />
+
+      <div className="max-w-md w-full relative z-10">
         <button
           onClick={() => {
             if (showPasswordStep) {
@@ -114,22 +119,25 @@ const Import: React.FC = () => {
               navigate('/');
             }
           }}
-          className="text-sm text-gray-400 hover:text-white transition-colors mb-6 active:scale-95"
+          className="text-sm text-gray-400 hover:text-white transition-colors mb-8 active:scale-95
+                     flex items-center gap-1"
         >
           &larr; Back
         </button>
 
         {!showPasswordStep ? (
-          <div className="animate-fade-in">
-            <h1 className="text-2xl font-bold text-white mb-6">Import Wallet</h1>
+          <div className="animate-slide-up-fade">
+            <h1 className="text-2xl font-bold mb-8 bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+              Import Wallet
+            </h1>
 
             {/* Tabs */}
-            <div className="flex rounded-lg bg-shib-surface border border-shib-border mb-6 overflow-hidden">
+            <div className="flex rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] mb-8 overflow-hidden p-1">
               <button
                 onClick={() => setTab('mnemonic')}
-                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
                   tab === 'mnemonic'
-                    ? 'bg-shib-orange text-white'
+                    ? 'bg-gradient-to-r from-[#FF6900] to-[#FF8C00] text-white shadow-[0_0_15px_rgba(255,105,0,0.2)]'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -137,9 +145,9 @@ const Import: React.FC = () => {
               </button>
               <button
                 onClick={() => setTab('privatekey')}
-                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+                className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
                   tab === 'privatekey'
-                    ? 'bg-shib-orange text-white'
+                    ? 'bg-gradient-to-r from-[#FF6900] to-[#FF8C00] text-white shadow-[0_0_15px_rgba(255,105,0,0.2)]'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -149,7 +157,7 @@ const Import: React.FC = () => {
 
             {tab === 'mnemonic' ? (
               <div className="mb-8">
-                <label className="block text-sm text-gray-400 mb-1.5">
+                <label className="block text-sm text-gray-400 mb-2 font-medium">
                   Enter your 12-word recovery phrase
                 </label>
                 <textarea
@@ -157,14 +165,15 @@ const Import: React.FC = () => {
                   onChange={(e) => setMnemonicInput(e.target.value)}
                   placeholder="word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12"
                   rows={4}
-                  className="w-full px-4 py-3 rounded-lg bg-shib-surface border border-shib-border
-                             text-white placeholder-gray-600 focus:outline-none focus:border-shib-orange
-                             transition-colors resize-none text-sm leading-relaxed"
+                  className="w-full px-4 py-3.5 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                             text-white placeholder-gray-600 focus:outline-none
+                             focus:border-[#FF6900]/50 focus:shadow-[0_0_20px_rgba(255,105,0,0.12)]
+                             transition-all duration-300 resize-none text-sm leading-relaxed"
                 />
               </div>
             ) : (
               <div className="mb-8">
-                <label className="block text-sm text-gray-400 mb-1.5">
+                <label className="block text-sm text-gray-400 mb-2 font-medium">
                   Enter your private key (0x-prefixed)
                 </label>
                 <input
@@ -172,31 +181,35 @@ const Import: React.FC = () => {
                   value={privateKeyInput}
                   onChange={(e) => setPrivateKeyInput(e.target.value)}
                   placeholder="0x..."
-                  className="w-full px-4 py-3 rounded-lg bg-shib-surface border border-shib-border
-                             text-white placeholder-gray-600 focus:outline-none focus:border-shib-orange
-                             transition-colors text-sm font-mono"
+                  className="w-full px-4 py-3.5 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                             text-white placeholder-gray-600 focus:outline-none
+                             focus:border-[#FF6900]/50 focus:shadow-[0_0_20px_rgba(255,105,0,0.12)]
+                             transition-all duration-300 text-sm font-mono"
                 />
               </div>
             )}
 
             <button
               onClick={handleValidateAndProceed}
-              className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover
-                         text-white font-semibold transition active:scale-95"
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                         text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                         hover:shadow-[0_0_25px_rgba(255,105,0,0.3)] hover:scale-[1.01]"
             >
               Continue
             </button>
           </div>
         ) : (
-          <div className="animate-fade-in">
-            <h1 className="text-2xl font-bold text-white mb-2">Set a Password</h1>
-            <p className="text-sm text-gray-400 mb-6">
+          <div className="animate-slide-up-fade">
+            <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+              Set a Password
+            </h1>
+            <p className="text-sm text-gray-400 mb-8 leading-relaxed">
               This password encrypts your wallet on this device. Minimum 8 characters.
             </p>
 
-            <div className="space-y-4 mb-8">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1.5">Password</label>
+            <div className="space-y-5 mb-8">
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5">
+                <label className="block text-sm text-gray-400 mb-2 font-medium">Password</label>
                 <PasswordInput
                   value={password}
                   onChange={setPassword}
@@ -204,8 +217,8 @@ const Import: React.FC = () => {
                   showStrength
                 />
               </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1.5">Confirm Password</label>
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5">
+                <label className="block text-sm text-gray-400 mb-2 font-medium">Confirm Password</label>
                 <PasswordInput
                   value={confirmPassword}
                   onChange={setConfirmPassword}
@@ -217,9 +230,10 @@ const Import: React.FC = () => {
             <button
               onClick={handleSetPassword}
               disabled={saving || password.length < 8 || password !== confirmPassword}
-              className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover
-                         text-white font-semibold transition active:scale-95
-                         disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                         text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                         hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                         disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none"
             >
               {saving ? 'Importing...' : 'Import Wallet'}
             </button>

@@ -4,26 +4,40 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  fallback,
   parseUnits,
   formatUnits,
   type Chain,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, X, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TokenSelector from '../components/TokenSelector';
 import ReviewModal from '../components/ReviewModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
+import { useTransactionStore } from '../store/transactionStore';
+import { isShibName, resolveShibName, formatShibName } from '../lib/sns';
 import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
+import { fetchPrices } from '../lib/prices';
+
+function stringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 60%, 40%)`;
+}
 
 const Send: React.FC = () => {
   const navigate = useNavigate();
   const { address, privateKey, isUnlocked } = useWalletStore();
   const chainId = useNetworkStore((s) => s.chainId);
+  const addTransaction = useTransactionStore((s) => s.addTransaction);
 
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
   const [toAddress, setToAddress] = useState('');
@@ -35,7 +49,19 @@ const Send: React.FC = () => {
   const [balances, setBalances] = useState<Record<string, bigint>>({});
   const [loadingBalances, setLoadingBalances] = useState(true);
   const [gasEstimate, setGasEstimate] = useState<bigint | null>(null);
+  const [gasPrice, setGasPrice] = useState<bigint | null>(null);
   const [estimatingGas, setEstimatingGas] = useState(false);
+  const [prices, setPrices] = useState<Record<string, number>>({});
+  const [tokenImgLoaded, setTokenImgLoaded] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [copiedHash, setCopiedHash] = useState(false);
+
+  // SNS name resolution
+  const [snsInput, setSnsInput] = useState(''); // The raw .shib name typed
+  const [snsResolvedAddr, setSnsResolvedAddr] = useState<string | null>(null);
+  const [snsResolving, setSnsResolving] = useState(false);
+  const [snsError, setSnsError] = useState(false);
+  const [snsNetworkError, setSnsNetworkError] = useState(false);
 
   const network = useMemo(() => getNetworkByChainId(chainId), [chainId]);
 
@@ -50,16 +76,19 @@ const Send: React.FC = () => {
         decimals: 18,
       },
       rpcUrls: {
-        default: { http: [network.rpcUrl] },
+        default: { http: [network.rpcUrl, ...(network.rpcFallbacks ?? [])] },
       },
     };
   }, [network]);
 
   const publicClient = useMemo(() => {
     if (!network || !viemChain) return null;
+    const allRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
     return createPublicClient({
       chain: viemChain,
-      transport: http(network.rpcUrl),
+      transport: allRpcs.length > 1
+        ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
+        : http(allRpcs[0], { timeout: 10_000 }),
     });
   }, [network, viemChain]);
 
@@ -77,6 +106,15 @@ const Send: React.FC = () => {
       setSelectedToken(tokens[0]);
     }
   }, [chainId, selectedToken]);
+
+  // Reset image loaded state when token changes
+  useEffect(() => {
+    setTokenImgLoaded(false);
+  }, [selectedToken]);
+
+  useEffect(() => {
+    fetchPrices().then(setPrices).catch(() => {});
+  }, []);
 
   // Fetch balances
   useEffect(() => {
@@ -118,12 +156,14 @@ const Send: React.FC = () => {
 
   // Estimate gas when inputs change
   useEffect(() => {
-    if (!publicClient || !address || !toAddress || !amount || !selectedToken || !network) {
+    // Use effectiveAddress (resolved SNS or raw) for gas estimation
+    const gasTarget = snsResolvedAddr ?? toAddress;
+    if (!publicClient || !address || !gasTarget || !amount || !selectedToken || !network) {
       setGasEstimate(null);
       return;
     }
 
-    const isValidTo = toAddress.startsWith('0x') && toAddress.length === 42;
+    const isValidTo = gasTarget.startsWith('0x') && gasTarget.length === 42;
     if (!isValidTo) {
       setGasEstimate(null);
       return;
@@ -147,7 +187,7 @@ const Send: React.FC = () => {
         if (isNativeToken(selectedToken)) {
           const gas = await publicClient.estimateGas({
             account: address as `0x${string}`,
-            to: toAddress as `0x${string}`,
+            to: effectiveAddress as `0x${string}`,
             value: parsedAmount,
           });
           setGasEstimate(gas);
@@ -155,10 +195,12 @@ const Send: React.FC = () => {
           const gas = await publicClient.estimateGas({
             account: address as `0x${string}`,
             to: selectedToken.address,
-            data: encodeFunctionData(toAddress as `0x${string}`, parsedAmount),
+            data: encodeFunctionData(effectiveAddress as `0x${string}`, parsedAmount),
           });
           setGasEstimate(gas);
         }
+        const gp = await publicClient.getGasPrice();
+        setGasPrice(gp);
       } catch {
         setGasEstimate(null);
       } finally {
@@ -168,9 +210,47 @@ const Send: React.FC = () => {
 
     const timer = setTimeout(estimate, 500);
     return () => clearTimeout(timer);
-  }, [publicClient, address, toAddress, amount, selectedToken, network]);
+  }, [publicClient, address, toAddress, snsResolvedAddr, amount, selectedToken, network]);
 
-  const isValidAddress = toAddress.startsWith('0x') && toAddress.length === 42;
+  // SNS: resolve .shib names when typed
+  useEffect(() => {
+    setSnsResolvedAddr(null);
+    setSnsError(false);
+    setSnsNetworkError(false);
+
+    if (!isShibName(toAddress)) {
+      setSnsInput('');
+      setSnsResolving(false);
+      return;
+    }
+
+    setSnsInput(toAddress);
+    setSnsResolving(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const addr = await resolveShibName(toAddress, chainId);
+        if (addr) {
+          setSnsResolvedAddr(addr);
+        } else {
+          // Contract returned zero address — name is genuinely not registered
+          setSnsError(true);
+        }
+      } catch {
+        // RPC/network failure — distinct from "name not found"
+        setSnsNetworkError(true);
+      } finally {
+        setSnsResolving(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [toAddress]);
+
+  // The effective address used for transactions: resolved SNS address or raw input
+  const effectiveAddress = snsResolvedAddr ?? toAddress;
+  const isValidAddress = effectiveAddress.startsWith('0x') && effectiveAddress.length === 42;
+  const isSnsMode = isShibName(toAddress);
   const currentBalance = selectedToken ? (balances[selectedToken.address] ?? 0n) : 0n;
   const formattedBalance = selectedToken
     ? formatUnits(currentBalance, selectedToken.decimals)
@@ -214,9 +294,12 @@ const Send: React.FC = () => {
     setSending(true);
     try {
       const account = privateKeyToAccount(privateKey as `0x${string}`);
+      const sendRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
       const walletClient = createWalletClient({
         chain: viemChain,
-        transport: http(network.rpcUrl),
+        transport: sendRpcs.length > 1
+          ? fallback(sendRpcs.map((url) => http(url, { timeout: 10_000 })))
+          : http(sendRpcs[0], { timeout: 10_000 }),
         account,
       });
 
@@ -225,7 +308,7 @@ const Send: React.FC = () => {
 
       if (isNativeToken(selectedToken)) {
         hash = await walletClient.sendTransaction({
-          to: toAddress as `0x${string}`,
+          to: effectiveAddress as `0x${string}`,
           value: parsedAmount,
         });
       } else {
@@ -233,84 +316,108 @@ const Send: React.FC = () => {
           address: selectedToken.address,
           abi: ERC20_ABI,
           functionName: 'transfer',
-          args: [toAddress as `0x${string}`, parsedAmount],
+          args: [effectiveAddress as `0x${string}`, parsedAmount],
         });
       }
 
       setTxHash(hash);
       setReviewOpen(false);
-      toast.success('Transaction sent successfully!');
+      setShowSuccessModal(true);
+      setCopiedHash(false);
+
+      // Record transaction in local store for history
+      try {
+        addTransaction({
+          hash,
+          from: address!,
+          to: effectiveAddress,
+          value: parseUnits(amount, selectedToken.decimals).toString(),
+          timeStamp: Math.floor(Date.now() / 1000).toString(),
+          type: 'send',
+          chainId,
+          tokenSymbol: isNativeToken(selectedToken) ? undefined : selectedToken.symbol,
+          tokenDecimal: isNativeToken(selectedToken) ? undefined : selectedToken.decimals.toString(),
+          tokenName: isNativeToken(selectedToken) ? undefined : selectedToken.name,
+        });
+      } catch {
+        // Don't let history recording errors affect the success display
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Transaction failed');
     } finally {
       setSending(false);
     }
-  }, [selectedToken, privateKey, network, viemChain, publicClient, amount, toAddress]);
+  }, [selectedToken, privateKey, network, viemChain, publicClient, amount, toAddress, address, addTransaction, chainId]);
+
+  const handleCopyHash = useCallback(() => {
+    if (!txHash) return;
+    navigator.clipboard.writeText(txHash).then(() => {
+      setCopiedHash(true);
+      setTimeout(() => setCopiedHash(false), 2000);
+    }).catch(() => {});
+  }, [txHash]);
 
   if (!isUnlocked || !address) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in">
-      <div className="max-w-md mx-auto w-full px-4 py-6">
+    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
+      {/* Subtle background radial gradient */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
+        }}
+      />
+
+      <div className="max-w-md mx-auto w-full px-5 py-8 relative z-10">
         {/* Back button */}
         <button
           onClick={() => navigate('/wallet')}
-          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-6 active:scale-95"
+          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-8 active:scale-95"
         >
           <ArrowLeft size={16} />
           Back
         </button>
 
-        <h1 className="text-2xl font-bold text-white mb-6">Send</h1>
+        <h1 className="text-2xl font-bold mb-8 bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+          Send
+        </h1>
 
-        {txHash ? (
-          <div className="animate-fade-in text-center py-8">
-            <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <h2 className="text-lg font-semibold text-white mb-2">Transaction Sent</h2>
-            <p className="text-sm text-gray-400 font-mono break-all mb-4">
-              {txHash}
-            </p>
-            <a
-              href={getExplorerTxUrl(chainId, txHash)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm text-shib-orange hover:text-shib-orange-hover transition-colors"
-            >
-              View on Explorer
-              <ExternalLink size={14} />
-            </a>
-            <div className="mt-6">
-              <button
-                onClick={() => navigate('/wallet')}
-                className="w-full py-3 rounded-lg bg-shib-orange hover:bg-shib-orange-hover text-white font-semibold transition active:scale-95"
-              >
-                Back to Wallet
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
+        {txHash ? null : (
+          <div className="space-y-5">
             {/* Token selector */}
-            <div className="mb-4">
-              <label className="block text-sm text-gray-400 mb-1.5">Token</label>
+            <div>
+              <label className="block text-sm text-gray-400 mb-2 font-medium">Token</label>
               <button
                 onClick={() => setSelectorOpen(true)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-shib-surface border border-shib-border hover:border-shib-orange/50 transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl
+                           bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                           hover:border-[#FF6900]/30 hover:shadow-[0_0_15px_rgba(255,105,0,0.08)]
+                           transition-all duration-200 text-left"
               >
                 {selectedToken ? (
                   <>
-                    <img
-                      src={selectedToken.logoUrl}
-                      alt={selectedToken.symbol}
-                      className="w-6 h-6 rounded-full bg-shib-surface-alt"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
+                    <div className="relative w-7 h-7 shrink-0">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                        style={{ backgroundColor: stringToColor(selectedToken.symbol) }}
+                      >
+                        {selectedToken.symbol.slice(0, 2)}
+                      </div>
+                      {tokenImgLoaded && (
+                        <img
+                          src={selectedToken.logoUrl}
+                          alt={selectedToken.symbol}
+                          className="w-7 h-7 rounded-full absolute inset-0"
+                        />
+                      )}
+                      <img
+                        src={selectedToken.logoUrl}
+                        alt=""
+                        className="hidden"
+                        onLoad={() => setTokenImgLoaded(true)}
+                      />
+                    </div>
                     <span className="text-white text-sm font-medium">{selectedToken.symbol}</span>
                     <span className="ml-auto text-xs text-gray-500">
                       Balance: {loadingBalances ? '...' : parseFloat(formattedBalance).toFixed(6)}
@@ -323,29 +430,64 @@ const Send: React.FC = () => {
             </div>
 
             {/* To address */}
-            <div className="mb-4">
-              <label className="block text-sm text-gray-400 mb-1.5">To Address</label>
+            <div>
+              <label className="block text-sm text-gray-400 mb-2 font-medium">To Address</label>
               <input
                 type="text"
                 value={toAddress}
                 onChange={(e) => setToAddress(e.target.value)}
-                placeholder="0x..."
-                className={`w-full px-4 py-3 rounded-lg bg-shib-surface border text-white placeholder-gray-600 focus:outline-none transition-colors text-sm font-mono ${
-                  toAddress && !isValidAddress
-                    ? 'border-shib-red focus:border-shib-red'
-                    : 'border-shib-border focus:border-shib-orange'
+                placeholder="0x... or name.shib"
+                className={`w-full px-4 py-3.5 rounded-xl bg-white/[0.03] backdrop-blur-xl border
+                           text-white placeholder-gray-600 focus:outline-none
+                           transition-all duration-300 text-sm ${isSnsMode ? '' : 'font-mono'} ${
+                  (toAddress && !isSnsMode && !isValidAddress) || snsError
+                    ? 'border-red-500/50 focus:border-red-500/70 focus:shadow-[0_0_15px_rgba(239,68,68,0.1)]'
+                    : snsResolvedAddr
+                      ? 'border-purple-500/50 focus:border-purple-500/70 focus:shadow-[0_0_15px_rgba(168,85,247,0.12)]'
+                      : 'border-white/[0.06] focus:border-[#FF6900]/50 focus:shadow-[0_0_20px_rgba(255,105,0,0.12)]'
                 }`}
               />
-              {toAddress && !isValidAddress && (
-                <p className="text-xs text-shib-red mt-1">
-                  Enter a valid address (0x-prefixed, 42 characters)
+
+              {/* SNS resolution status */}
+              {isSnsMode && snsResolving && (
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs text-purple-400">Resolving {formatShibName(toAddress)}...</p>
+                </div>
+              )}
+              {isSnsMode && snsResolvedAddr && !snsResolving && (
+                <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/15">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                    <circle cx="8" cy="8" r="7" stroke="#a855f7" strokeWidth="1.5" />
+                    <path d="M5.5 8.5L7 10l3.5-4" stroke="#a855f7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="text-xs text-purple-300 font-semibold">{formatShibName(toAddress)}</span>
+                  <span className="text-[10px] text-gray-500 mx-1">&rarr;</span>
+                  <span className="text-[10px] text-gray-400 font-mono">{snsResolvedAddr.slice(0, 8)}...{snsResolvedAddr.slice(-6)}</span>
+                </div>
+              )}
+              {isSnsMode && snsError && !snsResolving && (
+                <p className="text-xs text-red-400 mt-1.5">
+                  Name not found — &quot;{formatShibName(toAddress)}&quot; is not registered
+                </p>
+              )}
+              {isSnsMode && snsNetworkError && !snsResolving && (
+                <p className="text-xs text-yellow-400 mt-1.5">
+                  Could not resolve name — check your connection and try again
+                </p>
+              )}
+
+              {/* Standard address validation */}
+              {toAddress && !isSnsMode && !isValidAddress && (
+                <p className="text-xs text-red-400 mt-1.5">
+                  Enter a valid address (0x-prefixed, 42 characters) or .shib name
                 </p>
               )}
             </div>
 
             {/* Amount */}
-            <div className="mb-6">
-              <label className="block text-sm text-gray-400 mb-1.5">Amount</label>
+            <div>
+              <label className="block text-sm text-gray-400 mb-2 font-medium">Amount</label>
               <div className="relative">
                 <input
                   type="text"
@@ -357,11 +499,16 @@ const Send: React.FC = () => {
                     }
                   }}
                   placeholder="0.0"
-                  className="w-full px-4 py-3 pr-16 rounded-lg bg-shib-surface border border-shib-border text-white placeholder-gray-600 focus:outline-none focus:border-shib-orange transition-colors text-sm"
+                  className="w-full px-4 py-3.5 pr-20 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                             text-white placeholder-gray-600 focus:outline-none
+                             focus:border-[#FF6900]/50 focus:shadow-[0_0_20px_rgba(255,105,0,0.12)]
+                             transition-all duration-300 text-sm"
                 />
                 <button
                   onClick={handleMaxClick}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-shib-orange font-semibold hover:text-shib-orange-hover transition-colors active:scale-95"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg
+                             bg-gradient-to-r from-[#FF6900] to-[#FF8C00] text-[10px] font-bold text-white
+                             hover:shadow-[0_0_12px_rgba(255,105,0,0.3)] transition-all duration-200 active:scale-95"
                 >
                   MAX
                 </button>
@@ -369,13 +516,28 @@ const Send: React.FC = () => {
             </div>
 
             {/* Gas estimate */}
-            {gasEstimate !== null && (
-              <div className="mb-6 px-4 py-3 rounded-lg bg-shib-surface border border-shib-border">
+            {gasEstimate !== null && gasPrice !== null && (
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-xl px-4 py-3 space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Estimated Gas</span>
-                  <span className="text-white font-mono">
-                    {estimatingGas ? '...' : gasEstimate.toString()} units
-                  </span>
+                  <span className="text-gray-400">Estimated Gas Fee</span>
+                  <div className="text-right">
+                    <span className="text-white font-medium">
+                      {parseFloat(formatUnits(gasEstimate * gasPrice, 18)).toFixed(8)} {network?.nativeToken.symbol}
+                    </span>
+                    {(() => {
+                      const nativeSymbol = network?.nativeToken.symbol ?? '';
+                      const price = prices[nativeSymbol] ?? 0;
+                      if (price > 0) {
+                        const usd = parseFloat(formatUnits(gasEstimate * gasPrice, 18)) * price;
+                        return (
+                          <span className="text-gray-500 text-xs ml-2">
+                            (~${usd < 0.01 ? '<0.01' : usd.toFixed(2)})
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
                 </div>
               </div>
             )}
@@ -384,11 +546,14 @@ const Send: React.FC = () => {
             <button
               onClick={handleReview}
               disabled={!selectedToken || !isValidAddress || !amount || parseFloat(amount) <= 0}
-              className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover text-white font-semibold transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                         text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                         hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                         disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none"
             >
               Review Transaction
             </button>
-          </>
+          </div>
         )}
       </div>
 
@@ -423,23 +588,149 @@ const Send: React.FC = () => {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">To</span>
-            <span className="text-white font-mono text-xs break-all">
-              {toAddress}
+            <span className="text-white text-xs break-all">
+              {isSnsMode && snsResolvedAddr ? (
+                <span><span className="text-purple-300 font-semibold">{formatShibName(toAddress)}</span> <span className="text-gray-500 font-mono">({effectiveAddress.slice(0, 6)}...{effectiveAddress.slice(-4)})</span></span>
+              ) : (
+                <span className="font-mono">{effectiveAddress}</span>
+              )}
             </span>
           </div>
-          {gasEstimate !== null && (
+          {gasEstimate !== null && gasPrice !== null && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Gas Estimate</span>
-              <span className="text-white font-mono">{gasEstimate.toString()} units</span>
+              <span className="text-gray-400">Gas Fee</span>
+              <div className="text-right">
+                <span className="text-white font-medium">
+                  {parseFloat(formatUnits(gasEstimate * gasPrice, 18)).toFixed(8)} {network?.nativeToken.symbol}
+                </span>
+                {(() => {
+                  const nativeSymbol = network?.nativeToken.symbol ?? '';
+                  const price = prices[nativeSymbol] ?? 0;
+                  if (price > 0) {
+                    const usd = parseFloat(formatUnits(gasEstimate * gasPrice, 18)) * price;
+                    return (
+                      <span className="text-gray-500 text-xs ml-1">
+                        (~${usd < 0.01 ? '<0.01' : usd.toFixed(2)})
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
             </div>
           )}
-          <div className="border-t border-shib-border pt-3 mt-3">
+          <div className="border-t border-white/[0.06] pt-3 mt-3">
             <p className="text-xs text-gray-500 leading-relaxed">
               Please verify all details before confirming. Transactions cannot be reversed.
             </p>
           </div>
         </div>
       </ReviewModal>
+
+      {/* Success notification modal */}
+      {showSuccessModal && txHash && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in" onClick={() => navigate('/wallet')}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <div className="flex items-center justify-end mb-2">
+              <button
+                onClick={() => navigate('/wallet')}
+                className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Animated checkmark with green glow */}
+            <div className="text-center">
+              <div className="relative inline-block mb-5">
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: 'radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%)',
+                    transform: 'scale(2.5)',
+                    filter: 'blur(20px)',
+                  }}
+                />
+                <div className="relative w-16 h-16 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto backdrop-blur-xl">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+              </div>
+              <h2 className="text-lg font-semibold text-white mb-1">Transaction Sent</h2>
+              <p className="text-xs text-gray-400 mb-5">Your transaction has been submitted to the network</p>
+            </div>
+
+            {/* Transaction hash card */}
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-gray-500">Transaction Hash</p>
+                <button
+                  onClick={handleCopyHash}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  {copiedHash ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                  {copiedHash ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-sm text-gray-300 font-mono break-all leading-relaxed">
+                {txHash}
+              </p>
+            </div>
+
+            {/* Transaction details */}
+            {selectedToken && (
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-5 space-y-2.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Amount</span>
+                  <span className="text-white font-medium">{amount} {selectedToken.symbol}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">To</span>
+                  <span className="text-white text-xs">
+                    {isSnsMode && snsResolvedAddr ? (
+                      <span className="text-purple-300 font-semibold">{formatShibName(toAddress)}</span>
+                    ) : (
+                      <span className="font-mono">{effectiveAddress.slice(0, 8)}...{effectiveAddress.slice(-6)}</span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Network</span>
+                  <span className="text-white">{network?.name}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <a
+              href={getExplorerTxUrl(chainId, txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3.5 rounded-xl border border-white/[0.08] bg-white/[0.03]
+                         text-white font-medium text-sm transition-all duration-300 active:scale-[0.97]
+                         hover:border-[#FF6900]/30 hover:shadow-[0_0_15px_rgba(255,105,0,0.08)]
+                         flex items-center justify-center gap-2 mb-3"
+            >
+              View on Explorer
+              <ExternalLink size={14} />
+            </a>
+            <button
+              onClick={() => navigate('/wallet')}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                         text-white font-semibold text-sm transition-all duration-300 active:scale-[0.97]
+                         hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]"
+            >
+              Back to Wallet
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

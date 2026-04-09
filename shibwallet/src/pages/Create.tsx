@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import toast from 'react-hot-toast';
 import PasswordInput from '../components/PasswordInput';
-import { createWallet, encryptMnemonic, hashPassword } from '../lib/wallet';
+import { createWallet, encryptMnemonic } from '../lib/wallet';
 import { useWalletStore } from '../store/walletStore';
 
 const VAULT_KEY = 'shibwallet_vault';
-const HASH_KEY = 'shibwallet_hash';
 
 type Step = 'backup' | 'verify' | 'password';
 
@@ -99,11 +98,9 @@ const Create: React.FC = () => {
 
     setSaving(true);
     try {
-      const hashed = hashPassword(password);
-      const encrypted = encryptMnemonic(wallet.mnemonic, hashed);
+      const encrypted = encryptMnemonic(wallet.mnemonic, password);
       localStorage.setItem(VAULT_KEY, encrypted);
-      localStorage.setItem(HASH_KEY, hashed);
-      setWallet(wallet.address, wallet.privateKey, wallet.mnemonic);
+      setWallet(wallet.address, wallet.privateKey, wallet.mnemonic, password);
       navigate('/wallet', { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create wallet');
@@ -113,17 +110,25 @@ const Create: React.FC = () => {
   }, [password, confirmPassword, wallet, setWallet, navigate]);
 
   return (
-    <div className="flex-1 flex flex-col items-center bg-shib-bg min-h-screen py-8 px-4 animate-fade-in">
-      <div className="max-w-md w-full">
+    <div className="flex-1 flex flex-col items-center bg-shib-bg min-h-screen py-8 px-5 animate-fade-in relative overflow-hidden">
+      {/* Subtle background radial gradient */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
+        }}
+      />
+
+      <div className="max-w-md w-full relative z-10">
         {/* Progress indicator */}
-        <div className="flex items-center gap-2 mb-8">
+        <div className="flex items-center gap-2 mb-10">
           {(['backup', 'verify', 'password'] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center flex-1">
               <div
-                className={`h-1 flex-1 rounded-full transition-colors ${
+                className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
                   i <= ['backup', 'verify', 'password'].indexOf(step)
-                    ? 'bg-shib-orange'
-                    : 'bg-shib-border'
+                    ? 'bg-gradient-to-r from-[#FF6900] to-[#FF8C00] shadow-[0_0_8px_rgba(255,105,0,0.3)]'
+                    : 'bg-white/[0.06]'
                 }`}
               />
             </div>
@@ -132,34 +137,42 @@ const Create: React.FC = () => {
 
         {/* Step 1: Backup */}
         {step === 'backup' && (
-          <div className="animate-fade-in">
-            <h1 className="text-2xl font-bold text-white mb-2">Your Secret Recovery Phrase</h1>
-            <p className="text-sm text-gray-400 mb-6">
+          <div className="animate-slide-up-fade">
+            <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+              Your Secret Recovery Phrase
+            </h1>
+            <p className="text-sm text-gray-400 mb-8 leading-relaxed">
               Write down these 12 words in order and store them somewhere safe.
             </p>
 
-            <div className="grid grid-cols-3 gap-2 mb-6">
+            <div className="grid grid-cols-3 gap-2.5 mb-8">
               {words.map((word, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-shib-surface border border-shib-border"
+                  className="flex items-center gap-2 px-3 py-3 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                             transition-all duration-200 hover:bg-white/[0.05] hover:border-white/[0.1]"
+                  style={{
+                    animation: `slide-up-fade 0.4s ease-out ${i * 40}ms both`,
+                  }}
                 >
-                  <span className="text-xs text-gray-500 w-5 text-right">{i + 1}.</span>
+                  <span className="text-xs text-gray-500 w-5 text-right font-mono">{i + 1}.</span>
                   <span className="text-sm text-white font-medium">{word}</span>
                 </div>
               ))}
             </div>
 
-            <div className="rounded-lg border border-yellow-600/40 bg-yellow-900/20 p-4 mb-8">
-              <p className="text-sm text-yellow-300 leading-relaxed">
+            <div className="rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-amber-500/20 p-5 mb-8
+                            shadow-[0_0_20px_rgba(255,184,0,0.05)]">
+              <p className="text-sm text-amber-300/90 leading-relaxed">
                 Never share your secret phrase. Anyone with these words owns your wallet.
               </p>
             </div>
 
             <button
               onClick={() => setStep('verify')}
-              className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover
-                         text-white font-semibold transition active:scale-95"
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                         text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                         hover:shadow-[0_0_25px_rgba(255,105,0,0.3)] hover:scale-[1.01]"
             >
               I've Written It Down &rarr; Continue
             </button>
@@ -168,28 +181,34 @@ const Create: React.FC = () => {
 
         {/* Step 2: Verify */}
         {step === 'verify' && (
-          <div className="animate-fade-in">
-            <h1 className="text-2xl font-bold text-white mb-2">Verify Your Phrase</h1>
-            <p className="text-sm text-gray-400 mb-6">
+          <div className="animate-slide-up-fade">
+            <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+              Verify Your Phrase
+            </h1>
+            <p className="text-sm text-gray-400 mb-8 leading-relaxed">
               Select the correct word for each position to confirm you saved your phrase.
             </p>
 
             <div className="mb-8">
-              <p className="text-sm text-gray-400 mb-1">
+              <p className="text-sm text-gray-500 mb-1.5">
                 Question {currentVerifyStep + 1} of {verifyOptions.length}
               </p>
-              <p className="text-lg text-white font-semibold mb-4">
+              <p className="text-lg text-white font-semibold mb-6">
                 What is word #{verifyOptions[currentVerifyStep].index + 1}?
               </p>
 
               <div className="grid grid-cols-2 gap-3">
-                {verifyOptions[currentVerifyStep].options.map((option) => (
+                {verifyOptions[currentVerifyStep].options.map((option, i) => (
                   <button
                     key={option}
                     onClick={() => handleVerifySelect(option)}
-                    className="py-3 px-4 rounded-lg bg-shib-surface border border-shib-border
-                               text-white text-sm font-medium hover:border-shib-orange
-                               hover:bg-shib-surface-alt transition active:scale-95"
+                    className="py-3.5 px-4 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/[0.06]
+                               text-white text-sm font-medium transition-all duration-200 active:scale-[0.97]
+                               hover:border-[#FF6900]/40 hover:bg-white/[0.06]
+                               hover:shadow-[0_0_15px_rgba(255,105,0,0.1)]"
+                    style={{
+                      animation: `slide-up-fade 0.3s ease-out ${i * 60}ms both`,
+                    }}
                   >
                     {option}
                   </button>
@@ -201,15 +220,17 @@ const Create: React.FC = () => {
 
         {/* Step 3: Password */}
         {step === 'password' && (
-          <div className="animate-fade-in">
-            <h1 className="text-2xl font-bold text-white mb-2">Set a Password</h1>
-            <p className="text-sm text-gray-400 mb-6">
+          <div className="animate-slide-up-fade">
+            <h1 className="text-2xl font-bold mb-2 bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+              Set a Password
+            </h1>
+            <p className="text-sm text-gray-400 mb-8 leading-relaxed">
               This password encrypts your wallet on this device. Minimum 8 characters.
             </p>
 
-            <div className="space-y-4 mb-8">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1.5">Password</label>
+            <div className="space-y-5 mb-8">
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5">
+                <label className="block text-sm text-gray-400 mb-2 font-medium">Password</label>
                 <PasswordInput
                   value={password}
                   onChange={setPassword}
@@ -217,8 +238,8 @@ const Create: React.FC = () => {
                   showStrength
                 />
               </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1.5">Confirm Password</label>
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5">
+                <label className="block text-sm text-gray-400 mb-2 font-medium">Confirm Password</label>
                 <PasswordInput
                   value={confirmPassword}
                   onChange={setConfirmPassword}
@@ -230,9 +251,10 @@ const Create: React.FC = () => {
             <button
               onClick={handleCreatePassword}
               disabled={saving || password.length < 8 || password !== confirmPassword}
-              className="w-full py-3.5 rounded-lg bg-shib-orange hover:bg-shib-orange-hover
-                         text-white font-semibold transition active:scale-95
-                         disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                         text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                         hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                         disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none"
             >
               {saving ? 'Creating Wallet...' : 'Create Wallet'}
             </button>

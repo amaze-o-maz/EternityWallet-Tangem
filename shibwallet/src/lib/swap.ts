@@ -2,6 +2,7 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  fallback,
   type Account,
   type Chain,
   parseUnits,
@@ -22,6 +23,7 @@ interface QuoteResult {
 }
 
 function buildViemChain(network: NetworkConfig): Chain {
+  const allRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
   return {
     id: network.chainId,
     name: network.name,
@@ -31,7 +33,7 @@ function buildViemChain(network: NetworkConfig): Chain {
       decimals: network.nativeToken.decimals,
     },
     rpcUrls: {
-      default: { http: [network.rpcUrl] },
+      default: { http: allRpcs },
     },
     blockExplorers: {
       default: { name: network.name, url: network.explorerUrl },
@@ -39,9 +41,16 @@ function buildViemChain(network: NetworkConfig): Chain {
   };
 }
 
+function buildTransport(network: NetworkConfig) {
+  const allRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
+  return allRpcs.length > 1
+    ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
+    : http(allRpcs[0], { timeout: 10_000 });
+}
+
 function getClients(network: NetworkConfig, account?: Account) {
   const chain = buildViemChain(network);
-  const transport = http(network.rpcUrl);
+  const transport = buildTransport(network);
 
   const publicClient = createPublicClient({ chain, transport });
 
@@ -192,15 +201,23 @@ export async function approveToken(
     throw new Error('Wallet client not available');
   }
 
-  const { request } = await publicClient.simulateContract({
+  const chain = buildViemChain(network);
+  const gasPrice = await publicClient.getGasPrice();
+
+  // Approve max to avoid repeated approvals
+  const hash = await walletClient.writeContract({
     address: tokenAddress,
     abi: ERC20_ABI,
     functionName: 'approve',
-    args: [spenderAddress, amount],
+    args: [spenderAddress, maxUint256],
+    gasPrice,
+    chain,
     account,
   });
 
-  const hash = await walletClient.writeContract(request);
+  // Wait for the approval tx to be mined (needed before swap can proceed)
+  await publicClient.waitForTransactionReceipt({ hash, timeout: 60_000, pollingInterval: 2_000 });
+
   return hash;
 }
 
@@ -239,41 +256,46 @@ export async function executeSwap(
     !directPairExists,
   );
 
+  const chain = buildViemChain(network);
+
+  // Fetch gas price upfront — Shibarium uses legacy gas pricing
+  const gasPrice = await publicClient.getGasPrice();
+
   if (inputIsNative) {
     // Native -> Token: use swapExactETHForTokens
-    const { request } = await publicClient.simulateContract({
+    return walletClient.writeContract({
       address: routerAddress,
       abi: ROUTER_V1_ABI,
       functionName: 'swapExactETHForTokens',
       args: [amountOutMin, path, account.address, swapDeadline],
       value: amountIn,
+      gasPrice,
+      chain,
       account,
     });
-
-    return walletClient.writeContract(request);
   }
 
   if (outputIsNative) {
     // Token -> Native: use swapExactTokensForETH
-    const { request } = await publicClient.simulateContract({
+    return walletClient.writeContract({
       address: routerAddress,
       abi: ROUTER_V1_ABI,
       functionName: 'swapExactTokensForETH',
       args: [amountIn, amountOutMin, path, account.address, swapDeadline],
+      gasPrice,
+      chain,
       account,
     });
-
-    return walletClient.writeContract(request);
   }
 
   // Token -> Token: use swapExactTokensForTokens
-  const { request } = await publicClient.simulateContract({
+  return walletClient.writeContract({
     address: routerAddress,
     abi: ROUTER_V1_ABI,
     functionName: 'swapExactTokensForTokens',
     args: [amountIn, amountOutMin, path, account.address, swapDeadline],
+    gasPrice,
+    chain,
     account,
   });
-
-  return walletClient.writeContract(request);
 }
