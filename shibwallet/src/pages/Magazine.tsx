@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, RefreshCw, BookOpen, Newspaper } from 'lucide-react';
+import { ChevronRight, RefreshCw, BookOpen, Newspaper } from 'lucide-react';
 import Header from '../components/Header';
 import BottomNav from '../components/BottomNav';
 import { useWalletStore } from '../store/walletStore';
@@ -245,11 +245,9 @@ const Magazine: React.FC = () => {
             <div className="space-y-4">
               {/* Featured article */}
               {featured && (
-                <a
-                  href={featured.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block group rounded-2xl bg-white/[0.03] border border-white/[0.06] overflow-hidden
+                <button
+                  onClick={() => navigate(`/wallet/browser?url=${encodeURIComponent(featured.link)}`)}
+                  className="block w-full text-left group rounded-2xl bg-white/[0.03] border border-white/[0.06] overflow-hidden
                              hover:border-[#FF6900]/20 transition-all duration-300"
                 >
                   <div className="relative w-full h-48 bg-white/[0.04] overflow-hidden">
@@ -298,20 +296,18 @@ const Magazine: React.FC = () => {
                         {timeAgo(featured.date)}
                       </span>
                     </div>
-                    <ExternalLink size={12} className="text-gray-500" />
+                    <ChevronRight size={12} className="text-gray-500" />
                   </div>
-                </a>
+                </button>
               )}
 
               {/* Article list */}
               {rest.map((post, index) => (
-                <a
+                <button
                   key={`${post._source}-${post.id}`}
-                  href={post.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={() => navigate(`/wallet/browser?url=${encodeURIComponent(post.link)}`)}
                   className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]
-                             hover:border-[#FF6900]/20 transition-all duration-300 group"
+                             hover:border-[#FF6900]/20 transition-all duration-300 group w-full text-left"
                   style={{ animation: `slide-up-fade 0.35s ease-out ${index * 40}ms both` }}
                 >
                   {/* Thumbnail */}
@@ -353,7 +349,7 @@ const Magazine: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                </a>
+                </button>
               ))}
 
               {/* Load more / bottom states */}
