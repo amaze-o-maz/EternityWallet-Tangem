@@ -1,11 +1,12 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Wallet, Globe, RefreshCw, Clock, Newspaper } from 'lucide-react';
+import { Wallet, Globe, RefreshCw, Clock, Newspaper, CreditCard } from 'lucide-react';
 
 const NAV_ITEMS = [
   { path: '/wallet', label: 'Wallet', icon: Wallet },
   { path: '/wallet/swap', label: 'Swap', icon: RefreshCw },
-  { path: '/wallet/news', label: 'News', icon: Newspaper },
+  { path: '/wallet/buy', label: 'Buy', icon: CreditCard },
+  { path: '/wallet/news', label: 'The Shib', icon: Newspaper },
   { path: '/wallet/history', label: 'History', icon: Clock },
   { path: '/wallet/dapps', label: 'dApps', icon: Globe },
 ];
@@ -31,7 +32,7 @@ const BottomNav: React.FC = () => {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`relative flex flex-col items-center gap-1 px-3.5 py-1.5 rounded-xl transition-all duration-200
+                className={`relative flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl transition-all duration-200
                            ${isActive
                              ? 'text-[#FF6900]'
                              : 'text-gray-500 hover:text-gray-300 active:scale-95'
