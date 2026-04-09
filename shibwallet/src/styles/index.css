@@ -463,3 +463,29 @@ textarea {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ==========================================
+   BURN FIRE PARTICLES
+   ========================================== */
+
+@keyframes fire-rise {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-220px) scale(0);
+    opacity: 0;
+  }
+}

@@ -12,6 +12,7 @@ import DAppBrowser from './pages/DAppBrowser';
 import History from './pages/History';
 import Magazine from './pages/Magazine';
 import Buy from './pages/Buy';
+import Burns from './pages/Burns';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Onboarding /> },
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
   { path: '/wallet/history', element: <History /> },
   { path: '/wallet/news', element: <Magazine /> },
   { path: '/wallet/buy', element: <Buy /> },
+  { path: '/wallet/burns', element: <Burns /> },
   { path: '/wallet/dapps', element: <DApps /> },
   { path: '/wallet/browser', element: <DAppBrowser /> },
 ]);
