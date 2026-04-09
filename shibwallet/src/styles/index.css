@@ -41,6 +41,8 @@ body {
   background: var(--shib-bg);
   color: #e5e5e5;
   overflow-x: hidden;
+  /* Edge-to-edge: pad content below Android/iOS status bar */
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* Subtle radial glow behind the page — uses theme accent */

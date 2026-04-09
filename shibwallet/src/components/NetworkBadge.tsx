@@ -100,9 +100,9 @@ const NetworkBadge: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-64 z-50 animate-fade-in overflow-hidden
+        <div className="absolute top-full left-0 mt-2 w-64 z-50 animate-fade-in overflow-hidden
                         rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/50"
-             style={{ background: '#1A1A1A' }}>
+             style={{ background: 'var(--shib-surface)' }}>
 
           {!showAddForm ? (
             <>
