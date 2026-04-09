@@ -8,7 +8,7 @@ import {
   formatUnits,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { ArrowLeft, ArrowDownUp, ExternalLink, X } from 'lucide-react';
+import { ArrowDownUp, ExternalLink, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TokenSelector from '../components/TokenSelector';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -433,16 +433,7 @@ const Swap: React.FC = () => {
 
   return (
     <>
-      <div className="max-w-md mx-auto w-full px-5 pt-8 pb-28">
-        {/* Back button */}
-        <button
-          onClick={() => navigate('/wallet')}
-          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-8 active:scale-95"
-        >
-          <ArrowLeft size={16} />
-          Back
-        </button>
-
+      <div className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
         {/* ShibaSwap branding */}
         <div className="flex items-center gap-3 mb-8">
           <img

@@ -4,7 +4,7 @@ import Header from './Header';
 import BottomNav from './BottomNav';
 
 /** Routes where the global Header is hidden (page provides its own header) */
-const NO_HEADER = new Set(['swap']);
+const NO_HEADER = new Set<string>();
 
 const WalletLayout: React.FC = () => {
   const location = useLocation();

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Settings, Lock, Key, Trash2, X, Palette, Check } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Settings, Lock, Key, Trash2, X, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ShibLogo from './ShibLogo';
 import NetworkBadge from './NetworkBadge';
@@ -15,9 +15,21 @@ const Header: React.FC = () => {
   const { isUnlocked, privateKey, lock } = useWalletStore();
   const { theme, setTheme } = useThemeStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [exportConfirmText, setExportConfirmText] = useState('');
+  const themeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (themeRef.current && !themeRef.current.contains(e.target as Node)) {
+        setThemeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLock = () => {
     lock();
@@ -61,9 +73,12 @@ const Header: React.FC = () => {
     <>
       <header className="relative flex items-center justify-between px-3 py-2.5 sticky top-0 z-40
                           bg-white/[0.03] backdrop-blur-2xl border-b border-white/[0.06]">
-        {/* Left: Logo + Wordmark */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="relative">
+        {/* Left: Logo + Wordmark (tap logo for theme picker) */}
+        <div className="flex items-center gap-2 shrink-0 relative" ref={themeRef}>
+          <button
+            onClick={() => setThemeOpen(!themeOpen)}
+            className="relative active:scale-90 transition-transform duration-150"
+          >
             <div
               className="absolute inset-0 rounded-full"
               style={{
@@ -73,11 +88,56 @@ const Header: React.FC = () => {
               }}
             />
             <ShibLogo size={26} className="relative z-10" />
-          </div>
+          </button>
           <span className="text-sm font-bold tracking-tight select-none">
             <span className="text-white">Shib</span>
             <span className="gradient-text">Wallet</span>
           </span>
+
+          {/* Theme picker popover */}
+          {themeOpen && (
+            <div className="absolute top-full left-0 mt-2 z-50 animate-fade-in overflow-hidden
+                            rounded-2xl border border-white/[0.1] shadow-2xl shadow-black/50 p-3 w-56"
+                 style={{ background: 'var(--shib-surface)' }}>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-2 px-1">Theme</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {THEME_ORDER.map((key) => {
+                  const t = THEMES[key];
+                  const active = theme === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => { setTheme(key); setThemeOpen(false); }}
+                      className={`relative flex flex-col items-center gap-1 px-1.5 py-2 rounded-xl
+                                  transition-all duration-200 active:scale-95
+                                  ${active
+                                    ? 'bg-white/[0.08] border border-white/20'
+                                    : 'hover:bg-white/[0.04] border border-transparent'
+                                  }`}
+                    >
+                      <div className="relative">
+                        <div
+                          className="w-7 h-7 rounded-full border-2"
+                          style={{
+                            background: `linear-gradient(135deg, ${t.accent}, ${t.secondary})`,
+                            borderColor: active ? '#fff' : 'rgba(255,255,255,0.1)',
+                          }}
+                        />
+                        {active && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Check size={12} className="text-white drop-shadow-lg" />
+                          </div>
+                        )}
+                      </div>
+                      <span className={`text-[9px] font-medium leading-tight text-center ${active ? 'text-white' : 'text-gray-500'}`}>
+                        {t.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right: Network + Address + Settings (only when unlocked) */}
@@ -145,51 +205,6 @@ const Header: React.FC = () => {
                   <div className="text-xs text-gray-500 mt-0.5">Require password to access</div>
                 </div>
               </button>
-
-              {/* Theme Picker */}
-              <div className="my-1 mx-4 border-t border-white/[0.04]" />
-              <div className="px-4 py-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <Palette size={14} className="text-shib-orange" />
-                  <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Theme</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {THEME_ORDER.map((key) => {
-                    const t = THEMES[key];
-                    const active = theme === key;
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => setTheme(key)}
-                        className={`relative flex flex-col items-center gap-1.5 px-2 py-2.5 rounded-xl
-                                    transition-all duration-200 active:scale-95
-                                    ${active
-                                      ? 'bg-white/[0.08] border border-white/20'
-                                      : 'hover:bg-white/[0.04] border border-transparent'
-                                    }`}
-                      >
-                        <div className="relative">
-                          <div
-                            className="w-8 h-8 rounded-full border-2"
-                            style={{
-                              background: `linear-gradient(135deg, ${t.accent}, ${t.secondary})`,
-                              borderColor: active ? '#fff' : 'rgba(255,255,255,0.1)',
-                            }}
-                          />
-                          {active && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <Check size={14} className="text-white drop-shadow-lg" />
-                            </div>
-                          )}
-                        </div>
-                        <span className={`text-[10px] font-medium ${active ? 'text-white' : 'text-gray-500'}`}>
-                          {t.name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
               <div className="my-1 mx-4 border-t border-white/[0.04]" />
               <button
