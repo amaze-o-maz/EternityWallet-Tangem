@@ -6,6 +6,7 @@
     "androidScheme": "https"
   },
   "android": {
+    "backgroundColor": "#0D0D0D",
     "buildOptions": {
       "signingType": "apksigner"
     }

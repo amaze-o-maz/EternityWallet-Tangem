@@ -43,12 +43,13 @@ const BottomNav: React.FC = () => {
         key={item.path}
         onClick={() => navigate(item.path)}
         className={`relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200
-          ${isActive ? 'text-[#FF6900]' : 'text-gray-500 hover:text-gray-300 active:scale-95'}`}
+          ${isActive ? '' : 'text-gray-500 hover:text-gray-300 active:scale-95'}`}
+        style={isActive ? { color: 'var(--shib-orange)' } : undefined}
       >
         {isActive && (
           <div
-            className="absolute inset-0 rounded-xl bg-[#FF6900]/[0.08]"
-            style={{ animation: 'fadeIn 200ms ease-out' }}
+            className="absolute inset-0 rounded-xl"
+            style={{ backgroundColor: 'var(--shib-orange)', opacity: 0.08, animation: 'fadeIn 200ms ease-out' }}
           />
         )}
         <Icon size={18} strokeWidth={isActive ? 2.2 : 1.8} className="relative z-10" />
@@ -58,7 +59,10 @@ const BottomNav: React.FC = () => {
           {item.label}
         </span>
         {isActive && (
-          <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full bg-gradient-to-r from-[#FF6900] to-[#FFB800]" />
+          <div
+            className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
+            style={{ background: `linear-gradient(to right, var(--shib-orange), var(--shib-amber))` }}
+          />
         )}
       </button>
     );
@@ -67,9 +71,9 @@ const BottomNav: React.FC = () => {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40">
       {/* Top gradient border */}
-      <div className="h-px bg-gradient-to-r from-transparent via-[#FF6900]/30 to-transparent" />
+      <div className="h-px" style={{ background: `linear-gradient(to right, transparent, var(--shib-glow-strong), transparent)` }} />
 
-      <div className="bg-[#0D0D0D]/90 backdrop-blur-2xl border-t border-white/[0.06]">
+      <div className="backdrop-blur-2xl border-t border-white/[0.06]" style={{ backgroundColor: 'color-mix(in srgb, var(--shib-bg) 90%, transparent)' }}>
         <div className="max-w-md mx-auto px-3 pt-1.5 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
           {/* Row 1 — primary */}
           <div className="flex items-center justify-around">
