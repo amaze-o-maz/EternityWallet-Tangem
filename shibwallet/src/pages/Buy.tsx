@@ -42,7 +42,7 @@ const Buy: React.FC = () => {
   };
 
   return (
-    <main className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
+    <main className="max-w-md mx-auto w-full px-5 pt-6 pb-40">
       <div className="mb-6">
         <h1 className="text-xl font-bold bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
           Buy Crypto

@@ -433,7 +433,7 @@ const Swap: React.FC = () => {
 
   return (
     <>
-      <div className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
+      <div className="max-w-md mx-auto w-full px-5 pt-6 pb-40">
         {/* ShibaSwap branding */}
         <div className="flex items-center gap-3 mb-8">
           <img

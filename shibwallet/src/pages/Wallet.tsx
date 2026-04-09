@@ -291,7 +291,7 @@ const Wallet: React.FC = () => {
 
   return (
     <>
-      <main className="max-w-md mx-auto w-full px-5 pt-8 pb-28">
+      <main className="max-w-md mx-auto w-full px-5 pt-8 pb-40">
         {/* Balance section */}
         <div className="text-center mb-8">
           {loading ? (

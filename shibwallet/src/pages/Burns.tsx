@@ -574,7 +574,7 @@ const Burns: React.FC = () => {
     <>
       {showParticles && <FireParticles onDone={() => setShowParticles(false)} />}
 
-      <main className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
+      <main className="max-w-md mx-auto w-full px-5 pt-6 pb-40">
         {/* ── HERO ─────────────────────────────────────────────────────── */}
         <section className="text-center mb-6" style={{ animation: 'slide-up-fade 0.4s ease-out' }}>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 mb-3">

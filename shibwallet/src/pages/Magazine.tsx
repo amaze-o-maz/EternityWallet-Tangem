@@ -177,7 +177,7 @@ const Magazine: React.FC = () => {
   if (!isUnlocked) return null;
 
   return (
-        <div className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
+        <div className="max-w-md mx-auto w-full px-5 pt-6 pb-40">
           {/* Title */}
           <div className="flex items-center justify-between mb-5">
             <div>

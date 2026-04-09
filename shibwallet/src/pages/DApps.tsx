@@ -236,7 +236,7 @@ const DApps: React.FC = () => {
   });
 
   return (
-      <main className="max-w-md mx-auto w-full px-5 pt-6 pb-28">
+      <main className="max-w-md mx-auto w-full px-5 pt-6 pb-40">
         {/* Title */}
         <div className="mb-5">
           <h1 className="text-xl font-bold gradient-text">Shibarium dApps</h1>

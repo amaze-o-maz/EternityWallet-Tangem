@@ -191,7 +191,7 @@ const History: React.FC = () => {
   if (!isUnlocked || !address) return null;
 
   return (
-      <main className="max-w-md mx-auto w-full px-5 pt-8 pb-28">
+      <main className="max-w-md mx-auto w-full px-5 pt-8 pb-40">
         {/* Page title and refresh */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-lg font-bold bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
