@@ -1,4 +1,4 @@
-# ShibWallet
+# SUPASAIYANAPP
 
 A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage your SHIB, BONE, LEASH, TREAT, and other tokens across Ethereum and Shibarium networks — all from a single mobile-first app.
 
@@ -13,6 +13,8 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 - **Fast balance loading** — batched multicall RPC for instant token balances
 - **Live prices** — real-time USD prices via CoinGecko with 7-day sparkline charts
 - **QR receive** — generate QR codes for easy address sharing
+
+- also SNS and mag and burns and stuff 
 
 ### Send & Receive
 - Send native tokens (ETH, BONE) and any ERC-20 token
