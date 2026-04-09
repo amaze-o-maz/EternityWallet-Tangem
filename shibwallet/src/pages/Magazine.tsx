@@ -1,0 +1,400 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ExternalLink, RefreshCw, BookOpen, Newspaper } from 'lucide-react';
+import Header from '../components/Header';
+import BottomNav from '../components/BottomNav';
+import { useWalletStore } from '../store/walletStore';
+
+interface WPPost {
+  id: number;
+  title: { rendered: string };
+  excerpt: { rendered: string };
+  link: string;
+  date: string;
+  _embedded?: {
+    'wp:featuredmedia'?: { source_url: string; alt_text?: string }[];
+    author?: { name: string; avatar_urls?: Record<string, string> }[];
+    'wp:term'?: { name: string; slug: string }[][];
+  };
+}
+
+type Source = 'news' | 'magazine';
+type Tab = 'all' | 'news' | 'magazine';
+
+const NEWS_API = 'https://news.shib.io/wp-json/wp/v2/posts';
+const MAG_API = 'https://magazine.shib.io/wp-json/wp/v2/posts';
+const PER_PAGE = 10;
+
+function stripHtml(html: string): string {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent || div.innerText || '';
+}
+
+function timeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = Math.floor((now - then) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const Magazine: React.FC = () => {
+  const navigate = useNavigate();
+  const { isUnlocked } = useWalletStore();
+  const [tab, setTab] = useState<Tab>('all');
+  const [newsPosts, setNewsPosts] = useState<(WPPost & { _source: Source })[]>([]);
+  const [magPosts, setMagPosts] = useState<(WPPost & { _source: Source })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [newsPage, setNewsPage] = useState(1);
+  const [magPage, setMagPage] = useState(1);
+  const [newsHasMore, setNewsHasMore] = useState(true);
+  const [magHasMore, setMagHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState<Set<number>>(new Set());
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isUnlocked) navigate('/lock', { replace: true });
+  }, [isUnlocked, navigate]);
+
+  const fetchPosts = useCallback(async (source: Source, page: number): Promise<WPPost[]> => {
+    const api = source === 'news' ? NEWS_API : MAG_API;
+    const resp = await fetch(`${api}?per_page=${PER_PAGE}&page=${page}&_embed`);
+    if (!resp.ok) return [];
+    const totalPages = parseInt(resp.headers.get('X-WP-TotalPages') || '1', 10);
+    const posts: WPPost[] = await resp.json();
+    if (source === 'news') setNewsHasMore(page < totalPages);
+    else setMagHasMore(page < totalPages);
+    return posts;
+  }, []);
+
+  const loadInitial = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [news, mag] = await Promise.all([
+        fetchPosts('news', 1),
+        fetchPosts('magazine', 1),
+      ]);
+      setNewsPosts(news.map((p) => ({ ...p, _source: 'news' as Source })));
+      setMagPosts(mag.map((p) => ({ ...p, _source: 'magazine' as Source })));
+      setNewsPage(1);
+      setMagPage(1);
+    } catch {
+      // Silently fail - show whatever we have
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchPosts]);
+
+  useEffect(() => {
+    loadInitial();
+  }, [loadInitial]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadInitial();
+    setRefreshing(false);
+  };
+
+  const loadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      if ((tab === 'all' || tab === 'news') && newsHasMore) {
+        const nextPage = newsPage + 1;
+        const posts = await fetchPosts('news', nextPage);
+        setNewsPosts((prev) => [...prev, ...posts.map((p) => ({ ...p, _source: 'news' as Source }))]);
+        setNewsPage(nextPage);
+      }
+      if ((tab === 'all' || tab === 'magazine') && magHasMore) {
+        const nextPage = magPage + 1;
+        const posts = await fetchPosts('magazine', nextPage);
+        setMagPosts((prev) => [...prev, ...posts.map((p) => ({ ...p, _source: 'magazine' as Source }))]);
+        setMagPage(nextPage);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Infinite scroll
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
+        const hasMore = tab === 'news' ? newsHasMore : tab === 'magazine' ? magHasMore : newsHasMore || magHasMore;
+        if (hasMore && !loadingMore) loadMore();
+      }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [tab, newsHasMore, magHasMore, loadingMore, newsPage, magPage]);
+
+  const handleImgLoad = (id: number) => {
+    setImgLoaded((prev) => new Set(prev).add(id));
+  };
+
+  // Merge and sort posts by date
+  const visiblePosts = (() => {
+    let posts: (WPPost & { _source: Source })[] = [];
+    if (tab === 'all') posts = [...newsPosts, ...magPosts];
+    else if (tab === 'news') posts = newsPosts;
+    else posts = magPosts;
+    return posts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  })();
+
+  const featured = visiblePosts[0];
+  const rest = visiblePosts.slice(1);
+
+  const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
+    { key: 'all', label: 'All', icon: RefreshCw },
+    { key: 'news', label: 'Daily', icon: Newspaper },
+    { key: 'magazine', label: 'Magazine', icon: BookOpen },
+  ];
+
+  if (!isUnlocked) return null;
+
+  return (
+    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse at center top, rgba(255, 105, 0, 0.04) 0%, transparent 60%)',
+        }}
+      />
+
+      <Header />
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto relative z-10">
+        <div className="max-w-md mx-auto w-full px-5 pt-6 pb-24">
+          {/* Title */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-[#FF6900] to-[#FFB800] bg-clip-text text-transparent">
+                Shib News
+              </h1>
+              <p className="text-[11px] text-gray-500 mt-0.5">Powered by The Shib Daily & Shib Magazine</p>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="w-8 h-8 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center
+                         text-gray-400 hover:text-white transition-all active:scale-90"
+            >
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          {/* Source tabs */}
+          <div className="flex gap-2 mb-5">
+            {tabs.map((t) => {
+              const Icon = t.icon;
+              const isActive = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200
+                             ${isActive
+                               ? 'bg-gradient-to-r from-[#FF6900]/20 to-[#FFB800]/10 text-[#FF6900] border border-[#FF6900]/20'
+                               : 'bg-white/[0.03] text-gray-400 border border-white/[0.06] hover:border-white/[0.12]'
+                             }`}
+                >
+                  <Icon size={12} />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Loading skeleton */}
+          {loading && (
+            <div className="space-y-4">
+              {/* Featured skeleton */}
+              <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] overflow-hidden animate-pulse">
+                <div className="w-full h-48 bg-white/[0.06]" />
+                <div className="p-4 space-y-2">
+                  <div className="h-4 bg-white/[0.06] rounded w-2/3" />
+                  <div className="h-3 bg-white/[0.04] rounded w-full" />
+                  <div className="h-3 bg-white/[0.04] rounded w-4/5" />
+                </div>
+              </div>
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] animate-pulse">
+                  <div className="w-20 h-20 rounded-lg bg-white/[0.06] shrink-0" />
+                  <div className="flex-1 space-y-2 py-1">
+                    <div className="h-3 bg-white/[0.06] rounded w-3/4" />
+                    <div className="h-2.5 bg-white/[0.04] rounded w-full" />
+                    <div className="h-2.5 bg-white/[0.04] rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Content */}
+          {!loading && (
+            <div className="space-y-4">
+              {/* Featured article */}
+              {featured && (
+                <a
+                  href={featured.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block group rounded-2xl bg-white/[0.03] border border-white/[0.06] overflow-hidden
+                             hover:border-[#FF6900]/20 transition-all duration-300"
+                >
+                  <div className="relative w-full h-48 bg-white/[0.04] overflow-hidden">
+                    {featured._embedded?.['wp:featuredmedia']?.[0]?.source_url && (
+                      <img
+                        src={featured._embedded['wp:featuredmedia'][0].source_url}
+                        alt=""
+                        className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105
+                                   ${imgLoaded.has(featured.id) ? 'opacity-100' : 'opacity-0'}`}
+                        onLoad={() => handleImgLoad(featured.id)}
+                      />
+                    )}
+                    {/* Source badge */}
+                    <div className="absolute top-3 left-3">
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide backdrop-blur-xl
+                                       ${featured._source === 'magazine'
+                                         ? 'bg-purple-500/80 text-white'
+                                         : 'bg-[#FF6900]/80 text-white'
+                                       }`}>
+                        {featured._source === 'magazine' ? 'Magazine' : 'Daily'}
+                      </span>
+                    </div>
+                    {/* Gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    {/* Title overlay */}
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <h2
+                        className="text-base font-bold text-white leading-snug line-clamp-2"
+                        dangerouslySetInnerHTML={{ __html: featured.title.rendered }}
+                      />
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {featured._embedded?.author?.[0]?.avatar_urls?.['48'] && (
+                        <img
+                          src={featured._embedded.author[0].avatar_urls['48']}
+                          alt=""
+                          className="w-5 h-5 rounded-full"
+                        />
+                      )}
+                      <span className="text-[11px] text-gray-400">
+                        {featured._embedded?.author?.[0]?.name}
+                      </span>
+                      <span className="text-[10px] text-gray-600">
+                        {timeAgo(featured.date)}
+                      </span>
+                    </div>
+                    <ExternalLink size={12} className="text-gray-500" />
+                  </div>
+                </a>
+              )}
+
+              {/* Article list */}
+              {rest.map((post, index) => (
+                <a
+                  key={`${post._source}-${post.id}`}
+                  href={post.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]
+                             hover:border-[#FF6900]/20 transition-all duration-300 group"
+                  style={{ animation: `slide-up-fade 0.35s ease-out ${index * 40}ms both` }}
+                >
+                  {/* Thumbnail */}
+                  <div className="w-20 h-20 rounded-lg bg-white/[0.04] overflow-hidden shrink-0">
+                    {post._embedded?.['wp:featuredmedia']?.[0]?.source_url && (
+                      <img
+                        src={post._embedded['wp:featuredmedia'][0].source_url}
+                        alt=""
+                        className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105
+                                   ${imgLoaded.has(post.id) ? 'opacity-100' : 'opacity-0'}`}
+                        onLoad={() => handleImgLoad(post.id)}
+                      />
+                    )}
+                  </div>
+
+                  {/* Text content */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                    <div>
+                      <h3
+                        className="text-sm font-semibold text-white leading-snug line-clamp-2 group-hover:text-[#FF6900]/90 transition-colors"
+                        dangerouslySetInnerHTML={{ __html: post.title.rendered }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide
+                                       ${post._source === 'magazine'
+                                         ? 'bg-purple-500/15 text-purple-400'
+                                         : 'bg-[#FF6900]/10 text-[#FF6900]'
+                                       }`}>
+                        {post._source === 'magazine' ? 'Mag' : 'Daily'}
+                      </span>
+                      {post._embedded?.['wp:term']?.[0]?.[0] && (
+                        <span className="text-[10px] text-gray-500 truncate">
+                          {post._embedded['wp:term'][0][0].name}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-gray-600 ml-auto shrink-0">
+                        {timeAgo(post.date)}
+                      </span>
+                    </div>
+                  </div>
+                </a>
+              ))}
+
+              {/* Load more / bottom states */}
+              {loadingMore && (
+                <div className="flex items-center justify-center py-6">
+                  <div className="w-5 h-5 border-2 border-[#FF6900] border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {!loadingMore && visiblePosts.length > 0 && (
+                (() => {
+                  const hasMore = tab === 'news' ? newsHasMore : tab === 'magazine' ? magHasMore : newsHasMore || magHasMore;
+                  return hasMore ? (
+                    <button
+                      onClick={loadMore}
+                      className="w-full py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-gray-400
+                                 text-xs font-medium hover:border-[#FF6900]/20 hover:text-gray-300 transition-all"
+                    >
+                      Load more articles
+                    </button>
+                  ) : (
+                    <p className="text-center text-[11px] text-gray-600 py-4">You're all caught up</p>
+                  );
+                })()
+              )}
+
+              {!loading && visiblePosts.length === 0 && (
+                <div className="text-center py-12">
+                  <Newspaper size={32} className="mx-auto text-gray-600 mb-3" />
+                  <p className="text-sm text-gray-400">No articles available</p>
+                  <p className="text-xs text-gray-600 mt-1">Pull to refresh or try again later</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <BottomNav />
+    </div>
+  );
+};
+
+export default Magazine;
