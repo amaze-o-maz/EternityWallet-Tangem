@@ -685,17 +685,20 @@ const Burns: React.FC = () => {
               <div className="h-4 w-40 mx-auto rounded bg-white/[0.04] animate-shimmer" />
             </div>
           ) : (
-            <div className="relative z-10">
-              <h1 className="text-[38px] sm:text-[44px] font-black tracking-tight leading-none mb-2 tabular-nums">
+            <div className="relative z-10 px-2">
+              <h1 className="text-[56px] sm:text-[68px] font-black tracking-tight leading-none mb-2 tabular-nums">
                 <span
                   className="bg-gradient-to-br from-[#FFE48C] via-[#FF6900] to-[#C41B0E] bg-clip-text text-transparent"
                   style={{ filter: 'drop-shadow(0 0 24px rgba(255,105,0,0.55))' }}
                 >
-                  {fmtCommas(animBurned)}
+                  {fmtCompact(animBurned)}
                 </span>
               </h1>
-              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-[0.28em] mb-2.5">
+              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-[0.28em] mb-2">
                 SHIB Incinerated Forever
+              </p>
+              <p className="text-[10px] text-gray-500 font-mono tabular-nums break-all leading-tight mb-2.5 max-w-[280px] mx-auto">
+                {fmtCommas(animBurned)}
               </p>
               <p className="text-xs text-gray-400">
                 <span className="text-orange-400 font-bold text-sm">

@@ -19,7 +19,7 @@ const WalletLayout: React.FC = () => {
   }, [location.pathname]);
 
   return (
-    <div className="flex flex-col h-screen bg-shib-bg relative overflow-hidden">
+    <div className="safe-top flex flex-col h-screen bg-shib-bg relative overflow-hidden">
       {/* Persistent background gradient */}
       <div
         className="absolute inset-0 pointer-events-none"

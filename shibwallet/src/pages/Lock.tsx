@@ -96,7 +96,7 @@ const Lock: React.FC = () => {
   );
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 bg-shib-bg min-h-screen animate-fade-in relative overflow-hidden">
+    <div className="safe-top flex-1 flex flex-col items-center justify-center px-6 bg-shib-bg min-h-screen animate-fade-in relative overflow-hidden">
       {/* Background radial gradient */}
       <div
         className="absolute inset-0 pointer-events-none"

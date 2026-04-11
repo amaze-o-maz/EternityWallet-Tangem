@@ -41,7 +41,13 @@ body {
   background: var(--shib-bg);
   color: #e5e5e5;
   overflow-x: hidden;
-  /* Edge-to-edge: pad content below Android/iOS status bar */
+}
+
+/* Page roots opt into the Android/iOS status-bar safe area by applying this
+   class. Padding is inside the element so h-screen / min-h-screen do not
+   overflow the viewport (which would otherwise enable a document scroll that
+   slides the header up into the status bar). */
+.safe-top {
   padding-top: env(safe-area-inset-top, 0px);
 }
 

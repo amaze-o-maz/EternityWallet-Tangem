@@ -108,7 +108,7 @@ const DAppBrowser: React.FC = () => {
   if (isNativePlatform()) return null;
 
   return (
-    <div className="flex flex-col h-screen bg-shib-bg animate-fade-in">
+    <div className="safe-top flex flex-col h-screen bg-shib-bg animate-fade-in">
       {/* Top bar */}
       <div className="shrink-0 bg-[#0D0D0D]/95 backdrop-blur-2xl border-b border-white/[0.06] z-30">
         {/* Navigation row */}

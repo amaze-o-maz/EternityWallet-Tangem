@@ -15,7 +15,7 @@ const Onboarding: React.FC = () => {
 
   return (
     <div
-      className="flex-1 flex flex-col items-center justify-center px-6 min-h-screen animate-fade-in relative overflow-hidden"
+      className="safe-top flex-1 flex flex-col items-center justify-center px-6 min-h-screen animate-fade-in relative overflow-hidden"
       style={{ background: '#0A0A0A' }}
     >
       {/* Deep ambient glow */}

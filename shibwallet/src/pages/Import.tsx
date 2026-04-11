@@ -99,7 +99,7 @@ const Import: React.FC = () => {
   }, [password, confirmPassword, importedAddress, importedPrivateKey, importedMnemonic, setWallet, navigate]);
 
   return (
-    <div className="flex-1 flex flex-col items-center bg-shib-bg min-h-screen py-8 px-5 animate-fade-in relative overflow-hidden">
+    <div className="safe-top flex-1 flex flex-col items-center bg-shib-bg min-h-screen py-8 px-5 animate-fade-in relative overflow-hidden">
       {/* Subtle background radial gradient */}
       <div
         className="absolute inset-0 pointer-events-none"

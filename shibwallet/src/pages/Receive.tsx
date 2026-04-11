@@ -33,7 +33,7 @@ const Receive: React.FC = () => {
   if (!isUnlocked || !address) return null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
+    <div className="safe-top flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
       {/* Subtle background radial gradient */}
       <div
         className="absolute inset-0 pointer-events-none"
