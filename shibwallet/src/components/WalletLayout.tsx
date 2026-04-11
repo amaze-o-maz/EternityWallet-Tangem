@@ -32,7 +32,7 @@ const WalletLayout: React.FC = () => {
       {showHeader && <Header />}
 
       {/* Scrollable content area — persists across navigations */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto relative z-10">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto relative z-10">
         <div key={location.pathname} className="animate-page-in min-h-full">
           <Outlet />
         </div>

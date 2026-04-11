@@ -30,6 +30,11 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -51,8 +56,22 @@ public class DAppBrowserActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setStatusBarColor(Color.parseColor("#0D0D0D"));
-        getWindow().setNavigationBarColor(Color.parseColor("#0D0D0D"));
+
+        // Edge-to-edge: match MainActivity so status bar is transparent and
+        // content is pushed below system bars via WindowInsets.
+        Window window = getWindow();
+        WindowCompat.setDecorFitsSystemWindows(window, false);
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+        window.setStatusBarColor(Color.TRANSPARENT);
+        window.setNavigationBarColor(Color.parseColor("#0D0D0D"));
+
+        // Light (white) icons on dark background
+        View decorView = window.getDecorView();
+        int flags = decorView.getSystemUiVisibility();
+        flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        decorView.setSystemUiVisibility(flags);
 
         Intent intent = getIntent();
         String url = intent.getStringExtra("url");
@@ -164,6 +183,15 @@ public class DAppBrowserActivity extends Activity {
 
         root.addView(webView);
         setContentView(root);
+
+        // Pad the root layout to avoid the system status bar and navigation
+        // bar now that we're drawing edge-to-edge.
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insetsCompat) -> {
+            Insets bars = insetsCompat.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return insetsCompat;
+        });
+        ViewCompat.requestApplyInsets(root);
 
         webView.loadUrl(url);
     }

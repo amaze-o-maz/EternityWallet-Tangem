@@ -562,3 +562,70 @@ textarea {
     opacity: 0;
   }
 }
+
+/* Ambient ember drift — slow, persistent background */
+@keyframes ember-rise {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(-45vh) translateX(8px) scale(0.85);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(-90vh) translateX(-6px) scale(0.1);
+    opacity: 0;
+  }
+}
+
+/* Flame icon flicker — slight scale + brightness pulse */
+@keyframes flame-flicker {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1) drop-shadow(0 0 12px rgba(255, 120, 0, 0.75));
+  }
+  25% {
+    transform: scale(1.03) rotate(-1deg);
+    filter: brightness(1.12) drop-shadow(0 0 18px rgba(255, 140, 0, 0.9));
+  }
+  50% {
+    transform: scale(0.98) rotate(0.5deg);
+    filter: brightness(0.95) drop-shadow(0 0 10px rgba(255, 100, 0, 0.7));
+  }
+  75% {
+    transform: scale(1.02) rotate(1deg);
+    filter: brightness(1.08) drop-shadow(0 0 16px rgba(255, 150, 0, 0.85));
+  }
+}
+
+/* Dramatic burn-cta glow breathing */
+@keyframes burn-cta-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 30px rgba(255, 80, 0, 0.45),
+      0 0 60px rgba(255, 80, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 50px rgba(255, 120, 0, 0.6),
+      0 0 90px rgba(255, 80, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+}
+
+/* Soft glow halo breathing for hero */
+@keyframes halo-breathe {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translateX(-50%) scale(1.15);
+  }
+}

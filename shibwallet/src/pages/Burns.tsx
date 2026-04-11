@@ -11,9 +11,11 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   Flame,
-  TrendingUp,
   TrendingDown,
   Trophy,
+  Crown,
+  Medal,
+  Zap,
   ExternalLink,
   X,
   AlertTriangle,
@@ -31,6 +33,7 @@ import {
   SHIB_CONTRACT,
   DEAD_ADDRESSES,
   KNOWN_ADDRESSES,
+  INITIAL_SUPPLY_FLOAT,
   fmtCompact,
   fmtCommas,
   chartData,
@@ -527,6 +530,20 @@ const Burns: React.FC = () => {
   const [showParticles, setShowParticles] = useState(false);
   const [burnResult, setBurnResult] = useState<{ hash: string; amount: string } | null>(null);
 
+  // Ambient fire embers — generated once, drift upward across the page
+  const ambientEmbers = useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}%`,
+        delay: `${Math.random() * 6}s`,
+        dur: `${8 + Math.random() * 6}s`,
+        size: `${3 + Math.random() * 5}px`,
+        hue: 15 + Math.random() * 25,
+      })),
+    [],
+  );
+
   // Redirect guards
   useEffect(() => {
     if (!localStorage.getItem('shibwallet_vault')) {
@@ -569,90 +586,276 @@ const Burns: React.FC = () => {
   if (!isUnlocked || !address) return null;
 
   const isLoading = store.loading && store.totalBurned === 0;
+  const burnRatePerHour = store.burns24h.amount / 24;
+  const burnRatePerDay = store.burns24h.amount;
+  const remainingSupply = Math.max(INITIAL_SUPPLY_FLOAT - store.totalBurned, 0);
 
   return (
     <>
       {showParticles && <FireParticles onDone={() => setShowParticles(false)} />}
 
-      <main className="max-w-md mx-auto w-full px-5 pt-6 pb-40">
-        {/* ── HERO ─────────────────────────────────────────────────────── */}
-        <section className="text-center mb-6" style={{ animation: 'slide-up-fade 0.4s ease-out' }}>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 mb-3">
-            <Flame size={12} className="text-orange-400" />
-            <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">
-              SHIB Burn Tracker
+      {/* ── AMBIENT FIRE — persistent background embers ─────────────── */}
+      <div
+        className="fixed left-0 right-0 bottom-0 h-[85vh] pointer-events-none z-0 overflow-hidden"
+        aria-hidden="true"
+      >
+        {ambientEmbers.map((p) => (
+          <div
+            key={p.id}
+            className="absolute rounded-full"
+            style={{
+              left: p.left,
+              bottom: '-10px',
+              width: p.size,
+              height: p.size,
+              background: `radial-gradient(circle, hsl(${p.hue}, 100%, 62%) 0%, transparent 70%)`,
+              filter: 'blur(1.5px)',
+              animation: `ember-rise ${p.dur} ${p.delay} linear infinite`,
+            }}
+          />
+        ))}
+        {/* Warm glow at the bottom edge */}
+        <div
+          className="absolute left-0 right-0 bottom-0 h-40"
+          style={{
+            background:
+              'radial-gradient(ellipse at bottom, rgba(255,80,0,0.12) 0%, transparent 70%)',
+          }}
+        />
+      </div>
+
+      <main className="relative z-10 max-w-md mx-auto w-full px-5 pt-5 pb-40">
+        {/* ── HERO — dramatic flame + huge number ─────────────────── */}
+        <section className="relative text-center mb-6" style={{ animation: 'slide-up-fade 0.5s ease-out' }}>
+          {/* Glow halo behind the flame */}
+          <div
+            className="absolute left-1/2 -top-4 w-72 h-72 pointer-events-none -z-0"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(255,105,0,0.28) 0%, rgba(196,27,14,0.12) 35%, transparent 65%)',
+              animation: 'halo-breathe 4s ease-in-out infinite',
+            }}
+          />
+
+          {/* Big flame medallion */}
+          <div className="relative inline-flex items-center justify-center mb-4 z-10">
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: 'radial-gradient(circle, rgba(255,70,0,0.75) 0%, transparent 65%)',
+                filter: 'blur(16px)',
+                transform: 'scale(2.2)',
+              }}
+            />
+            <div
+              className="relative w-[72px] h-[72px] rounded-full flex items-center justify-center
+                         border border-white/10"
+              style={{
+                background:
+                  'radial-gradient(circle at 30% 20%, #FFD166 0%, #FF6900 40%, #C41B0E 100%)',
+                boxShadow:
+                  '0 0 40px rgba(255,80,0,0.65), 0 0 80px rgba(255,80,0,0.3), inset 0 2px 0 rgba(255,255,255,0.3)',
+                animation: 'flame-flicker 2.4s ease-in-out infinite',
+              }}
+            >
+              <Flame
+                size={34}
+                className="text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.9)]"
+                strokeWidth={2.5}
+                fill="currentColor"
+              />
+            </div>
+          </div>
+
+          {/* Live badge */}
+          <div className="relative inline-flex items-center gap-1.5 px-3 py-1 rounded-full
+                          bg-red-500/10 border border-red-500/25 mb-3 z-10">
+            <div className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+            </div>
+            <span className="text-[10px] font-bold text-red-300 uppercase tracking-[0.2em]">
+              Live Burn Tracker
             </span>
           </div>
 
           {isLoading ? (
-            <div className="space-y-3 py-4">
-              <div className="h-8 w-64 mx-auto rounded bg-white/[0.06] animate-shimmer" />
-              <div className="h-5 w-32 mx-auto rounded bg-white/[0.04] animate-shimmer" />
-              <div className="h-3 w-full rounded-full bg-white/[0.04] animate-shimmer" />
+            <div className="space-y-3 py-4 relative z-10">
+              <div className="h-10 w-72 mx-auto rounded bg-white/[0.06] animate-shimmer" />
+              <div className="h-4 w-40 mx-auto rounded bg-white/[0.04] animate-shimmer" />
             </div>
           ) : (
-            <>
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-1">
-                <span className="bg-gradient-to-r from-[#FFB800] via-[#FF6900] to-[#FF3000] bg-clip-text text-transparent">
+            <div className="relative z-10">
+              <h1 className="text-[38px] sm:text-[44px] font-black tracking-tight leading-none mb-2 tabular-nums">
+                <span
+                  className="bg-gradient-to-br from-[#FFE48C] via-[#FF6900] to-[#C41B0E] bg-clip-text text-transparent"
+                  style={{ filter: 'drop-shadow(0 0 24px rgba(255,105,0,0.55))' }}
+                >
                   {fmtCommas(animBurned)}
                 </span>
               </h1>
-              <p className="text-sm text-gray-300 font-medium mb-1">SHIB BURNED 🔥</p>
-              <p className="text-xs text-gray-500 mb-4">
-                ≈ ${fmtCompact(store.totalBurnedUSD)} USD
+              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-[0.28em] mb-2.5">
+                SHIB Incinerated Forever
               </p>
-
-              {/* Progress bar */}
-              <div className="relative h-3 rounded-full bg-white/[0.06] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-red-600"
-                  style={{
-                    width: `${Math.min(animPercent, 100)}%`,
-                    transition: 'width 2s ease-out',
-                  }}
-                />
-                <div
-                  className="absolute inset-0 rounded-full opacity-40"
-                  style={{
-                    background:
-                      'linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.15) 50%, transparent 75%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'shimmer 2s linear infinite',
-                  }}
-                />
-              </div>
-              <p className="text-[11px] text-gray-500 mt-1.5">
-                {animPercent.toFixed(2)}% of total supply burned
+              <p className="text-xs text-gray-400">
+                <span className="text-orange-400 font-bold text-sm">
+                  ${fmtCompact(store.totalBurnedUSD)}
+                </span>
+                <span className="ml-1.5 text-gray-500">destroyed · never returns</span>
               </p>
-            </>
+            </div>
           )}
         </section>
 
-        {/* ── TIME WINDOW CARDS ────────────────────────────────────────── */}
-        <section className="mb-6" style={{ animation: 'slide-up-fade 0.4s ease-out 60ms both' }}>
-          <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
+        {/* ── LIVE BURN RATE TICKER ───────────────────────────────── */}
+        {!isLoading && burnRatePerDay > 0 && (
+          <section
+            className="mb-5 rounded-2xl border border-orange-500/20 overflow-hidden relative"
+            style={{
+              animation: 'slide-up-fade 0.5s ease-out 50ms both',
+              background:
+                'linear-gradient(135deg, rgba(255,105,0,0.09) 0%, rgba(196,27,14,0.05) 100%)',
+            }}
+          >
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className="relative w-10 h-10 rounded-xl bg-orange-500/15 border border-orange-500/20
+                              flex items-center justify-center shrink-0">
+                <Zap size={16} className="text-orange-400" fill="currentColor" />
+                <div
+                  className="absolute inset-0 rounded-xl"
+                  style={{ animation: 'pulse-glow 2s ease-in-out infinite' }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold">
+                  Burn Rate
+                </p>
+                <p className="text-sm font-bold text-white tabular-nums leading-tight">
+                  {fmtCompact(burnRatePerHour)}
+                  <span className="text-gray-400 font-medium text-[11px] ml-1">SHIB / hr</span>
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold">
+                  24h Burned
+                </p>
+                <p className="text-sm font-bold text-orange-400 tabular-nums leading-tight">
+                  {fmtCompact(store.burns24h.amount)}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── CIRCULAR BURN GAUGE ─────────────────────────────────── */}
+        <section
+          className="relative mb-6 rounded-2xl border border-white/[0.06] overflow-hidden"
+          style={{
+            animation: 'slide-up-fade 0.5s ease-out 100ms both',
+            background:
+              'radial-gradient(ellipse at 20% 30%, rgba(255,105,0,0.08) 0%, rgba(0,0,0,0.2) 70%)',
+          }}
+        >
+          <div className="p-5 flex items-center gap-5">
+            {/* SVG ring gauge */}
+            <div className="relative shrink-0" style={{ width: 118, height: 118 }}>
+              <svg width="118" height="118" viewBox="0 0 118 118" className="-rotate-90">
+                <defs>
+                  <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#FFE48C" />
+                    <stop offset="45%" stopColor="#FF6900" />
+                    <stop offset="100%" stopColor="#C41B0E" />
+                  </linearGradient>
+                </defs>
+                {/* Track */}
+                <circle cx="59" cy="59" r="50" stroke="rgba(255,255,255,0.06)" strokeWidth="9" fill="none" />
+                {/* Progress */}
+                <circle
+                  cx="59"
+                  cy="59"
+                  r="50"
+                  stroke="url(#gaugeGrad)"
+                  strokeWidth="9"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={`${(Math.min(animPercent, 100) / 100) * 314.16} 314.16`}
+                  style={{
+                    filter: 'drop-shadow(0 0 10px rgba(255,105,0,0.7))',
+                    transition: 'stroke-dasharray 1.5s cubic-bezier(0.4,0,0.2,1)',
+                  }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <p className="text-[22px] font-black bg-gradient-to-br from-amber-300 to-red-500
+                              bg-clip-text text-transparent tabular-nums leading-none">
+                  {animPercent.toFixed(2)}%
+                </p>
+                <p className="text-[8px] text-gray-500 font-bold uppercase tracking-[0.15em] mt-1">
+                  Burned
+                </p>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="flex-1 min-w-0 space-y-2.5">
+              <div>
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.14em]">
+                  Initial Supply
+                </p>
+                <p className="text-[13px] text-gray-300 font-semibold tabular-nums">1,000T SHIB</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.14em]">
+                  Remaining
+                </p>
+                <p className="text-[13px] text-white font-bold tabular-nums">
+                  {fmtCompact(remainingSupply)} <span className="text-gray-500 font-medium">SHIB</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <TrendingDown size={11} className="text-orange-400" />
+                <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">
+                  Deflationary Forever
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── TIME WINDOW CARDS ─────────────────────────────────── */}
+        <section className="mb-6" style={{ animation: 'slide-up-fade 0.5s ease-out 160ms both' }}>
+          <div className="grid grid-cols-3 gap-2">
             {(
               [
                 { label: '24H', data: store.burns24h },
                 { label: '7D', data: store.burns7d },
                 { label: '30D', data: store.burns30d },
               ] as const
-            ).map((card) => (
+            ).map((card, idx) => (
               <div
                 key={card.label}
-                className="flex-1 min-w-[100px] p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]
-                           hover:border-orange-500/20 transition-colors"
+                className="relative p-3 rounded-xl border border-white/[0.06] overflow-hidden
+                           hover:border-orange-500/30 transition-all group"
+                style={{
+                  background:
+                    'linear-gradient(160deg, rgba(255,105,0,0.05) 0%, rgba(0,0,0,0.2) 100%)',
+                  animation: `slide-up-fade 0.4s ease-out ${180 + idx * 60}ms both`,
+                }}
               >
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                {/* Corner flame accent */}
+                <div className="absolute top-1.5 right-1.5 opacity-20 group-hover:opacity-60 transition-opacity">
+                  <Flame size={11} className="text-orange-400" fill="currentColor" />
+                </div>
+                <p className="text-[9px] font-black text-orange-400/80 uppercase tracking-[0.12em] mb-1.5">
                   {card.label}
                 </p>
-                <p className="text-sm font-bold text-white leading-tight">
+                <p className="text-[13px] font-bold text-white leading-tight tabular-nums">
                   {fmtCompact(card.data.amount)}
                 </p>
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-[9px] text-gray-500 mt-0.5">
                   ${fmtCompact(card.data.usd)}
                 </p>
-                <p className="text-[10px] text-gray-600 mt-1">
+                <p className="text-[9px] text-gray-600 mt-0.5">
                   {card.data.count} tx{card.data.count !== 1 ? 's' : ''}
                 </p>
               </div>
@@ -772,50 +975,85 @@ const Burns: React.FC = () => {
           )}
         </section>
 
-        {/* ── TOP BURNERS LEADERBOARD ──────────────────────────────────── */}
+        {/* ── TOP BURNERS LEADERBOARD ─────────────────────────────── */}
         {store.topBurners.length > 0 && (
           <section
-            className="mb-6 rounded-2xl bg-white/[0.03] border border-white/[0.06] overflow-hidden"
-            style={{ animation: 'slide-up-fade 0.4s ease-out 240ms both' }}
+            className="mb-6 rounded-2xl border border-white/[0.06] overflow-hidden"
+            style={{
+              animation: 'slide-up-fade 0.5s ease-out 240ms both',
+              background:
+                'linear-gradient(180deg, rgba(255,184,0,0.04) 0%, rgba(0,0,0,0.2) 100%)',
+            }}
           >
             <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
-              <Trophy size={13} className="text-amber-400" />
-              <h3 className="text-xs font-semibold text-gray-400">Top Burners</h3>
+              <Trophy size={14} className="text-amber-400 drop-shadow-[0_0_6px_rgba(255,184,0,0.6)]" />
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">Hall of Flame</h3>
+              <span className="ml-auto text-[9px] text-gray-600 uppercase tracking-wider font-bold">
+                Top Burners
+              </span>
             </div>
 
             <div>
               {store.topBurners.map((burner, idx) => {
-                const rankColor =
+                const isPodium = idx < 3;
+                const rankGradient =
                   idx === 0
-                    ? 'text-amber-400'
+                    ? 'from-amber-300 via-yellow-400 to-amber-600'
                     : idx === 1
-                      ? 'text-gray-300'
+                      ? 'from-gray-200 via-gray-300 to-gray-500'
                       : idx === 2
-                        ? 'text-orange-700'
-                        : 'text-gray-600';
+                        ? 'from-orange-400 via-orange-600 to-orange-800'
+                        : '';
+                const rankGlow =
+                  idx === 0
+                    ? 'shadow-[0_0_14px_rgba(255,184,0,0.5)]'
+                    : idx === 1
+                      ? 'shadow-[0_0_10px_rgba(200,200,200,0.35)]'
+                      : idx === 2
+                        ? 'shadow-[0_0_10px_rgba(255,100,0,0.35)]'
+                        : '';
 
                 return (
                   <div
                     key={burner.address}
-                    className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-b-0"
-                    style={{ animation: `slide-up-fade 0.35s ease-out ${idx * 30}ms both` }}
+                    className={`flex items-center gap-3 px-4 py-3 border-b border-white/[0.04] last:border-b-0
+                                ${idx === 0 ? 'bg-gradient-to-r from-amber-500/[0.06] to-transparent' : ''}`}
+                    style={{ animation: `slide-up-fade 0.35s ease-out ${idx * 35}ms both` }}
                   >
-                    <span className={`text-xs font-black w-5 text-center ${rankColor}`}>
-                      {idx + 1}
-                    </span>
+                    {/* Rank badge */}
+                    {isPodium ? (
+                      <div
+                        className={`relative w-7 h-7 rounded-full flex items-center justify-center shrink-0
+                                    bg-gradient-to-br ${rankGradient} ${rankGlow}`}
+                      >
+                        {idx === 0 ? (
+                          <Crown size={13} className="text-white drop-shadow" strokeWidth={2.5} />
+                        ) : (
+                          <Medal size={13} className="text-white drop-shadow" strokeWidth={2.5} />
+                        )}
+                      </div>
+                    ) : (
+                      <span className="w-7 text-center text-xs font-black text-gray-600 tabular-nums">
+                        {idx + 1}
+                      </span>
+                    )}
+
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-white font-medium truncate">
+                      <p className="text-xs text-white font-semibold truncate">
                         {burner.label || truncAddr(burner.address)}
                       </p>
                       <p className="text-[10px] text-gray-600">
                         {burner.burnCount} burn{burner.burnCount !== 1 ? 's' : ''}
                       </p>
                     </div>
+
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-semibold text-orange-400">
+                      <p className="text-xs font-bold text-orange-400 tabular-nums">
                         {fmtCompact(burner.totalBurned)}
                       </p>
-                      <p className="text-[10px] text-gray-600">${fmtCompact(burner.usdValue)}</p>
+                      <p className="text-[10px] text-gray-600 tabular-nums">
+                        ${fmtCompact(burner.usdValue)}
+                      </p>
                     </div>
                   </div>
                 );
@@ -824,19 +1062,72 @@ const Burns: React.FC = () => {
           </section>
         )}
 
-        {/* ── BURN CTA ─────────────────────────────────────────────────── */}
-        <section style={{ animation: 'slide-up-fade 0.4s ease-out 300ms both' }}>
+        {/* ── BURN CTA — dramatic hero button ────────────────────── */}
+        <section
+          className="relative mt-8"
+          style={{ animation: 'slide-up-fade 0.5s ease-out 300ms both' }}
+        >
+          {/* Blurred glow halo behind button */}
+          <div
+            className="absolute -inset-2 rounded-3xl -z-10 opacity-70"
+            style={{
+              background:
+                'radial-gradient(ellipse at center, rgba(255,80,0,0.5) 0%, rgba(196,27,14,0.2) 40%, transparent 70%)',
+              filter: 'blur(22px)',
+              animation: 'halo-breathe 3s ease-in-out infinite',
+            }}
+          />
+
           <button
             onClick={() => setModalOpen(true)}
-            className="w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2
-                       bg-gradient-to-r from-orange-500 via-red-500 to-orange-600 text-white
-                       shadow-[0_0_30px_rgba(255,70,0,0.25)] hover:shadow-[0_0_40px_rgba(255,70,0,0.35)]
-                       active:scale-[0.98] transition-all duration-200 animate-pulse-glow"
+            className="relative w-full py-5 rounded-2xl overflow-hidden group active:scale-[0.98]
+                       transition-transform duration-150"
+            style={{
+              background: 'linear-gradient(135deg, #FFB800 0%, #FF6900 35%, #C41B0E 100%)',
+              backgroundSize: '180% 180%',
+              animation:
+                'gradient-shift 5s ease-in-out infinite, burn-cta-glow 2.5s ease-in-out infinite',
+            }}
           >
-            <Flame size={18} /> Burn SHIB 🔥
+            {/* Inner highlight */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 45%, rgba(0,0,0,0.25) 100%)',
+              }}
+            />
+            {/* Shine sweep on hover */}
+            <div
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(110deg, transparent 40%, rgba(255,255,255,0.25) 50%, transparent 60%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 2s linear infinite',
+              }}
+            />
+            <div className="relative flex items-center justify-center gap-3">
+              <Flame
+                size={22}
+                className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]"
+                fill="currentColor"
+                strokeWidth={2.5}
+              />
+              <span className="text-base font-black text-white uppercase tracking-[0.2em]
+                               drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                Burn SHIB
+              </span>
+              <Flame
+                size={22}
+                className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.9)]"
+                fill="currentColor"
+                strokeWidth={2.5}
+              />
+            </div>
           </button>
-          <p className="text-center text-[10px] text-gray-600 mt-2">
-            Permanently destroy SHIB to reduce total supply
+          <p className="text-center text-[10px] text-gray-500 mt-2.5 tracking-wide">
+            Permanently destroy SHIB · Reduce supply forever
           </p>
         </section>
 
