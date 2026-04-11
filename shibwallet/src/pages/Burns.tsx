@@ -553,7 +553,9 @@ const Burns: React.FC = () => {
     if (!isUnlocked) navigate('/lock', { replace: true });
   }, [isUnlocked, navigate]);
 
-  // Load cache + fetch on mount, auto-refresh every 60s
+  // Load cache + fetch on mount, auto-refresh every 60s, and refresh again
+  // when the app returns from background (Android can suspend the WebView
+  // which leaves in-flight fetches hanging and the burn data looking empty).
   useEffect(() => {
     store.loadCache();
     store.fetchBurnData();
@@ -562,7 +564,19 @@ const Burns: React.FC = () => {
       store.fetchBurnData();
     }, 60_000);
 
-    return () => clearInterval(iv);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        store.fetchBurnData();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -110,7 +110,7 @@ export async function fetchRecentBurns(limit = 100): Promise<BurnTransaction[]> 
         `&address=${deadAddr}` +
         `&contractaddress=${SHIB_CONTRACT}` +
         `&page=1&offset=${limit}&sort=desc`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       const data = await res.json();
       if (data.status === '1' && Array.isArray(data.result)) {
         return (data.result as any[])
