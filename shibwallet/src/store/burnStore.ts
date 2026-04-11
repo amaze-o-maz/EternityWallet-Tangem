@@ -13,6 +13,9 @@ import { fetchPrices } from '../lib/prices';
 
 const CACHE_KEY = 'shibwallet_burn_cache';
 const STALE_MS = 60_000; // 1 minute
+// If a fetch has been "in flight" for longer than this, assume it got stuck
+// (e.g. Android paused the WebView mid-request) and allow a new fetch to run.
+const STUCK_LOADING_MS = 20_000;
 
 interface BurnState {
   totalBurned: number;
@@ -25,6 +28,7 @@ interface BurnState {
   topBurners: TopBurner[];
   shibPrice: number;
   loading: boolean;
+  loadingStartedAt: number | null;
   lastUpdated: number | null;
 }
 
@@ -67,6 +71,7 @@ export const useBurnStore = create<BurnState & BurnActions>((set, get) => ({
   topBurners: [],
   shibPrice: 0,
   loading: false,
+  loadingStartedAt: null,
   lastUpdated: null,
 
   loadCache: () => {
@@ -99,8 +104,16 @@ export const useBurnStore = create<BurnState & BurnActions>((set, get) => ({
   },
 
   fetchBurnData: async () => {
-    if (get().loading) return;
-    set({ loading: true });
+    // Skip if another fetch is already running — BUT only if it's recent.
+    // A "stuck" loading flag from a fetch that was paused by Android
+    // backgrounding should not permanently block new refreshes.
+    const state = get();
+    if (state.loading && state.loadingStartedAt !== null) {
+      const elapsed = Date.now() - state.loadingStartedAt;
+      if (elapsed < STUCK_LOADING_MS) return;
+      // Otherwise, fall through and start a new fetch.
+    }
+    set({ loading: true, loadingStartedAt: Date.now() });
 
     try {
       const [totalBurned, recentBurns, prices] = await Promise.all([
@@ -135,6 +148,7 @@ export const useBurnStore = create<BurnState & BurnActions>((set, get) => ({
         topBurners: top,
         shibPrice,
         loading: false,
+        loadingStartedAt: null,
         lastUpdated: Date.now(),
       };
 
@@ -142,7 +156,7 @@ export const useBurnStore = create<BurnState & BurnActions>((set, get) => ({
       saveCache(get());
     } catch (err) {
       console.error('[BurnStore] fetchBurnData failed:', err);
-      set({ loading: false });
+      set({ loading: false, loadingStartedAt: null });
     }
   },
 }));
