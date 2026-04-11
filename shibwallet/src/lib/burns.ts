@@ -100,20 +100,40 @@ export async function fetchTotalBurned(): Promise<number> {
 
 const BLOCKSCOUT_API = 'https://eth.blockscout.com/api';
 
+// Blockscout's etherscan-compat endpoint silently returns an empty body when
+// offset > 100, so we cap page size at 100 and paginate if the caller asks
+// for more.
+const BLOCKSCOUT_MAX_OFFSET = 100;
+
 export async function fetchRecentBurns(limit = 100): Promise<BurnTransaction[]> {
   const all: BurnTransaction[] = [];
 
   const fetches = DEAD_ADDRESSES.map(async (deadAddr) => {
-    try {
-      const url =
-        `${BLOCKSCOUT_API}?module=account&action=tokentx` +
-        `&address=${deadAddr}` +
-        `&contractaddress=${SHIB_CONTRACT}` +
-        `&page=1&offset=${limit}&sort=desc`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-      const data = await res.json();
-      if (data.status === '1' && Array.isArray(data.result)) {
-        return (data.result as any[])
+    const out: BurnTransaction[] = [];
+    const pageSize = Math.min(limit, BLOCKSCOUT_MAX_OFFSET);
+    const totalPages = Math.max(1, Math.ceil(limit / pageSize));
+
+    for (let page = 1; page <= totalPages; page++) {
+      try {
+        const url =
+          `${BLOCKSCOUT_API}?module=account&action=tokentx` +
+          `&address=${deadAddr}` +
+          `&contractaddress=${SHIB_CONTRACT}` +
+          `&page=${page}&offset=${pageSize}&sort=desc`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+        if (!res.ok) break;
+        const text = await res.text();
+        // Blockscout sometimes returns an empty body for rate-limited / bad
+        // queries — treat that as "no more results" and stop paging.
+        if (!text || text.trim().length === 0) break;
+        let data: any;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          break;
+        }
+        if (data.status !== '1' || !Array.isArray(data.result) || data.result.length === 0) break;
+        const batch = (data.result as any[])
           .filter((tx) => tx.to?.toLowerCase() === deadAddr.toLowerCase())
           .map((tx) => ({
             hash: tx.hash as string,
@@ -122,11 +142,15 @@ export async function fetchRecentBurns(limit = 100): Promise<BurnTransaction[]> 
             amount: tx.value as string,
             timestamp: parseInt(tx.timeStamp, 10),
           }));
+        out.push(...batch);
+        // If the page returned fewer than pageSize results, there's nothing more.
+        if (data.result.length < pageSize) break;
+      } catch (err) {
+        console.error(`[Burns] fetch for ${deadAddr} page ${page}:`, err);
+        break;
       }
-    } catch (err) {
-      console.error(`[Burns] fetch for ${deadAddr}:`, err);
     }
-    return [] as BurnTransaction[];
+    return out;
   });
 
   const results = await Promise.all(fetches);

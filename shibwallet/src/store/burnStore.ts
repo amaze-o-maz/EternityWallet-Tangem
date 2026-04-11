@@ -40,6 +40,32 @@ interface BurnActions {
 
 const EMPTY_BUCKET: TimeBucket = { amount: 0, usd: 0, count: 0 };
 
+// Read the cache synchronously at module load so the very first render of
+// the Burns page already shows the last-seen data instead of flashing zeros
+// while useEffect runs.
+function readCacheSync(): Partial<BurnState> {
+  try {
+    if (typeof localStorage === 'undefined') return {};
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return {};
+    const data = JSON.parse(raw);
+    return {
+      totalBurned: data.totalBurned ?? 0,
+      totalBurnedUSD: data.totalBurnedUSD ?? 0,
+      burnPercent: data.burnPercent ?? 0,
+      burns24h: data.burns24h ?? EMPTY_BUCKET,
+      burns7d: data.burns7d ?? EMPTY_BUCKET,
+      burns30d: data.burns30d ?? EMPTY_BUCKET,
+      recentBurns: data.recentBurns ?? [],
+      topBurners: data.topBurners ?? [],
+      shibPrice: data.shibPrice ?? 0,
+      lastUpdated: data.lastUpdated ?? null,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function saveCache(state: BurnState) {
   try {
     localStorage.setItem(
@@ -51,7 +77,7 @@ function saveCache(state: BurnState) {
         burns24h: state.burns24h,
         burns7d: state.burns7d,
         burns30d: state.burns30d,
-        recentBurns: state.recentBurns.slice(0, 50),
+        recentBurns: state.recentBurns.slice(0, 200),
         topBurners: state.topBurners,
         shibPrice: state.shibPrice,
         lastUpdated: state.lastUpdated,
@@ -60,19 +86,21 @@ function saveCache(state: BurnState) {
   } catch { /* quota exceeded — ignore */ }
 }
 
+const INITIAL_CACHED = readCacheSync();
+
 export const useBurnStore = create<BurnState & BurnActions>((set, get) => ({
-  totalBurned: 0,
-  totalBurnedUSD: 0,
-  burnPercent: 0,
-  burns24h: EMPTY_BUCKET,
-  burns7d: EMPTY_BUCKET,
-  burns30d: EMPTY_BUCKET,
-  recentBurns: [],
-  topBurners: [],
-  shibPrice: 0,
+  totalBurned: INITIAL_CACHED.totalBurned ?? 0,
+  totalBurnedUSD: INITIAL_CACHED.totalBurnedUSD ?? 0,
+  burnPercent: INITIAL_CACHED.burnPercent ?? 0,
+  burns24h: INITIAL_CACHED.burns24h ?? EMPTY_BUCKET,
+  burns7d: INITIAL_CACHED.burns7d ?? EMPTY_BUCKET,
+  burns30d: INITIAL_CACHED.burns30d ?? EMPTY_BUCKET,
+  recentBurns: INITIAL_CACHED.recentBurns ?? [],
+  topBurners: INITIAL_CACHED.topBurners ?? [],
+  shibPrice: INITIAL_CACHED.shibPrice ?? 0,
   loading: false,
   loadingStartedAt: null,
-  lastUpdated: null,
+  lastUpdated: INITIAL_CACHED.lastUpdated ?? null,
 
   loadCache: () => {
     try {
@@ -118,33 +146,43 @@ export const useBurnStore = create<BurnState & BurnActions>((set, get) => ({
     try {
       const [totalBurned, recentBurns, prices] = await Promise.all([
         fetchTotalBurned(),
-        fetchRecentBurns(150),
+        fetchRecentBurns(100),
         fetchPrices(),
       ]);
 
       // If prices failed to load, fall back to the previous shibPrice so that
       // USD values don't collapse to $0.00 on transient network failures.
       const freshShibPrice = prices['SHIB'] ?? 0;
-      const prevShibPrice = get().shibPrice;
-      const shibPrice = freshShibPrice > 0 ? freshShibPrice : prevShibPrice;
+      const prev = get();
+      const shibPrice = freshShibPrice > 0 ? freshShibPrice : prev.shibPrice;
 
-      const totalBurnedUSD = totalBurned * shibPrice;
-      const burnPercent = (totalBurned / INITIAL_SUPPLY_FLOAT) * 100;
+      // If the fresh recentBurns came back empty (API paging glitch, upstream
+      // outage, etc) but we previously had some, keep the old list + windows.
+      const useFreshBurns = recentBurns.length > 0 || prev.recentBurns.length === 0;
+      const finalRecent = useFreshBurns ? recentBurns : prev.recentBurns;
 
-      const b24h = windowedBurns(recentBurns, 86_400, shibPrice);
-      const b7d = windowedBurns(recentBurns, 604_800, shibPrice);
-      const b30d = windowedBurns(recentBurns, 2_592_000, shibPrice);
+      // Same for totalBurned — if the RPC returned 0 unexpectedly, preserve
+      // the prior value rather than zeroing out the hero number.
+      const finalTotalBurned = totalBurned > 0 ? totalBurned : prev.totalBurned;
 
-      const top = calcTopBurners(recentBurns, shibPrice, 10);
+      const totalBurnedUSD = finalTotalBurned * shibPrice;
+      const burnPercent = (finalTotalBurned / INITIAL_SUPPLY_FLOAT) * 100;
+
+      const b24h = useFreshBurns ? windowedBurns(finalRecent, 86_400, shibPrice) : prev.burns24h;
+      const b7d = useFreshBurns ? windowedBurns(finalRecent, 604_800, shibPrice) : prev.burns7d;
+      const b30d = useFreshBurns ? windowedBurns(finalRecent, 2_592_000, shibPrice) : prev.burns30d;
+
+      const top = useFreshBurns ? calcTopBurners(finalRecent, shibPrice, 10) : prev.topBurners;
 
       const newState: Partial<BurnState> = {
-        totalBurned,
+        totalBurned: finalTotalBurned,
         totalBurnedUSD,
         burnPercent,
         burns24h: b24h,
         burns7d: b7d,
         burns30d: b30d,
-        recentBurns: recentBurns.slice(0, 50),
+        // Keep enough history to render the 30D chart / windows correctly.
+        recentBurns: finalRecent.slice(0, 200),
         topBurners: top,
         shibPrice,
         loading: false,
