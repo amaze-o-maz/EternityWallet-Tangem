@@ -109,7 +109,12 @@ export const useBurnStore = create<BurnState & BurnActions>((set, get) => ({
         fetchPrices(),
       ]);
 
-      const shibPrice = prices['SHIB'] ?? 0;
+      // If prices failed to load, fall back to the previous shibPrice so that
+      // USD values don't collapse to $0.00 on transient network failures.
+      const freshShibPrice = prices['SHIB'] ?? 0;
+      const prevShibPrice = get().shibPrice;
+      const shibPrice = freshShibPrice > 0 ? freshShibPrice : prevShibPrice;
+
       const totalBurnedUSD = totalBurned * shibPrice;
       const burnPercent = (totalBurned / INITIAL_SUPPLY_FLOAT) * 100;
 

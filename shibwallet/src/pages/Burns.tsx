@@ -701,10 +701,16 @@ const Burns: React.FC = () => {
                 {fmtCommas(animBurned)}
               </p>
               <p className="text-xs text-gray-400">
-                <span className="text-orange-400 font-bold text-sm">
-                  ${fmtCompact(store.totalBurnedUSD)}
-                </span>
-                <span className="ml-1.5 text-gray-500">destroyed · never returns</span>
+                {store.totalBurnedUSD > 0 ? (
+                  <>
+                    <span className="text-orange-400 font-bold text-sm">
+                      ${fmtCompact(store.totalBurnedUSD)}
+                    </span>
+                    <span className="ml-1.5 text-gray-500">destroyed · never returns</span>
+                  </>
+                ) : (
+                  <span className="text-gray-500">Destroyed forever · never returns</span>
+                )}
               </p>
             </div>
           )}
@@ -855,9 +861,11 @@ const Burns: React.FC = () => {
                 <p className="text-[13px] font-bold text-white leading-tight tabular-nums">
                   {fmtCompact(card.data.amount)}
                 </p>
-                <p className="text-[9px] text-gray-500 mt-0.5">
-                  ${fmtCompact(card.data.usd)}
-                </p>
+                {card.data.usd > 0 && (
+                  <p className="text-[9px] text-gray-500 mt-0.5">
+                    ${fmtCompact(card.data.usd)}
+                  </p>
+                )}
                 <p className="text-[9px] text-gray-600 mt-0.5">
                   {card.data.count} tx{card.data.count !== 1 ? 's' : ''}
                 </p>
@@ -1054,9 +1062,11 @@ const Burns: React.FC = () => {
                       <p className="text-xs font-bold text-orange-400 tabular-nums">
                         {fmtCompact(burner.totalBurned)}
                       </p>
-                      <p className="text-[10px] text-gray-600 tabular-nums">
-                        ${fmtCompact(burner.usdValue)}
-                      </p>
+                      {burner.usdValue > 0 && (
+                        <p className="text-[10px] text-gray-600 tabular-nums">
+                          ${fmtCompact(burner.usdValue)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );

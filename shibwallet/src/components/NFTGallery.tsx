@@ -146,6 +146,28 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       return;
     }
 
+    // Fetch with retry on 5xx / network errors (exponential backoff).
+    const fetchWithRetry = async (url: string, attempts = 3): Promise<Response> => {
+      let lastErr: unknown = null;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
+          // Retry on 5xx (server error / temporary outage)
+          if (res.status >= 500 && res.status < 600 && i < attempts - 1) {
+            await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+            continue;
+          }
+          return res;
+        } catch (err) {
+          lastErr = err;
+          if (i < attempts - 1) {
+            await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+          }
+        }
+      }
+      throw lastErr ?? new Error('Fetch failed');
+    };
+
     try {
       let items: NFTItem[] = [];
 
@@ -160,8 +182,16 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
 
       if (blockscoutBase) {
         const url = `${blockscoutBase}/api/v2/addresses/${address}/nft?type=ERC-721%2CERC-1155`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        const res = await fetchWithRetry(url);
+        if (!res.ok) {
+          // Propagate a descriptive error so UI can show a helpful message
+          if (res.status >= 500) {
+            throw new Error(
+              `${chainId === 109 ? 'Shibarium' : 'Ethereum'} explorer is temporarily unavailable (HTTP ${res.status}). Please try again in a moment.`,
+            );
+          }
+          throw new Error(`Explorer returned HTTP ${res.status}`);
+        }
         const data = await res.json();
 
         if (data.items && Array.isArray(data.items)) {
@@ -225,7 +255,13 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       }
     } catch (err) {
       console.error('[NFTGallery] Fetch failed:', err);
-      setError('Failed to load NFTs');
+      const msg = err instanceof Error ? err.message : '';
+      // Keep messages that are already user-friendly, otherwise fall back to generic
+      if (msg && (msg.includes('temporarily unavailable') || msg.includes('HTTP'))) {
+        setError(msg);
+      } else {
+        setError('Failed to load NFTs. Check your connection and try again.');
+      }
     } finally {
       setLoading(false);
     }

@@ -65,36 +65,73 @@ export async function fetchPrices(): Promise<Record<string, number>> {
     return cachedPrices;
   }
 
+  // Try CoinGecko first
+  const fromCoinGecko = await tryCoinGecko();
+  if (fromCoinGecko && Object.keys(fromCoinGecko).length > 0) {
+    cachedPrices = fromCoinGecko;
+    cacheTimestamp = now;
+    return fromCoinGecko;
+  }
+
+  // Fallback to CryptoCompare — more lenient rate limits, CORS-friendly
+  const fromCryptoCompare = await tryCryptoCompare();
+  if (fromCryptoCompare && Object.keys(fromCryptoCompare).length > 0) {
+    // Merge with any cached values so we don't overwrite known-good prices with 0
+    const merged = { ...cachedPrices, ...fromCryptoCompare };
+    cachedPrices = merged;
+    cacheTimestamp = now;
+    return merged;
+  }
+
+  // Both sources failed — return stale cache if available
+  return cachedPrices;
+}
+
+async function tryCoinGecko(): Promise<Record<string, number> | null> {
   try {
     const ids = COIN_IDS.join(',');
     const url = `${COINGECKO_API}?ids=${ids}&vs_currencies=usd`;
 
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`CoinGecko API error: ${response.status} ${response.statusText}`);
-    }
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) return null;
 
     const data: Record<string, { usd?: number }> = await response.json();
-
     const prices: Record<string, number> = {};
 
     for (const [coinId, priceData] of Object.entries(data)) {
       const symbol = COIN_ID_TO_SYMBOL[coinId];
-      if (symbol && priceData.usd !== undefined) {
+      if (symbol && priceData.usd !== undefined && priceData.usd > 0) {
         prices[symbol] = priceData.usd;
       }
     }
 
-    cachedPrices = prices;
-    cacheTimestamp = now;
-
-    return prices;
+    return Object.keys(prices).length > 0 ? prices : null;
   } catch {
-    // On failure, return cached data if available, otherwise empty object
-    if (Object.keys(cachedPrices).length > 0) {
-      return cachedPrices;
-    }
-    return {};
+    return null;
   }
 }
+
+async function tryCryptoCompare(): Promise<Record<string, number> | null> {
+  try {
+    // CryptoCompare supports comma-separated symbols; SHIB, BONE, LEASH, ETH, TREAT
+    const symbols = ['SHIB', 'BONE', 'LEASH', 'ETH', 'TREAT'].join(',');
+    const url = `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${symbols}&tsyms=USD`;
+
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) return null;
+
+    const data: Record<string, { USD?: number }> = await response.json();
+    const prices: Record<string, number> = {};
+
+    for (const [symbol, priceData] of Object.entries(data)) {
+      if (priceData.USD !== undefined && priceData.USD > 0) {
+        prices[symbol] = priceData.USD;
+      }
+    }
+
+    return Object.keys(prices).length > 0 ? prices : null;
+  } catch {
+    return null;
+  }
+}
+
