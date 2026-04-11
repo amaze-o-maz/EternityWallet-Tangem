@@ -565,8 +565,8 @@ const Burns: React.FC = () => {
     }, 60_000);
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        store.fetchBurnData();
+      if (document.visibilityState === 'visible' && useBurnStore.getState().needsRefresh()) {
+        useBurnStore.getState().fetchBurnData();
       }
     };
     document.addEventListener('visibilitychange', onVisible);
