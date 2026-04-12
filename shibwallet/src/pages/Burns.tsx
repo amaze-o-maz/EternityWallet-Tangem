@@ -37,8 +37,11 @@ import {
   fmtCompact,
   fmtCommas,
   chartData,
+  topBurners as calcTopBurners,
   type BurnTransaction,
 } from '../lib/burns';
+import { reverseResolveEnsBatch } from '../lib/ens';
+import { reverseResolveShibName } from '../lib/sns';
 
 /* ═══════════════════════════════════════════════════════════════════════
    HOOKS
@@ -581,14 +584,73 @@ const Burns: React.FC = () => {
   }, []);
 
   // Animated hero number
-  const animBurned = useCountUp(store.totalBurned, 2500);
-  const animPercent = useCountUp(store.burnPercent, 2000);
+  const animBurned = useCountUp(store.totalBurned, 1200);
+  const animPercent = useCountUp(store.burnPercent, 1000);
 
   // Chart data
   const cData = useMemo(() => {
     const cfg = CHART_CFG[chartPeriod];
     return chartData(store.recentBurns, cfg.bucket, cfg.window);
   }, [store.recentBurns, chartPeriod]);
+
+  // Hall of Flame follows the selected chart window (24H / 7D / 30D).
+  const periodTopBurners = useMemo(() => {
+    const windowSec = CHART_CFG[chartPeriod].window;
+    const cutoff = Math.floor(Date.now() / 1000) - windowSec;
+    const windowed = store.recentBurns.filter((b) => b.timestamp >= cutoff);
+    return calcTopBurners(windowed, store.shibPrice, 10);
+  }, [store.recentBurns, store.shibPrice, chartPeriod]);
+
+  // Reverse-resolve ENS / SNS names for the top burners so the Hall of Flame
+  // shows "vitalik.eth" / "shibarmy.shib" instead of a truncated 0xabc…def.
+  const [nameMap, setNameMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (periodTopBurners.length === 0) return;
+    // Only resolve addresses we don't have a friendly label for yet.
+    const addrs = periodTopBurners
+      .filter((b) => !b.label && !nameMap[b.address.toLowerCase()])
+      .map((b) => b.address);
+    if (addrs.length === 0) return;
+
+    let cancelled = false;
+
+    // Kick off ENS + SNS lookups in parallel for each address.
+    (async () => {
+      const [ensHits, snsHits] = await Promise.all([
+        reverseResolveEnsBatch(addrs).catch(() => ({} as Record<string, string | null>)),
+        Promise.all(
+          addrs.map(async (a) => {
+            try {
+              const name = await reverseResolveShibName(a, 1);
+              return [a.toLowerCase(), name] as const;
+            } catch {
+              return [a.toLowerCase(), null] as const;
+            }
+          }),
+        ).then((rows) => Object.fromEntries(rows) as Record<string, string | null>),
+      ]);
+
+      if (cancelled) return;
+
+      setNameMap((prev) => {
+        const next = { ...prev };
+        for (const a of addrs) {
+          const key = a.toLowerCase();
+          const ens = ensHits[key];
+          const sns = snsHits[key];
+          // Prefer ENS for ETH addresses; fall back to SNS if the owner
+          // registered a .shib name instead.
+          if (ens) next[key] = ens;
+          else if (sns) next[key] = sns.endsWith('.shib') ? sns : `${sns}.shib`;
+        }
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [periodTopBurners, nameMap]);
 
   const handleBurnSuccess = (hash: string, amount: string) => {
     setBurnResult({ hash, amount });
@@ -1001,7 +1063,7 @@ const Burns: React.FC = () => {
         </section>
 
         {/* ── TOP BURNERS LEADERBOARD ─────────────────────────────── */}
-        {store.topBurners.length > 0 && (
+        {periodTopBurners.length > 0 && (
           <section
             className="mb-6 rounded-2xl border border-white/[0.06] overflow-hidden"
             style={{
@@ -1013,13 +1075,13 @@ const Burns: React.FC = () => {
             <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
               <Trophy size={14} className="text-amber-400 drop-shadow-[0_0_6px_rgba(255,184,0,0.6)]" />
               <h3 className="text-xs font-bold text-white uppercase tracking-wider">Hall of Flame</h3>
-              <span className="ml-auto text-[9px] text-gray-600 uppercase tracking-wider font-bold">
-                Top Burners
+              <span className="ml-auto text-[9px] text-amber-400/80 uppercase tracking-wider font-bold">
+                Top Burners · {chartPeriod}
               </span>
             </div>
 
             <div>
-              {store.topBurners.map((burner, idx) => {
+              {periodTopBurners.map((burner, idx) => {
                 const isPodium = idx < 3;
                 const rankGradient =
                   idx === 0
@@ -1065,7 +1127,9 @@ const Burns: React.FC = () => {
 
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-white font-semibold truncate">
-                        {burner.label || truncAddr(burner.address)}
+                        {burner.label ||
+                          nameMap[burner.address.toLowerCase()] ||
+                          truncAddr(burner.address)}
                       </p>
                       <p className="text-[10px] text-gray-600">
                         {burner.burnCount} burn{burner.burnCount !== 1 ? 's' : ''}
