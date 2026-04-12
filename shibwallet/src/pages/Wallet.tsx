@@ -113,8 +113,8 @@ const Wallet: React.FC = () => {
     const publicClient = createPublicClient({
       chain,
       transport: allRpcs.length > 1
-        ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
-        : http(allRpcs[0], { timeout: 10_000 }),
+        ? fallback(allRpcs.map((url) => http(url, { timeout: 5_000 })))
+        : http(allRpcs[0], { timeout: 5_000 }),
     });
 
     const tokens = getTokensForChain(chainId);
@@ -235,8 +235,8 @@ const Wallet: React.FC = () => {
       const client = createPublicClient({
         chain,
         transport: lookupRpcs.length > 1
-          ? fallback(lookupRpcs.map((url) => http(url, { timeout: 10_000 })))
-          : http(lookupRpcs[0], { timeout: 10_000 }),
+          ? fallback(lookupRpcs.map((url) => http(url, { timeout: 5_000 })))
+          : http(lookupRpcs[0], { timeout: 5_000 }),
       });
 
       const [sym, name, dec] = await Promise.all([

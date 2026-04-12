@@ -70,21 +70,22 @@ const SendNft: React.FC = () => {
     return createPublicClient({
       chain: viemChain,
       transport: allRpcs.length > 1
-        ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
-        : http(allRpcs[0], { timeout: 10_000 }),
+        ? fallback(allRpcs.map((url) => http(url, { timeout: 5_000 })))
+        : http(allRpcs[0], { timeout: 5_000 }),
     });
   }, [network, viemChain]);
 
-  // Redirect if nothing selected or not unlocked
+  // Redirect if nothing selected or not unlocked — but NOT if we
+  // already have a txHash (success modal is showing after clearSelection).
   useEffect(() => {
     if (!isUnlocked) {
       navigate('/lock', { replace: true });
       return;
     }
-    if (selected.length === 0) {
+    if (selected.length === 0 && !txHash) {
       navigate('/wallet', { replace: true });
     }
-  }, [isUnlocked, selected.length, navigate]);
+  }, [isUnlocked, selected.length, txHash, navigate]);
 
   useEffect(() => {
     fetchPrices().then(setPrices).catch(() => {});
@@ -219,8 +220,8 @@ const SendNft: React.FC = () => {
       const walletClient = createWalletClient({
         chain: viemChain,
         transport: rpcs.length > 1
-          ? fallback(rpcs.map((url) => http(url, { timeout: 10_000 })))
-          : http(rpcs[0], { timeout: 10_000 }),
+          ? fallback(rpcs.map((url) => http(url, { timeout: 5_000 })))
+          : http(rpcs[0], { timeout: 5_000 }),
         account,
       });
 
@@ -228,6 +229,9 @@ const SendNft: React.FC = () => {
       const to = effectiveAddress as `0x${string}`;
       const nftAddr = contractAddr as `0x${string}`;
       let hash: `0x${string}`;
+
+      // Pass pre-computed gas to skip redundant eth_estimateGas RPC call
+      const gasOpts = gasEstimate ? { gas: gasEstimate } : {};
 
       if (isErc1155 && selected.length > 1) {
         hash = await walletClient.writeContract({
@@ -241,6 +245,7 @@ const SendNft: React.FC = () => {
             selected.map(() => 1n),
             '0x',
           ],
+          ...gasOpts,
         });
       } else if (isErc1155) {
         hash = await walletClient.writeContract({
@@ -248,6 +253,7 @@ const SendNft: React.FC = () => {
           abi: ERC1155_ABI,
           functionName: 'safeTransferFrom',
           args: [from, to, BigInt(selected[0].tokenId), 1n, '0x'],
+          ...gasOpts,
         });
       } else {
         hash = await walletClient.writeContract({
@@ -255,6 +261,7 @@ const SendNft: React.FC = () => {
           abi: ERC721_ABI,
           functionName: 'safeTransferFrom',
           args: [from, to, BigInt(selected[0].tokenId)],
+          ...gasOpts,
         });
       }
 
@@ -282,6 +289,18 @@ const SendNft: React.FC = () => {
         // Don't let history recording errors affect the success display
       }
 
+      // Invalidate NFT cache so the gallery refetches on return —
+      // the sent NFTs should no longer appear in the sender's list.
+      try {
+        const raw = localStorage.getItem('shibwallet_nft_cache');
+        if (raw) {
+          const all = JSON.parse(raw);
+          const key = `${chainId}:${address!.toLowerCase()}`;
+          delete all[key];
+          localStorage.setItem('shibwallet_nft_cache', JSON.stringify(all));
+        }
+      } catch { /* ignore */ }
+
       clearSelection();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Transaction failed');
@@ -290,7 +309,7 @@ const SendNft: React.FC = () => {
     }
   }, [
     privateKey, network, viemChain, publicClient, selected,
-    address, effectiveAddress, contractAddr, isErc1155,
+    address, effectiveAddress, contractAddr, isErc1155, gasEstimate,
     addTransaction, chainId, collectionName, previewImage, clearSelection,
   ]);
 
@@ -302,7 +321,7 @@ const SendNft: React.FC = () => {
     }).catch(() => {});
   }, [txHash]);
 
-  if (!isUnlocked || !address || selected.length === 0) return null;
+  if (!isUnlocked || !address || (selected.length === 0 && !txHash)) return null;
 
   return (
     <div className="safe-top flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">

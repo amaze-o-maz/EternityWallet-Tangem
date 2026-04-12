@@ -87,8 +87,8 @@ const Send: React.FC = () => {
     return createPublicClient({
       chain: viemChain,
       transport: allRpcs.length > 1
-        ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
-        : http(allRpcs[0], { timeout: 10_000 }),
+        ? fallback(allRpcs.map((url) => http(url, { timeout: 5_000 })))
+        : http(allRpcs[0], { timeout: 5_000 }),
     });
   }, [network, viemChain]);
 
@@ -298,18 +298,23 @@ const Send: React.FC = () => {
       const walletClient = createWalletClient({
         chain: viemChain,
         transport: sendRpcs.length > 1
-          ? fallback(sendRpcs.map((url) => http(url, { timeout: 10_000 })))
-          : http(sendRpcs[0], { timeout: 10_000 }),
+          ? fallback(sendRpcs.map((url) => http(url, { timeout: 5_000 })))
+          : http(sendRpcs[0], { timeout: 5_000 }),
         account,
       });
 
       const parsedAmount = parseUnits(amount, selectedToken.decimals);
       let hash: `0x${string}`;
 
+      // Pass pre-computed gas estimate to skip redundant eth_estimateGas
+      // RPC call — we already estimated during the review step.
+      const gasOpts = gasEstimate ? { gas: gasEstimate } : {};
+
       if (isNativeToken(selectedToken)) {
         hash = await walletClient.sendTransaction({
           to: effectiveAddress as `0x${string}`,
           value: parsedAmount,
+          ...gasOpts,
         });
       } else {
         hash = await walletClient.writeContract({
@@ -317,6 +322,7 @@ const Send: React.FC = () => {
           abi: ERC20_ABI,
           functionName: 'transfer',
           args: [effectiveAddress as `0x${string}`, parsedAmount],
+          ...gasOpts,
         });
       }
 

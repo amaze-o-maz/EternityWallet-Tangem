@@ -444,8 +444,8 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       chain,
       transport:
         allRpcs.length > 1
-          ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
-          : http(allRpcs[0], { timeout: 10_000 }),
+          ? fallback(allRpcs.map((url) => http(url, { timeout: 5_000 })))
+          : http(allRpcs[0], { timeout: 5_000 }),
     });
 
     // Process in batches of 5 to avoid flooding the RPC
