@@ -1,4 +1,4 @@
-# SUPASAIYANAPP
+# ShibWallet (Eternity Wallet)
 
 A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage your SHIB, BONE, LEASH, TREAT, and other tokens across Ethereum and Shibarium networks — all from a single mobile-first app.
 
@@ -9,19 +9,23 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 - **Multi-account** — create via mnemonic or import private keys, switch between accounts
 - **Multi-network** — Ethereum & Shibarium built-in, plus add custom EVM networks
 - **Token management** — default Shiba ecosystem tokens + add any ERC-20 by contract address
-- **NFT gallery** — view ERC-721 and ERC-1155 NFTs on Ethereum and Shibarium with metadata & images
+- **NFT gallery** — view ERC-721, ERC-1155, and DN-404 NFTs on Ethereum and Shibarium with metadata & images
 - **Fast balance loading** — batched multicall RPC for instant token balances
 - **Live prices** — real-time USD prices via CoinGecko with 7-day sparkline charts
 - **QR receive** — generate QR codes for easy address sharing
-
-- also SNS and mag and burns and stuff 
+- **Instant cache hydration** — NFTs, transaction history, and news load instantly from localStorage on re-open, with silent background revalidation
 
 ### Send & Receive
 - Send native tokens (ETH, BONE) and any ERC-20 token
+- **NFT sending** — long-press to select NFTs in collection view, then send
+  - ERC-1155: multi-select with native `safeBatchTransferFrom` (one tx, one signature)
+  - ERC-721 / DN-404: single-select with `safeTransferFrom`
+- **SNS (.shib) name resolution** — send to `name.shib` addresses on Shibarium via Shib Name Service
+- **ENS name resolution** — send to `name.eth` addresses on Ethereum via ensideas.com API + viem fallback
 - Gas estimation with fees shown in both native token and USD
 - Transaction review modal before confirming
 - Success notification with transaction hash, copy button, and explorer link
-- Full transaction history with local persistence (sends, swaps, and on-chain activity)
+- Full transaction history with local persistence (sends, swaps, NFT sends, and on-chain activity)
 
 ### ShibaSwap Integration
 - Built-in swap tab powered by ShibaSwap V1 router contracts
@@ -30,6 +34,21 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 - Token approval flow with progress indicators
 - Swap confirmation with minimum received calculation
 - Support for Native-to-Token, Token-to-Native, and Token-to-Token swaps
+
+### SHIB Burns Tracker (Hall of Flame)
+- Real-time SHIB burn statistics — total burned, burn rate, recent burns
+- Leaderboard of top burners with ENS/SNS name resolution
+- Time period filtering (24h, 7d, 30d, all-time)
+- Cached data with background refresh for fast tab switching
+
+### News & Magazine
+- Shiba Inu ecosystem news feed powered by WordPress API
+- Magazine articles with featured images, authors, and categories
+- Paginated infinite scroll with pull-to-refresh
+- Cached with TTL-based revalidation and visibility listeners for app resume
+
+### Buy
+- Fiat on-ramp integration for purchasing crypto
 
 ### dApp Browser
 - 16 curated Shibarium dApps (ShibaSwap, SHIB The Metaverse, K9 Finance, and more)
@@ -52,11 +71,14 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 |-------|-----------|
 | Frontend | React 18 + TypeScript |
 | Styling | Tailwind CSS |
-| State | Zustand (wallet, network, balance, transaction stores) |
-| Blockchain | viem (multicall, contract reads/writes, gas estimation) |
+| State | Zustand (wallet, network, balance, transaction, burn, news, NFT selection stores) |
+| Blockchain | viem (multicall, contract reads/writes, gas estimation, ERC-721/1155 transfers) |
 | Swap | ShibaSwap V1 router contracts (on-chain) |
 | Prices | CoinGecko API (live prices + 7-day sparklines) |
-| NFTs | Etherscan API (ERC-721/1155) + Blockscout v2 (Shibarium) |
+| NFTs | Blockscout v2 API (Ethereum & Shibarium) + on-chain tokenURI |
+| Name Resolution | SNS (Shib Name Service via Cloudflare DoH), ENS (ensideas.com + viem fallback) |
+| News | WordPress REST API with embedded media |
+| Burns | Etherscan API + custom burn tracking |
 | Crypto | @scure/bip39, @scure/bip32, crypto-js |
 | Mobile | Capacitor (Android) |
 | dApp Browser | Android WebView + JavaScript injection (EIP-1193) |
@@ -67,15 +89,19 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 
 ## Getting Started
 
-### FOR Android - Simply Install the APK
+### For Android — Simply Install the APK
 
-------- For local APP -------
+Download `ShibWallet.apk` from the repository root and install on your device.
 
-### Prerequisites
+---
+
+### For Local Development
+
+#### Prerequisites
 - Node.js 18+
 - Android SDK (for mobile builds)
 
-### Install & Run (Web)
+#### Install & Run (Web)
 
 ```bash
 cd shibwallet
@@ -83,13 +109,13 @@ npm install
 npm run dev
 ```
 
-### Build for Production
+#### Build for Production
 
 ```bash
 npm run build
 ```
 
-### Android APK
+#### Android APK
 
 ```bash
 npx cap sync android
@@ -104,34 +130,58 @@ The APK will be at `android/app/build/outputs/apk/debug/app-debug.apk`.
 ```
 shibwallet/
 ├── src/
-│   ├── components/     # Reusable UI (TokenList, NFTGallery, Sparkline, Header, BottomNav,
-│   │                   #   AddressPill, NetworkBadge, QRCode, TokenSelector, ReviewModal)
-│   ├── lib/            # Core logic
-│   │   ├── wallet.ts   #   Key generation, encryption, PBKDF2 vault
-│   │   ├── chains.ts   #   Network configs (Ethereum, Shibarium, custom)
-│   │   ├── tokens.ts   #   Token registry, custom token import
-│   │   ├── swap.ts     #   ShibaSwap router integration (quotes, approvals, swaps)
-│   │   ├── prices.ts   #   CoinGecko price + sparkline fetching
-│   │   ├── abis.ts     #   Contract ABIs (ERC-20, Router, Factory, Multicall3)
-│   │   └── dappBrowser.ts # EIP-1193 provider injection for WebView
-│   ├── pages/          # Route pages
-│   │   ├── Wallet.tsx  #   Main dashboard (balances, tokens, NFTs)
-│   │   ├── Send.tsx    #   Token sending with gas estimation + success modal
-│   │   ├── Receive.tsx #   QR code + address display
-│   │   ├── Swap.tsx    #   ShibaSwap DEX interface
-│   │   ├── History.tsx #   Transaction history (on-chain + local)
-│   │   ├── DApps.tsx   #   Curated dApp directory
-│   │   ├── DAppBrowser.tsx # In-app Web3 browser
-│   │   ├── Lock.tsx    #   Unlock screen with rate limiting
-│   │   ├── Create.tsx  #   New wallet (mnemonic generation)
-│   │   ├── Import.tsx  #   Import via mnemonic or private key
-│   │   └── Onboarding.tsx # Splash + welcome screen
-│   └── store/          # Zustand stores
-│       ├── walletStore.ts      # Accounts, vault, lock/unlock
-│       ├── networkStore.ts     # Active chain, custom networks
-│       └── transactionStore.ts # Local transaction persistence
-├── android/            # Capacitor Android project with native WebView dApp browser
-└── dist/               # Production build output
+│   ├── components/        # Reusable UI
+│   │   ├── NFTGallery.tsx #   NFT grid with collection drill-down + long-press selection
+│   │   ├── ShibName.tsx   #   SNS/ENS name display component
+│   │   ├── TokenList.tsx  #   Token balance rows with sparklines
+│   │   ├── ReviewModal.tsx #  Confirm modal for sends/swaps
+│   │   ├── TokenSelector.tsx # Token picker modal
+│   │   ├── Sparkline.tsx  #   7-day price chart
+│   │   ├── Header.tsx     #   App header with account switcher + network badge
+│   │   ├── BottomNav.tsx  #   Tab navigation
+│   │   ├── WalletLayout.tsx #  Persistent layout wrapper
+│   │   ├── AddressPill.tsx #  Copyable address display
+│   │   ├── NetworkBadge.tsx # Chain indicator
+│   │   ├── QRCode.tsx     #   QR code generator
+│   │   └── ...
+│   ├── lib/               # Core logic
+│   │   ├── wallet.ts      #   Key generation, encryption, PBKDF2 vault
+│   │   ├── chains.ts      #   Network configs (Ethereum, Shibarium, custom)
+│   │   ├── tokens.ts      #   Token registry, custom token import
+│   │   ├── swap.ts        #   ShibaSwap router integration (quotes, approvals, swaps)
+│   │   ├── prices.ts      #   CoinGecko price + sparkline fetching
+│   │   ├── abis.ts        #   Contract ABIs (ERC-20, ERC-721, ERC-1155, Router, Factory)
+│   │   ├── ens.ts         #   ENS reverse resolution (ensideas.com + viem fallback, 24h cache)
+│   │   ├── sns.ts         #   SNS (.shib) name resolution via Cloudflare DoH
+│   │   ├── burns.ts       #   SHIB burn data fetching + aggregation
+│   │   └── dappBrowser.ts #   EIP-1193 provider injection for WebView
+│   ├── pages/             # Route pages
+│   │   ├── Wallet.tsx     #   Main dashboard (balances, tokens, NFTs)
+│   │   ├── Send.tsx       #   Token sending with gas estimation + SNS support
+│   │   ├── SendNft.tsx    #   NFT sending (ERC-721 single / ERC-1155 batch)
+│   │   ├── Receive.tsx    #   QR code + address display
+│   │   ├── Swap.tsx       #   ShibaSwap DEX interface
+│   │   ├── History.tsx    #   Transaction history (on-chain + local, cached)
+│   │   ├── Burns.tsx      #   SHIB burn tracker / Hall of Flame leaderboard
+│   │   ├── Magazine.tsx   #   Shiba ecosystem news feed
+│   │   ├── Buy.tsx        #   Fiat on-ramp
+│   │   ├── DApps.tsx      #   Curated dApp directory
+│   │   ├── DAppBrowser.tsx #  In-app Web3 browser
+│   │   ├── Lock.tsx       #   Unlock screen with rate limiting
+│   │   ├── Create.tsx     #   New wallet (mnemonic generation)
+│   │   ├── Import.tsx     #   Import via mnemonic or private key
+│   │   └── Onboarding.tsx #   Splash + welcome screen
+│   └── store/             # Zustand stores
+│       ├── walletStore.ts        # Accounts, vault, lock/unlock
+│       ├── networkStore.ts       # Active chain, custom networks
+│       ├── transactionStore.ts   # Local transaction persistence (sends, swaps, NFT sends)
+│       ├── burnStore.ts          # SHIB burn data cache
+│       ├── newsStore.ts          # News/magazine article cache with localStorage persistence
+│       ├── nftSelectionStore.ts  # Ephemeral NFT selection state for send flow
+│       ├── snsStore.ts           # SNS name cache
+│       └── themeStore.ts         # Theme preferences
+├── android/               # Capacitor Android project with native WebView dApp browser
+└── dist/                  # Production build output
 ```
 
 ## Security Model
@@ -158,4 +208,4 @@ shibwallet/
 
 ## License
 
-This project is for SHIBARMYSTRONGAF only all rights reserved
+This project is for SHIBARMYSTRONGAF only — all rights reserved.
