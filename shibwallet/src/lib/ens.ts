@@ -1,21 +1,21 @@
 // ENS (Ethereum Name Service) reverse resolution.
 // Used to show human-readable names in the burn leaderboard and elsewhere.
+//
+// Uses the ensideas.com public API which resolves both the primary name
+// AND the avatar in a single HTTP request (CORS-friendly, no RPC needed).
+// Falls back to viem's getEnsName via our Ethereum RPCs if ensideas is
+// unreachable.
 
 import { createPublicClient, http, fallback } from 'viem';
 import { mainnet } from 'viem/chains';
 import { getNetworkByChainId } from './chains';
 
-// Cache structure ────────────────────────────────────────────────────
-// We cache both positive hits (address → name) and negative hits
-// (address → null) so we don't re-query addresses with no ENS set.
-// Persisted to localStorage so navigating away and returning doesn't
-// re-hit the RPC for the same addresses.
-
+const ENSIDEAS_URL = 'https://api.ensideas.com/ens/resolve/';
 const CACHE_KEY = 'shibwallet_ens_cache';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 interface CachedEntry {
-  name: string | null;
+  name: string | null; // null means "confirmed no name set"
   at: number;
 }
 
@@ -45,16 +45,14 @@ function saveCacheDebounced() {
   }, 500);
 }
 
-// Public client ─────────────────────────────────────────────────────
+// viem fallback client (only used if ensideas fails)
 let ensClient: ReturnType<typeof createPublicClient> | null = null;
-
 function getEnsClient() {
   if (ensClient) return ensClient;
   const network = getNetworkByChainId(1);
   const rpcs = network
     ? [network.rpcUrl, ...(network.rpcFallbacks ?? [])]
     : ['https://eth.llamarpc.com', 'https://1rpc.io/eth', 'https://cloudflare-eth.com'];
-
   ensClient = createPublicClient({
     chain: mainnet,
     transport:
@@ -65,10 +63,34 @@ function getEnsClient() {
   return ensClient;
 }
 
+async function resolveViaEnsIdeas(address: string): Promise<string | null | 'error'> {
+  try {
+    const res = await fetch(ENSIDEAS_URL + address.toLowerCase(), {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return 'error';
+    const data = (await res.json()) as { name?: string | null; displayName?: string | null };
+    // ensideas returns displayName === address when no name is set, so
+    // we check .name which is null in that case.
+    return data.name && data.name.length > 0 ? data.name : null;
+  } catch {
+    return 'error';
+  }
+}
+
+async function resolveViaViem(address: string): Promise<string | null | 'error'> {
+  try {
+    const client = getEnsClient();
+    const name = await client.getEnsName({ address: address as `0x${string}` });
+    return name ?? null;
+  } catch {
+    return 'error';
+  }
+}
+
 /**
  * Reverse-resolve an Ethereum address to its primary ENS name.
- * Returns null if no name is set (or on error).
- * Results are cached for 24h in localStorage.
+ * Returns null if no name is set (cached for 24h).
  */
 export async function reverseResolveEns(address: string): Promise<string | null> {
   if (!address || !address.startsWith('0x') || address.length !== 42) return null;
@@ -80,16 +102,20 @@ export async function reverseResolveEns(address: string): Promise<string | null>
     return cached.name;
   }
 
-  try {
-    const client = getEnsClient();
-    const name = await client.getEnsName({ address: address as `0x${string}` });
-    cache[key] = { name: name ?? null, at: Date.now() };
-    saveCacheDebounced();
-    return name ?? null;
-  } catch {
-    // Don't cache failures — next time might succeed.
-    return null;
+  // Try ensideas first (fast, single HTTP call, CORS-friendly)
+  let result = await resolveViaEnsIdeas(address);
+
+  // If ensideas errored, fall back to viem + RPC
+  if (result === 'error') {
+    result = await resolveViaViem(address);
   }
+
+  // If both failed, don't cache — next attempt might succeed.
+  if (result === 'error') return null;
+
+  cache[key] = { name: result, at: Date.now() };
+  saveCacheDebounced();
+  return result;
 }
 
 /**

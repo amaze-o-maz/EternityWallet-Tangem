@@ -604,53 +604,71 @@ const Burns: React.FC = () => {
   // Reverse-resolve ENS / SNS names for the top burners so the Hall of Flame
   // shows "vitalik.eth" / "shibarmy.shib" instead of a truncated 0xabc…def.
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
+  const attemptedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (periodTopBurners.length === 0) return;
-    // Only resolve addresses we don't have a friendly label for yet.
+    // Only resolve addresses we haven't already tried (regardless of whether
+    // the previous attempt returned a name or not — null is a valid result
+    // and we don't want to loop re-querying addresses with no ENS set).
     const addrs = periodTopBurners
-      .filter((b) => !b.label && !nameMap[b.address.toLowerCase()])
+      .filter((b) => !b.label && !attemptedRef.current.has(b.address.toLowerCase()))
       .map((b) => b.address);
     if (addrs.length === 0) return;
 
+    // Mark as attempted immediately so concurrent renders don't re-queue.
+    addrs.forEach((a) => attemptedRef.current.add(a.toLowerCase()));
+
     let cancelled = false;
-
-    // Kick off ENS + SNS lookups in parallel for each address.
     (async () => {
-      const [ensHits, snsHits] = await Promise.all([
-        reverseResolveEnsBatch(addrs).catch(() => ({} as Record<string, string | null>)),
-        Promise.all(
-          addrs.map(async (a) => {
-            try {
-              const name = await reverseResolveShibName(a, 1);
-              return [a.toLowerCase(), name] as const;
-            } catch {
-              return [a.toLowerCase(), null] as const;
-            }
+      try {
+        const [ensHits, snsHits] = await Promise.all([
+          reverseResolveEnsBatch(addrs).catch((err) => {
+            console.error('[Burns] ENS batch failed:', err);
+            return {} as Record<string, string | null>;
           }),
-        ).then((rows) => Object.fromEntries(rows) as Record<string, string | null>),
-      ]);
+          Promise.all(
+            addrs.map(async (a) => {
+              try {
+                const name = await reverseResolveShibName(a, 1);
+                return [a.toLowerCase(), name] as const;
+              } catch {
+                return [a.toLowerCase(), null] as const;
+              }
+            }),
+          ).then((rows) => Object.fromEntries(rows) as Record<string, string | null>),
+        ]);
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      setNameMap((prev) => {
-        const next = { ...prev };
-        for (const a of addrs) {
-          const key = a.toLowerCase();
-          const ens = ensHits[key];
-          const sns = snsHits[key];
-          // Prefer ENS for ETH addresses; fall back to SNS if the owner
-          // registered a .shib name instead.
-          if (ens) next[key] = ens;
-          else if (sns) next[key] = sns.endsWith('.shib') ? sns : `${sns}.shib`;
-        }
-        return next;
-      });
+        setNameMap((prev) => {
+          const next = { ...prev };
+          let changed = false;
+          for (const a of addrs) {
+            const key = a.toLowerCase();
+            const ens = ensHits[key];
+            const sns = snsHits[key];
+            // Prefer ENS for ETH addresses; fall back to SNS.
+            if (ens) {
+              next[key] = ens;
+              changed = true;
+            } else if (sns) {
+              next[key] = sns.endsWith('.shib') ? sns : `${sns}.shib`;
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+      } catch (err) {
+        console.error('[Burns] name resolution failed:', err);
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [periodTopBurners, nameMap]);
+    // periodTopBurners is the only real dependency — attemptedRef is a ref
+    // so changes to it don't trigger re-runs.
+  }, [periodTopBurners]);
 
   const handleBurnSuccess = (hash: string, amount: string) => {
     setBurnResult({ hash, amount });
