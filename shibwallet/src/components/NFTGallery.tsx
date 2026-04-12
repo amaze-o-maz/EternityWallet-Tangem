@@ -297,7 +297,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
             : null;
 
       if (blockscoutBase) {
-        const url = `${blockscoutBase}/api/v2/addresses/${address}/nft?type=ERC-721%2CERC-1155`;
+        const url = `${blockscoutBase}/api/v2/addresses/${address}/nft`;
         const res = await fetchWithRetry(url);
         if (!res.ok) {
           if (res.status >= 500) {
@@ -320,7 +320,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
             for (const [k, v] of Object.entries(nextParams)) {
               params.set(k, String(v));
             }
-            const nextUrl = `${blockscoutBase}/api/v2/addresses/${address}/nft?type=ERC-721%2CERC-1155&${params.toString()}`;
+            const nextUrl = `${blockscoutBase}/api/v2/addresses/${address}/nft?${params.toString()}`;
             try {
               const nextRes = await fetch(nextUrl);
               if (!nextRes.ok) break;
