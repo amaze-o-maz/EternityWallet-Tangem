@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createPublicClient, http, fallback } from 'viem';
 import { getNetworkByChainId } from '../lib/chains';
 
@@ -25,6 +25,39 @@ function resolveUri(uri: string): string {
     return 'https://arweave.net/' + uri.slice(5);
   }
   return uri;
+}
+
+// ── localStorage cache so the NFT tab is instant on re-open ─────────
+const NFT_CACHE_KEY = 'shibwallet_nft_cache';
+const NFT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — revalidate in background
+
+interface NFTCacheEntry {
+  items: NFTItem[];
+  at: number;
+}
+
+function nftCacheRead(address: string, chainId: number): NFTCacheEntry | null {
+  try {
+    const raw = localStorage.getItem(NFT_CACHE_KEY);
+    if (!raw) return null;
+    const all: Record<string, NFTCacheEntry> = JSON.parse(raw);
+    const key = `${chainId}:${address.toLowerCase()}`;
+    return all[key] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function nftCacheWrite(address: string, chainId: number, items: NFTItem[]) {
+  try {
+    const raw = localStorage.getItem(NFT_CACHE_KEY);
+    const all: Record<string, NFTCacheEntry> = raw ? JSON.parse(raw) : {};
+    const key = `${chainId}:${address.toLowerCase()}`;
+    all[key] = { items, at: Date.now() };
+    localStorage.setItem(NFT_CACHE_KEY, JSON.stringify(all));
+  } catch {
+    /* quota — ignore */
+  }
 }
 
 const TOKEN_URI_ABI = [
@@ -131,12 +164,24 @@ const NFTCard: React.FC<{ nft: NFTItem }> = ({ nft }) => {
 };
 
 const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
-  const [nfts, setNfts] = useState<NFTItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Hydrate from cache synchronously so re-opening the tab shows the last
+  // seen collections instantly instead of flashing a skeleton for 5-10s.
+  const initialCache = useMemo(
+    () => nftCacheRead(address, chainId),
+    // Only read once per mount; re-reading on every render would defeat
+    // the purpose of hydration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const [nfts, setNfts] = useState<NFTItem[]>(initialCache?.items ?? []);
+  // Only show the skeleton when we have nothing to display yet.
+  const [loading, setLoading] = useState(!initialCache);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchedAtRef = useRef<number>(initialCache?.at ?? 0);
 
-  const fetchNFTs = useCallback(async () => {
-    setLoading(true);
+  const fetchNFTs = useCallback(async (opts: { silent?: boolean } = {}) => {
+    // Only show the skeleton if we don't have cached data to display.
+    if (!opts.silent) setLoading(true);
     setError(null);
 
     const network = getNetworkByChainId(chainId);
@@ -244,6 +289,8 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       }
 
       setNfts(items);
+      nftCacheWrite(address, chainId, items);
+      lastFetchedAtRef.current = Date.now();
 
       // For Ethereum, always fetch on-chain tokenURI to get fresh images
       // (Blockscout can cache stale pre-reveal images for collections like Sheboshis)
@@ -256,15 +303,23 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     } catch (err) {
       console.error('[NFTGallery] Fetch failed:', err);
       const msg = err instanceof Error ? err.message : '';
-      // Keep messages that are already user-friendly, otherwise fall back to generic
-      if (msg && (msg.includes('temporarily unavailable') || msg.includes('HTTP'))) {
-        setError(msg);
-      } else {
-        setError('Failed to load NFTs. Check your connection and try again.');
+      // Only surface an error if we have nothing cached to show. On silent
+      // revalidation, keep the stale data visible instead of swapping to an
+      // error state that blows away the gallery.
+      const hasCached = nfts.length > 0;
+      if (!hasCached) {
+        if (msg && (msg.includes('temporarily unavailable') || msg.includes('HTTP'))) {
+          setError(msg);
+        } else {
+          setError('Failed to load NFTs. Check your connection and try again.');
+        }
       }
     } finally {
       setLoading(false);
     }
+    // nfts intentionally excluded — we only read it to decide error handling
+    // and stale-data handling, not to track for re-runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, chainId]);
 
   const loadTokenImages = async (
@@ -366,15 +421,19 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       }
 
       if (Object.keys(updates).length > 0) {
-        setNfts((prev) =>
-          prev.map((nft) => {
+        setNfts((prev) => {
+          const merged = prev.map((nft) => {
             const key = `${nft.contractAddress.toLowerCase()}-${nft.tokenId}`;
             if (updates[key]) {
               return { ...nft, imageUrl: updates[key] };
             }
             return nft;
-          }),
-        );
+          });
+          // Persist the enriched images so reopening the tab shows them
+          // instantly next time.
+          nftCacheWrite(address, chainId, merged);
+          return merged;
+        });
       }
     }
   };
@@ -411,11 +470,21 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
 
   useEffect(() => {
     let cancelled = false;
-    fetchNFTs().catch(() => {});
-    // Retry on visibility change (fixes stale state after idle)
+    // On mount: if cache is fresh (< TTL), skip the fetch entirely.
+    // If cache is stale (or missing), trigger a fetch — silent if we
+    // already have cached items to display, loud otherwise.
+    const age = Date.now() - lastFetchedAtRef.current;
+    const hasCached = lastFetchedAtRef.current > 0;
+    if (!hasCached || age > NFT_CACHE_TTL_MS) {
+      fetchNFTs({ silent: hasCached }).catch(() => {});
+    }
+    // Retry on visibility change ONLY if the data is stale. Aggressive
+    // refetching on every focus change was causing the tab to feel slow.
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && !cancelled) {
-        fetchNFTs().catch(() => {});
+      if (document.visibilityState !== 'visible' || cancelled) return;
+      const ageNow = Date.now() - lastFetchedAtRef.current;
+      if (ageNow > NFT_CACHE_TTL_MS) {
+        fetchNFTs({ silent: nfts.length > 0 }).catch(() => {});
       }
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -423,6 +492,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onVisible);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchNFTs]);
 
   if (loading) {
@@ -445,7 +515,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
         </div>
         <p className="text-sm text-gray-400">{error}</p>
         <button
-          onClick={fetchNFTs}
+          onClick={() => fetchNFTs()}
           className="mt-3 px-4 py-1.5 text-xs font-medium text-[#FF6900] rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-all active:scale-95"
         >
           Retry
