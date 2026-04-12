@@ -306,9 +306,11 @@ const Send: React.FC = () => {
       const parsedAmount = parseUnits(amount, selectedToken.decimals);
       let hash: `0x${string}`;
 
-      // Pass pre-computed gas estimate to skip redundant eth_estimateGas
-      // RPC call — we already estimated during the review step.
-      const gasOpts = gasEstimate ? { gas: gasEstimate } : {};
+      // Pass pre-computed gas AND gasPrice to skip both eth_estimateGas
+      // and eth_gasPrice RPC calls — we already have these from the review step.
+      const gasOpts: Record<string, bigint> = {};
+      if (gasEstimate) gasOpts.gas = gasEstimate;
+      if (gasPrice) gasOpts.gasPrice = gasPrice;
 
       if (isNativeToken(selectedToken)) {
         hash = await walletClient.sendTransaction({

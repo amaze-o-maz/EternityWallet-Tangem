@@ -230,8 +230,11 @@ const SendNft: React.FC = () => {
       const nftAddr = contractAddr as `0x${string}`;
       let hash: `0x${string}`;
 
-      // Pass pre-computed gas to skip redundant eth_estimateGas RPC call
-      const gasOpts = gasEstimate ? { gas: gasEstimate } : {};
+      // Pass pre-computed gas AND gasPrice to skip both eth_estimateGas
+      // and eth_gasPrice RPC calls — we already have these from the review step.
+      const gasOpts: Record<string, bigint> = {};
+      if (gasEstimate) gasOpts.gas = gasEstimate;
+      if (gasPrice) gasOpts.gasPrice = gasPrice;
 
       if (isErc1155 && selected.length > 1) {
         hash = await walletClient.writeContract({
@@ -301,7 +304,12 @@ const SendNft: React.FC = () => {
         }
       } catch { /* ignore */ }
 
-      clearSelection();
+      // NOTE: Do NOT call clearSelection() here. It updates the Zustand
+      // store synchronously, triggering a re-render before React flushes
+      // the batched setTxHash/setShowSuccessModal updates. The redirect
+      // guard would see selected.length===0 with txHash still null and
+      // navigate away before the success modal renders. Selection is
+      // cleared when the user taps "Back to Wallet" instead.
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Transaction failed');
     } finally {
@@ -309,8 +317,8 @@ const SendNft: React.FC = () => {
     }
   }, [
     privateKey, network, viemChain, publicClient, selected,
-    address, effectiveAddress, contractAddr, isErc1155, gasEstimate,
-    addTransaction, chainId, collectionName, previewImage, clearSelection,
+    address, effectiveAddress, contractAddr, isErc1155, gasEstimate, gasPrice,
+    addTransaction, chainId, collectionName, previewImage,
   ]);
 
   const handleCopyHash = useCallback(() => {
@@ -565,7 +573,7 @@ const SendNft: React.FC = () => {
 
       {/* Success modal */}
       {showSuccessModal && txHash && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in" onClick={() => navigate('/wallet')}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in" onClick={() => { clearSelection(); navigate('/wallet'); }}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
@@ -573,7 +581,7 @@ const SendNft: React.FC = () => {
           >
             <div className="flex items-center justify-end mb-2">
               <button
-                onClick={() => navigate('/wallet')}
+                onClick={() => { clearSelection(); navigate('/wallet'); }}
                 className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
               >
                 <X size={16} />
@@ -652,7 +660,7 @@ const SendNft: React.FC = () => {
               <ExternalLink size={14} />
             </a>
             <button
-              onClick={() => navigate('/wallet')}
+              onClick={() => { clearSelection(); navigate('/wallet'); }}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
                          text-white font-semibold text-sm transition-all duration-300 active:scale-[0.97]
                          hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]"
