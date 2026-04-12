@@ -14,6 +14,7 @@ import History from './pages/History';
 import Magazine from './pages/Magazine';
 import Buy from './pages/Buy';
 import Burns from './pages/Burns';
+import SendNft from './pages/SendNft';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Onboarding /> },
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
 
   /* Standalone pages (no persistent chrome) */
   { path: '/wallet/send', element: <Send /> },
+  { path: '/wallet/send-nft', element: <SendNft /> },
   { path: '/wallet/receive', element: <Receive /> },
   { path: '/wallet/browser', element: <DAppBrowser /> },
 

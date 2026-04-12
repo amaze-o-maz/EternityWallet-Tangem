@@ -63,11 +63,17 @@ interface Transaction {
   tokenDecimal?: string;
   tokenName?: string;
   // Local transaction fields
-  type?: 'send' | 'swap';
+  type?: 'send' | 'swap' | 'send-nft';
   fromTokenSymbol?: string;
   toTokenSymbol?: string;
   toAmount?: string;
   isLocal?: boolean;
+  // NFT send fields
+  nftContract?: string;
+  nftTokenIds?: string[];
+  nftStandard?: string;
+  nftCollectionName?: string;
+  nftImageUrl?: string;
 }
 
 function timeAgo(timestamp: number): string {
@@ -370,6 +376,7 @@ const History: React.FC = () => {
             <div>
               {displayedTxs.map((tx, index) => {
                 const isSwap = tx.type === 'swap';
+                const isNftSend = tx.type === 'send-nft';
                 const isSent = tx.from.toLowerCase() === address.toLowerCase();
                 const counterparty = isSent ? tx.to : tx.from;
                 const timestamp = parseInt(tx.timeStamp, 10);
@@ -378,7 +385,11 @@ const History: React.FC = () => {
                 // Determine amount and symbol
                 let amount: string;
                 let symbol: string;
-                if (tx.tokenSymbol && tx.tokenDecimal) {
+                if (isNftSend) {
+                  const count = tx.nftTokenIds?.length ?? 1;
+                  amount = `${count}`;
+                  symbol = tx.nftCollectionName ?? 'NFT';
+                } else if (tx.tokenSymbol && tx.tokenDecimal) {
                   // Token transfer
                   const decimals = parseInt(tx.tokenDecimal, 10);
                   const raw = formatUnits(BigInt(tx.value), decimals);
@@ -404,9 +415,11 @@ const History: React.FC = () => {
                 }
 
                 // Display label
-                const txLabel = isSwap
-                  ? `Swap ${tx.fromTokenSymbol ?? ''} → ${tx.toTokenSymbol ?? ''}`
-                  : isSent ? 'Sent' : 'Received';
+                const txLabel = isNftSend
+                  ? `NFT Sent`
+                  : isSwap
+                    ? `Swap ${tx.fromTokenSymbol ?? ''} → ${tx.toTokenSymbol ?? ''}`
+                    : isSent ? 'Sent' : 'Received';
 
                 return (
                   <div
@@ -419,16 +432,20 @@ const History: React.FC = () => {
                     {/* Direction icon */}
                     <div
                       className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0
-                        ${isSwap
-                          ? 'bg-purple-500/10 text-purple-400'
-                          : isSent
-                            ? 'bg-orange-500/10 text-orange-400'
-                            : 'bg-green-500/10 text-green-400'
+                        ${isNftSend
+                          ? 'bg-blue-500/10 text-blue-400'
+                          : isSwap
+                            ? 'bg-purple-500/10 text-purple-400'
+                            : isSent
+                              ? 'bg-orange-500/10 text-orange-400'
+                              : 'bg-green-500/10 text-green-400'
                         }
                         ${failed ? 'bg-red-500/10 text-red-400' : ''}
                       `}
                     >
-                      {isSwap ? (
+                      {isNftSend ? (
+                        <ArrowUpRight size={18} />
+                      ) : isSwap ? (
                         <ArrowDownUp size={18} />
                       ) : isSent ? (
                         <ArrowUpRight size={18} />
@@ -463,8 +480,8 @@ const History: React.FC = () => {
 
                     {/* Amount and time */}
                     <div className="text-right shrink-0">
-                      <p className={`text-sm font-medium ${isSwap ? 'text-purple-400' : isSent ? 'text-orange-400' : 'text-green-400'} ${failed ? 'text-red-400 line-through' : ''}`}>
-                        {isSwap ? '' : isSent ? '-' : '+'}{amount} {symbol}
+                      <p className={`text-sm font-medium ${isNftSend ? 'text-blue-400' : isSwap ? 'text-purple-400' : isSent ? 'text-orange-400' : 'text-green-400'} ${failed ? 'text-red-400 line-through' : ''}`}>
+                        {isNftSend ? '' : isSwap ? '' : isSent ? '-' : '+'}{amount} {symbol}
                       </p>
                       <div className="flex items-center gap-1 justify-end mt-0.5">
                         <span className="text-[10px] text-gray-600">{timeAgo(timestamp)}</span>

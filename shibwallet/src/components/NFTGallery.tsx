@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPublicClient, http, fallback } from 'viem';
 import { getNetworkByChainId } from '../lib/chains';
+import { useNftSelectionStore, type SelectedNFT } from '../store/nftSelectionStore';
 
 interface NFTItem {
   contractAddress: string;
@@ -116,14 +118,49 @@ const NFTPlaceholder: React.FC<{ name: string; contractAddress: string }> = ({ n
   );
 };
 
-const NFTCard: React.FC<{ nft: NFTItem }> = ({ nft }) => {
+const LONG_PRESS_MS = 400;
+
+const NFTCard: React.FC<{
+  nft: NFTItem;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onLongPress?: () => void;
+  onTap?: () => void;
+}> = ({ nft, selectionMode, isSelected, onLongPress, onTap }) => {
   const [imgError, setImgError] = useState(false);
   const [imgLoading, setImgLoading] = useState(true);
   const truncatedId =
     nft.tokenId.length > 8 ? nft.tokenId.slice(0, 4) + '...' + nft.tokenId.slice(-4) : nft.tokenId;
 
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+
+  const onPointerDown = () => {
+    didLongPress.current = false;
+    pressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      onLongPress?.();
+    }, LONG_PRESS_MS);
+  };
+  const onPointerUp = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    if (!didLongPress.current && selectionMode) {
+      onTap?.();
+    }
+  };
+  const onPointerLeave = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+  };
+
   return (
-    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl overflow-hidden transition-all duration-300 hover:border-white/[0.12] hover:shadow-lg group">
+    <div
+      className={`bg-white/[0.03] backdrop-blur-xl border rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-lg group select-none
+        ${isSelected ? 'border-[#FF6900] ring-2 ring-[#FF6900]/40' : 'border-white/[0.06] hover:border-white/[0.12]'}`}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div className="relative">
         {nft.imageUrl && !imgError ? (
           <>
@@ -148,6 +185,23 @@ const NFTCard: React.FC<{ nft: NFTItem }> = ({ nft }) => {
         ) : (
           <NFTPlaceholder name={nft.contractName} contractAddress={nft.contractAddress} />
         )}
+        {/* Selection checkmark */}
+        {selectionMode && (
+          <div className="absolute top-2 left-2">
+            <div
+              className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all
+                ${isSelected
+                  ? 'bg-[#FF6900] border-[#FF6900]'
+                  : 'bg-black/40 border-white/30 backdrop-blur-sm'}`}
+            >
+              {isSelected && (
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 8.5L7 11.5l5-7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+          </div>
+        )}
         {/* Token standard badge */}
         <div className="absolute top-2 right-2">
           <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-black/60 backdrop-blur-sm text-gray-300 border border-white/[0.08]">
@@ -164,6 +218,10 @@ const NFTCard: React.FC<{ nft: NFTItem }> = ({ nft }) => {
 };
 
 const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
+  const navigate = useNavigate();
+  const { selected, toggle, clearSelection, isSelected } = useNftSelectionStore();
+  const selectionMode = selected.length > 0;
+
   // Hydrate from cache synchronously so re-opening the tab shows the last
   // seen collections instantly instead of flashing a skeleton for 5-10s.
   const initialCache = useMemo(
@@ -178,6 +236,12 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   const [loading, setLoading] = useState(!initialCache);
   const [error, setError] = useState<string | null>(null);
   const lastFetchedAtRef = useRef<number>(initialCache?.at ?? 0);
+
+  // Clear selection when navigating away or switching wallet/chain
+  useEffect(() => {
+    return () => { clearSelection(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, chainId]);
 
   const fetchNFTs = useCallback(async (opts: { silent?: boolean } = {}) => {
     // Only show the skeleton if we don't have cached data to display.
@@ -546,13 +610,29 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     ? collections.find((c) => c.address === selectedCollection)
     : null;
 
+  const handleToggleSelect = useCallback(
+    (nft: NFTItem) => {
+      const sel: SelectedNFT = {
+        contractAddress: nft.contractAddress,
+        tokenId: nft.tokenId,
+        contractName: nft.contractName,
+        tokenStandard: nft.tokenStandard,
+        imageUrl: nft.imageUrl,
+      };
+      toggle(sel);
+    },
+    [toggle],
+  );
+
+  const isErc1155Collection = activeCollection?.standard === 'ERC-1155';
+
   if (activeCollection) {
     return (
       <div className="animate-fade-in">
         {/* Back bar */}
         {collections.length > 1 && (
           <button
-            onClick={() => setSelectedCollection(null)}
+            onClick={() => { setSelectedCollection(null); clearSelection(); }}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors mb-4 active:scale-95"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -588,6 +668,31 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
               {activeCollection.standard}
             </p>
           </div>
+
+          {/* Selection hint / Send button */}
+          {selectionMode ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={clearSelection}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-gray-400
+                           bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => navigate('/wallet/send-nft')}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white
+                           bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                           hover:shadow-[0_0_15px_rgba(255,105,0,0.3)] transition-all active:scale-95"
+              >
+                Send{selected.length > 1 ? ` (${selected.length})` : ''}
+              </button>
+            </div>
+          ) : (
+            <p className="text-[10px] text-gray-600 shrink-0 max-w-[80px] text-right leading-tight">
+              {isErc1155Collection ? 'Long-press to select' : 'Long-press to send'}
+            </p>
+          )}
         </div>
 
         {/* NFT grid */}
@@ -597,7 +702,13 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
               key={`${nft.contractAddress}-${nft.tokenId}`}
               style={{ animation: `slide-up-fade 0.3s ease-out ${i * 40}ms both` }}
             >
-              <NFTCard nft={nft} />
+              <NFTCard
+                nft={nft}
+                selectionMode={selectionMode}
+                isSelected={isSelected(nft.contractAddress, nft.tokenId)}
+                onLongPress={() => handleToggleSelect(nft)}
+                onTap={() => handleToggleSelect(nft)}
+              />
             </div>
           ))}
         </div>
