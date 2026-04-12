@@ -237,11 +237,18 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   const [error, setError] = useState<string | null>(null);
   const lastFetchedAtRef = useRef<number>(initialCache?.at ?? 0);
 
-  // Clear selection when navigating away or switching wallet/chain
+  // Clear selection when wallet address or chain changes — but NOT on
+  // unmount, because navigating to /wallet/send-nft unmounts this
+  // component and we need the selection to survive.
+  const prevAddrRef = useRef(address);
+  const prevChainRef = useRef(chainId);
   useEffect(() => {
-    return () => { clearSelection(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, chainId]);
+    if (prevAddrRef.current !== address || prevChainRef.current !== chainId) {
+      clearSelection();
+      prevAddrRef.current = address;
+      prevChainRef.current = chainId;
+    }
+  }, [address, chainId, clearSelection]);
 
   const fetchNFTs = useCallback(async (opts: { silent?: boolean; force?: boolean } = {}) => {
     // Only show the skeleton if we don't have cached data to display.
