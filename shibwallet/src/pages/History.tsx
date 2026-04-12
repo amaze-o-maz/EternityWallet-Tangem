@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatUnits } from 'viem';
 import { ArrowUpRight, ArrowDownLeft, ArrowDownUp, RefreshCw, ExternalLink } from 'lucide-react';
@@ -7,6 +7,48 @@ import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useTransactionStore, type StoredTransaction } from '../store/transactionStore';
 import { getNetworkByChainId } from '../lib/chains';
+
+// ── localStorage cache so the History page is instant on re-open ─────
+const HISTORY_CACHE_KEY = 'shibwallet_history_cache';
+const HISTORY_CACHE_TTL_MS = 60 * 1000; // 1 min — revalidate in background
+
+interface HistoryCacheEntry {
+  txList: Transaction[];
+  tokenTxList: Transaction[];
+  at: number;
+}
+
+function historyCacheRead(
+  address: string,
+  chainId: number,
+): HistoryCacheEntry | null {
+  try {
+    const raw = localStorage.getItem(HISTORY_CACHE_KEY);
+    if (!raw) return null;
+    const all: Record<string, HistoryCacheEntry> = JSON.parse(raw);
+    const key = `${chainId}:${address.toLowerCase()}`;
+    return all[key] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function historyCacheWrite(
+  address: string,
+  chainId: number,
+  txList: Transaction[],
+  tokenTxList: Transaction[],
+) {
+  try {
+    const raw = localStorage.getItem(HISTORY_CACHE_KEY);
+    const all: Record<string, HistoryCacheEntry> = raw ? JSON.parse(raw) : {};
+    const key = `${chainId}:${address.toLowerCase()}`;
+    all[key] = { txList, tokenTxList, at: Date.now() };
+    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(all));
+  } catch {
+    /* quota — ignore */
+  }
+}
 
 interface Transaction {
   hash: string;
@@ -79,12 +121,25 @@ const History: React.FC = () => {
   const network = getNetworkByChainId(chainId);
   const localTransactions = useTransactionStore((s) => s.getTransactionsForChain(chainId));
 
+  // Hydrate synchronously from localStorage so switching to History shows
+  // the last-seen list instantly instead of flashing skeletons for 3-5s.
+  // Keyed by `${chainId}:${address}` so multiple chains/accounts each get
+  // their own cache bucket.
+  const initialCache = useMemo(() => {
+    if (!address) return null;
+    return historyCacheRead(address, chainId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, chainId]);
+
   const [activeTab, setActiveTab] = useState<TabType>('all');
-  const [txList, setTxList] = useState<Transaction[]>([]);
-  const [tokenTxList, setTokenTxList] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [txList, setTxList] = useState<Transaction[]>(initialCache?.txList ?? []);
+  const [tokenTxList, setTokenTxList] = useState<Transaction[]>(
+    initialCache?.tokenTxList ?? [],
+  );
+  const [loading, setLoading] = useState(!initialCache);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchedAtRef = useRef<number>(initialCache?.at ?? 0);
 
   useEffect(() => {
     if (!localStorage.getItem('shibwallet_vault')) {
@@ -96,60 +151,107 @@ const History: React.FC = () => {
     }
   }, [isUnlocked, navigate]);
 
-  const fetchTransactions = useCallback(async () => {
-    if (!address) return;
+  const fetchTransactions = useCallback(
+    async (opts: { silent?: boolean } = {}) => {
+      if (!address) return;
 
-    setError(null);
-    const apiUrl = getExplorerApiUrl(chainId);
-    const addr = address.toLowerCase();
+      // Only show a skeleton when we don't already have cached data.
+      if (!opts.silent) setLoading(true);
+      setError(null);
+      const apiUrl = getExplorerApiUrl(chainId);
+      const addr = address.toLowerCase();
 
-    try {
-      const [txRes, tokenRes] = await Promise.all([
-        fetch(
-          `${apiUrl}?module=account&action=txlist&address=${addr}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`
-        ).then((r) => r.json()),
-        fetch(
-          `${apiUrl}?module=account&action=tokentx&address=${addr}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`
-        ).then((r) => r.json()),
-      ]);
+      try {
+        const [txRes, tokenRes] = await Promise.all([
+          fetch(
+            `${apiUrl}?module=account&action=txlist&address=${addr}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`,
+          ).then((r) => r.json()),
+          fetch(
+            `${apiUrl}?module=account&action=tokentx&address=${addr}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc`,
+          ).then((r) => r.json()),
+        ]);
 
-      if (txRes.status === '1' && Array.isArray(txRes.result)) {
-        setTxList(txRes.result);
-      } else {
-        setTxList([]);
+        const nextTx: Transaction[] =
+          txRes.status === '1' && Array.isArray(txRes.result) ? txRes.result : [];
+        const nextToken: Transaction[] =
+          tokenRes.status === '1' && Array.isArray(tokenRes.result) ? tokenRes.result : [];
+
+        setTxList(nextTx);
+        setTokenTxList(nextToken);
+        historyCacheWrite(address, chainId, nextTx, nextToken);
+        lastFetchedAtRef.current = Date.now();
+      } catch (err) {
+        console.error('[ShibWallet] Failed to fetch transaction history:', err);
+        // Only surface an error if we have nothing cached to show. Silent
+        // revalidation failures should keep stale data visible rather than
+        // blow it away with an error screen.
+        const localTxs = useTransactionStore.getState().transactions.filter(
+          (t) => t.chainId === chainId,
+        );
+        // Note: using state snapshot via closure is fine here — we just
+        // want to know if there's anything on-screen.
+        if (localTxs.length === 0 && txList.length === 0 && tokenTxList.length === 0) {
+          setError('Failed to load transactions. Please try again.');
+        }
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
+      // txList/tokenTxList intentionally excluded — we only read them to
+      // decide error handling, not to trigger re-runs.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [address, chainId],
+  );
 
-      if (tokenRes.status === '1' && Array.isArray(tokenRes.result)) {
-        setTokenTxList(tokenRes.result);
-      } else {
-        setTokenTxList([]);
-      }
-    } catch (err) {
-      console.error('[ShibWallet] Failed to fetch transaction history:', err);
-      // Only show error if there are no local transactions to fall back on
-      const localTxs = useTransactionStore.getState().transactions.filter(
-        (t) => t.chainId === chainId,
-      );
-      if (localTxs.length === 0) {
-        setError('Failed to load transactions. Please try again.');
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [address, chainId]);
-
+  // On mount or chain/address change: hydrate from cache and refetch only
+  // if the cache is stale (or missing). New chain/address → reset state.
   useEffect(() => {
-    setLoading(true);
-    setTxList([]);
-    setTokenTxList([]);
-    fetchTransactions();
-  }, [fetchTransactions]);
+    if (!address) return;
+    const cached = historyCacheRead(address, chainId);
+    if (cached) {
+      setTxList(cached.txList);
+      setTokenTxList(cached.tokenTxList);
+      lastFetchedAtRef.current = cached.at;
+      // Fresh cache? skip the fetch entirely.
+      if (Date.now() - cached.at < HISTORY_CACHE_TTL_MS) {
+        setLoading(false);
+        return;
+      }
+      // Stale: silently revalidate in the background.
+      fetchTransactions({ silent: true });
+    } else {
+      // No cache: loud fetch with skeleton.
+      setTxList([]);
+      setTokenTxList([]);
+      lastFetchedAtRef.current = 0;
+      fetchTransactions();
+    }
+    // Revalidate on app resume so stale data doesn't linger after the
+    // WebView was paused. `fetchTransactions` is silent when we already
+    // have items displayed.
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const age = Date.now() - lastFetchedAtRef.current;
+      if (age > HISTORY_CACHE_TTL_MS) {
+        fetchTransactions({ silent: txList.length > 0 || tokenTxList.length > 0 });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, chainId, fetchTransactions]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    setLoading(true);
-    fetchTransactions();
+    // Force a loud refetch (ignores cache TTL, shows skeleton only if
+    // there's nothing to display — otherwise just the spinning icon).
+    const hasItems = txList.length > 0 || tokenTxList.length > 0;
+    fetchTransactions({ silent: hasItems });
   };
 
   // Convert local transactions to the Transaction interface and merge with API results
