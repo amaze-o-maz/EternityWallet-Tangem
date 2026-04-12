@@ -587,6 +587,21 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchNFTs]);
 
+  // Must be defined BEFORE early returns — hooks cannot be conditional.
+  const handleToggleSelect = useCallback(
+    (nft: NFTItem) => {
+      const sel: SelectedNFT = {
+        contractAddress: nft.contractAddress,
+        tokenId: nft.tokenId,
+        contractName: nft.contractName,
+        tokenStandard: nft.tokenStandard,
+        imageUrl: nft.imageUrl,
+      };
+      toggle(sel);
+    },
+    [toggle],
+  );
+
   if (loading) {
     return (
       <div className="grid grid-cols-2 gap-3">
@@ -637,20 +652,6 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   const activeCollection = selectedCollection
     ? collections.find((c) => c.address === selectedCollection)
     : null;
-
-  const handleToggleSelect = useCallback(
-    (nft: NFTItem) => {
-      const sel: SelectedNFT = {
-        contractAddress: nft.contractAddress,
-        tokenId: nft.tokenId,
-        contractName: nft.contractName,
-        tokenStandard: nft.tokenStandard,
-        imageUrl: nft.imageUrl,
-      };
-      toggle(sel);
-    },
-    [toggle],
-  );
 
   const isErc1155Collection = activeCollection?.standard === 'ERC-1155';
 
