@@ -45,37 +45,124 @@ interface NewsActions {
 }
 
 const STALE_AFTER_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_KEY = 'shibwallet_news_cache';
+// Cap persisted posts so we don't blow the localStorage quota. Users can
+// still scroll further — the store keeps everything in memory, we just
+// don't persist more than this on disk.
+const PERSIST_LIMIT = 30;
+
+type PersistShape = Pick<
+  NewsState,
+  'newsPosts' | 'magPosts' | 'newsPage' | 'magPage' | 'newsHasMore' | 'magHasMore' | 'lastFetchedAt'
+>;
+
+function readCacheSync(): Partial<PersistShape> {
+  try {
+    if (typeof localStorage === 'undefined') return {};
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return {};
+    const data = JSON.parse(raw) as Partial<PersistShape>;
+    return {
+      newsPosts: Array.isArray(data.newsPosts) ? data.newsPosts : [],
+      magPosts: Array.isArray(data.magPosts) ? data.magPosts : [],
+      newsPage: data.newsPage ?? 1,
+      magPage: data.magPage ?? 1,
+      newsHasMore: data.newsHasMore ?? true,
+      magHasMore: data.magHasMore ?? true,
+      lastFetchedAt: data.lastFetchedAt ?? null,
+    };
+  } catch {
+    return {};
+  }
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function saveCacheDebounced(state: NewsState) {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      const shape: PersistShape = {
+        newsPosts: state.newsPosts.slice(0, PERSIST_LIMIT),
+        magPosts: state.magPosts.slice(0, PERSIST_LIMIT),
+        newsPage: state.newsPage,
+        magPage: state.magPage,
+        newsHasMore: state.newsHasMore,
+        magHasMore: state.magHasMore,
+        lastFetchedAt: state.lastFetchedAt,
+      };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(shape));
+    } catch {
+      /* quota — ignore */
+    }
+  }, 300);
+}
+
+const INITIAL = readCacheSync();
 
 export const useNewsStore = create<NewsState & NewsActions>((set, get) => ({
-  newsPosts: [],
-  magPosts: [],
-  newsPage: 1,
-  magPage: 1,
-  newsHasMore: true,
-  magHasMore: true,
-  lastFetchedAt: null,
+  newsPosts: INITIAL.newsPosts ?? [],
+  magPosts: INITIAL.magPosts ?? [],
+  newsPage: INITIAL.newsPage ?? 1,
+  magPage: INITIAL.magPage ?? 1,
+  newsHasMore: INITIAL.newsHasMore ?? true,
+  magHasMore: INITIAL.magHasMore ?? true,
+  lastFetchedAt: INITIAL.lastFetchedAt ?? null,
 
-  setNewsPosts: (posts) => set({ newsPosts: posts }),
-  appendNewsPosts: (posts) => set((s) => ({ newsPosts: [...s.newsPosts, ...posts] })),
-  setMagPosts: (posts) => set({ magPosts: posts }),
-  appendMagPosts: (posts) => set((s) => ({ magPosts: [...s.magPosts, ...posts] })),
-  setNewsPage: (p) => set({ newsPage: p }),
-  setMagPage: (p) => set({ magPage: p }),
-  setNewsHasMore: (v) => set({ newsHasMore: v }),
-  setMagHasMore: (v) => set({ magHasMore: v }),
-  markFetched: () => set({ lastFetchedAt: Date.now() }),
+  setNewsPosts: (posts) => {
+    set({ newsPosts: posts });
+    saveCacheDebounced(get());
+  },
+  appendNewsPosts: (posts) => {
+    set((s) => ({ newsPosts: [...s.newsPosts, ...posts] }));
+    saveCacheDebounced(get());
+  },
+  setMagPosts: (posts) => {
+    set({ magPosts: posts });
+    saveCacheDebounced(get());
+  },
+  appendMagPosts: (posts) => {
+    set((s) => ({ magPosts: [...s.magPosts, ...posts] }));
+    saveCacheDebounced(get());
+  },
+  setNewsPage: (p) => {
+    set({ newsPage: p });
+    saveCacheDebounced(get());
+  },
+  setMagPage: (p) => {
+    set({ magPage: p });
+    saveCacheDebounced(get());
+  },
+  setNewsHasMore: (v) => {
+    set({ newsHasMore: v });
+    saveCacheDebounced(get());
+  },
+  setMagHasMore: (v) => {
+    set({ magHasMore: v });
+    saveCacheDebounced(get());
+  },
+  markFetched: () => {
+    set({ lastFetchedAt: Date.now() });
+    saveCacheDebounced(get());
+  },
   needsRefresh: () => {
     const { lastFetchedAt, newsPosts, magPosts } = get();
     if (!lastFetchedAt || (newsPosts.length === 0 && magPosts.length === 0)) return true;
     return Date.now() - lastFetchedAt > STALE_AFTER_MS;
   },
-  clear: () => set({
-    newsPosts: [],
-    magPosts: [],
-    newsPage: 1,
-    magPage: 1,
-    newsHasMore: true,
-    magHasMore: true,
-    lastFetchedAt: null,
-  }),
+  clear: () => {
+    set({
+      newsPosts: [],
+      magPosts: [],
+      newsPage: 1,
+      magPage: 1,
+      newsHasMore: true,
+      magHasMore: true,
+      lastFetchedAt: null,
+    });
+    try {
+      localStorage.removeItem(CACHE_KEY);
+    } catch {
+      /* ignore */
+    }
+  },
 }));

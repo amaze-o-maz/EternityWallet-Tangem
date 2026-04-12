@@ -6,7 +6,7 @@ export interface StoredTransaction {
   to: string;
   value: string;
   timeStamp: string;
-  type: 'send' | 'swap';
+  type: 'send' | 'swap' | 'send-nft';
   chainId: number;
   tokenSymbol?: string;
   tokenDecimal?: string;
@@ -15,6 +15,12 @@ export interface StoredTransaction {
   fromTokenSymbol?: string;
   toTokenSymbol?: string;
   toAmount?: string;
+  // NFT send fields
+  nftContract?: string;
+  nftTokenIds?: string[];    // one or many (batch)
+  nftStandard?: string;      // 'ERC-721' | 'ERC-1155'
+  nftCollectionName?: string;
+  nftImageUrl?: string;
 }
 
 const STORAGE_KEY = 'shibwallet_transactions';

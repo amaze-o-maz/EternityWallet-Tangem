@@ -106,6 +106,20 @@ const Magazine: React.FC = () => {
 
   useEffect(() => {
     loadInitial();
+    // Silently revalidate when the app returns from background so stale
+    // cached articles get refreshed. `loadInitial` is gated on
+    // `needsRefresh()` so this is a no-op when the cache is still fresh.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadInitial();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, [loadInitial]);
 
   const handleRefresh = async () => {
