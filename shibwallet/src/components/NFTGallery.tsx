@@ -243,7 +243,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, chainId]);
 
-  const fetchNFTs = useCallback(async (opts: { silent?: boolean } = {}) => {
+  const fetchNFTs = useCallback(async (opts: { silent?: boolean; force?: boolean } = {}) => {
     // Only show the skeleton if we don't have cached data to display.
     if (!opts.silent) setLoading(true);
     setError(null);
@@ -290,10 +290,13 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
             : null;
 
       if (blockscoutBase) {
-        const url = `${blockscoutBase}/api/v2/addresses/${address}/nft?type=ERC-721%2CERC-1155`;
+        // Don't filter by type — let Blockscout return everything.
+        // Filtering by type can cause pagination to split types across
+        // pages, and a failed page fetch would silently drop an entire
+        // token standard (e.g. all ERC-1155 items).
+        const url = `${blockscoutBase}/api/v2/addresses/${address}/nft`;
         const res = await fetchWithRetry(url);
         if (!res.ok) {
-          // Propagate a descriptive error so UI can show a helpful message
           if (res.status >= 500) {
             throw new Error(
               `${chainId === 109 ? 'Shibarium' : 'Ethereum'} explorer is temporarily unavailable (HTTP ${res.status}). Please try again in a moment.`,
@@ -304,7 +307,6 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
         const data = await res.json();
 
         if (data.items && Array.isArray(data.items)) {
-          // Paginate if there are more results
           let allItems = [...data.items];
           let nextParams = data.next_page_params;
 
@@ -315,7 +317,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
             for (const [k, v] of Object.entries(nextParams)) {
               params.set(k, String(v));
             }
-            const nextUrl = `${blockscoutBase}/api/v2/addresses/${address}/nft?type=ERC-721%2CERC-1155&${params.toString()}`;
+            const nextUrl = `${blockscoutBase}/api/v2/addresses/${address}/nft?${params.toString()}`;
             try {
               const nextRes = await fetch(nextUrl);
               if (!nextRes.ok) break;
@@ -332,7 +334,6 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
 
           items = allItems.map((item: any) => {
             let imageUrl: string | null = null;
-            // Blockscout provides image_url directly, also check metadata
             if (item.image_url) {
               imageUrl = resolveUri(item.image_url);
             } else if (item.metadata?.image) {
@@ -350,6 +351,33 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
       } else {
         // Unsupported chain for NFTs
         items = [];
+      }
+
+      // ── Defensive merge ──────────────────────────────────────────
+      // If the API returned fewer items than we already have cached,
+      // the response is likely incomplete (rate-limit, pagination
+      // failure, flaky indexer).  Merge: keep cached collections that
+      // the API didn't mention at all so we never silently drop an
+      // entire collection.  A forced refresh (pull-to-refresh) skips
+      // this protection so the user can clear truly stale data.
+      const cached = nftCacheRead(address, chainId)?.items ?? [];
+      if (!opts.force && cached.length > 0 && items.length > 0) {
+        // Build a set of collection addresses the API returned
+        const fetchedCollections = new Set(
+          items.map((n) => n.contractAddress.toLowerCase()),
+        );
+        // Find cached items whose entire collection is missing from
+        // the API response — those are likely dropped, not sold.
+        const rescued: NFTItem[] = [];
+        for (const c of cached) {
+          if (!fetchedCollections.has(c.contractAddress.toLowerCase())) {
+            rescued.push(c);
+          }
+        }
+        if (rescued.length > 0) {
+          // Merge: API items first, then rescued cached items
+          items = [...items, ...rescued];
+        }
       }
 
       setNfts(items);
@@ -579,7 +607,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
         </div>
         <p className="text-sm text-gray-400">{error}</p>
         <button
-          onClick={() => fetchNFTs()}
+          onClick={() => fetchNFTs({ force: true })}
           className="mt-3 px-4 py-1.5 text-xs font-medium text-[#FF6900] rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-all active:scale-95"
         >
           Retry
