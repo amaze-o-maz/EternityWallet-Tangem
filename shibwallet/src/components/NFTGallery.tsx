@@ -297,10 +297,6 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
             : null;
 
       if (blockscoutBase) {
-        // Don't filter by type — let Blockscout return everything.
-        // Filtering by type can cause pagination to split types across
-        // pages, and a failed page fetch would silently drop an entire
-        // token standard (e.g. all ERC-1155 items).
         const url = `${blockscoutBase}/api/v2/addresses/${address}/nft`;
         const res = await fetchWithRetry(url);
         if (!res.ok) {
