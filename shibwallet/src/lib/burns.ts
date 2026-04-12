@@ -69,8 +69,8 @@ function getEthClient() {
     } as any,
     transport:
       rpcs.length > 1
-        ? fallback(rpcs.map((u) => http(u, { timeout: 10_000 })))
-        : http(rpcs[0], { timeout: 10_000 }),
+        ? fallback(rpcs.map((u) => http(u, { timeout: 5_000 })))
+        : http(rpcs[0], { timeout: 5_000 }),
   });
 }
 

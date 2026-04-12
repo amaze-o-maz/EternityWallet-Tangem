@@ -44,8 +44,8 @@ function buildViemChain(network: NetworkConfig): Chain {
 function buildTransport(network: NetworkConfig) {
   const allRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
   return allRpcs.length > 1
-    ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
-    : http(allRpcs[0], { timeout: 10_000 });
+    ? fallback(allRpcs.map((url) => http(url, { timeout: 5_000 })))
+    : http(allRpcs[0], { timeout: 5_000 });
 }
 
 function getClients(network: NetworkConfig, account?: Account) {

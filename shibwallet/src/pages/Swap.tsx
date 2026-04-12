@@ -152,8 +152,8 @@ const Swap: React.FC = () => {
         },
       },
       transport: allRpcs.length > 1
-        ? fallback(allRpcs.map((url) => http(url, { timeout: 10_000 })))
-        : http(allRpcs[0], { timeout: 10_000 }),
+        ? fallback(allRpcs.map((url) => http(url, { timeout: 5_000 })))
+        : http(allRpcs[0], { timeout: 5_000 }),
     });
   }, [network]);
 
