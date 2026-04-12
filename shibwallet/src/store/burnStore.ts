@@ -139,62 +139,77 @@ export const useBurnStore = create<BurnState & BurnActions>((set, get) => ({
     if (state.loading && state.loadingStartedAt !== null) {
       const elapsed = Date.now() - state.loadingStartedAt;
       if (elapsed < STUCK_LOADING_MS) return;
-      // Otherwise, fall through and start a new fetch.
     }
     set({ loading: true, loadingStartedAt: Date.now() });
 
-    try {
-      const [totalBurned, recentBurns, prices] = await Promise.all([
-        fetchTotalBurned(),
-        fetchRecentBurns(100),
-        fetchPrices(),
-      ]);
+    // Fire the three data sources independently and update state as soon as
+    // each one resolves. This way the hero total animates immediately when
+    // fetchTotalBurned returns, without waiting for Blockscout or CoinGecko.
+    let pending = 3;
+    const markDone = () => {
+      pending--;
+      if (pending === 0) {
+        set({ loading: false, loadingStartedAt: null, lastUpdated: Date.now() });
+        saveCache(get());
+      }
+    };
 
-      // If prices failed to load, fall back to the previous shibPrice so that
-      // USD values don't collapse to $0.00 on transient network failures.
-      const freshShibPrice = prices['SHIB'] ?? 0;
-      const prev = get();
-      const shibPrice = freshShibPrice > 0 ? freshShibPrice : prev.shibPrice;
+    // ── 1. Total burned (fast — direct RPC balanceOf) ──
+    fetchTotalBurned()
+      .then((totalBurned) => {
+        if (totalBurned <= 0) return;
+        const prev = get();
+        const burnPercent = (totalBurned / INITIAL_SUPPLY_FLOAT) * 100;
+        const totalBurnedUSD = totalBurned * prev.shibPrice;
+        set({ totalBurned, burnPercent, totalBurnedUSD });
+      })
+      .catch((err) => console.error('[BurnStore] fetchTotalBurned failed:', err))
+      .finally(markDone);
 
-      // If the fresh recentBurns came back empty (API paging glitch, upstream
-      // outage, etc) but we previously had some, keep the old list + windows.
-      const useFreshBurns = recentBurns.length > 0 || prev.recentBurns.length === 0;
-      const finalRecent = useFreshBurns ? recentBurns : prev.recentBurns;
+    // ── 2. Prices (CoinGecko → CryptoCompare fallback) ──
+    fetchPrices()
+      .then((prices) => {
+        const freshShibPrice = prices['SHIB'] ?? 0;
+        if (freshShibPrice <= 0) return;
+        const prev = get();
+        const totalBurnedUSD = prev.totalBurned * freshShibPrice;
+        // Recompute windowed USD against any burns we already have.
+        const burns24h = windowedBurns(prev.recentBurns, 86_400, freshShibPrice);
+        const burns7d = windowedBurns(prev.recentBurns, 604_800, freshShibPrice);
+        const burns30d = windowedBurns(prev.recentBurns, 2_592_000, freshShibPrice);
+        const topBurners = calcTopBurners(prev.recentBurns, freshShibPrice, 10);
+        set({
+          shibPrice: freshShibPrice,
+          totalBurnedUSD,
+          burns24h,
+          burns7d,
+          burns30d,
+          topBurners,
+        });
+      })
+      .catch((err) => console.error('[BurnStore] fetchPrices failed:', err))
+      .finally(markDone);
 
-      // Same for totalBurned — if the RPC returned 0 unexpectedly, preserve
-      // the prior value rather than zeroing out the hero number.
-      const finalTotalBurned = totalBurned > 0 ? totalBurned : prev.totalBurned;
-
-      const totalBurnedUSD = finalTotalBurned * shibPrice;
-      const burnPercent = (finalTotalBurned / INITIAL_SUPPLY_FLOAT) * 100;
-
-      const b24h = useFreshBurns ? windowedBurns(finalRecent, 86_400, shibPrice) : prev.burns24h;
-      const b7d = useFreshBurns ? windowedBurns(finalRecent, 604_800, shibPrice) : prev.burns7d;
-      const b30d = useFreshBurns ? windowedBurns(finalRecent, 2_592_000, shibPrice) : prev.burns30d;
-
-      const top = useFreshBurns ? calcTopBurners(finalRecent, shibPrice, 10) : prev.topBurners;
-
-      const newState: Partial<BurnState> = {
-        totalBurned: finalTotalBurned,
-        totalBurnedUSD,
-        burnPercent,
-        burns24h: b24h,
-        burns7d: b7d,
-        burns30d: b30d,
-        // Keep enough history to render the 30D chart / windows correctly.
-        recentBurns: finalRecent.slice(0, 200),
-        topBurners: top,
-        shibPrice,
-        loading: false,
-        loadingStartedAt: null,
-        lastUpdated: Date.now(),
-      };
-
-      set(newState);
-      saveCache(get());
-    } catch (err) {
-      console.error('[BurnStore] fetchBurnData failed:', err);
-      set({ loading: false, loadingStartedAt: null });
-    }
+    // ── 3. Recent burns (Blockscout) ──
+    fetchRecentBurns(100)
+      .then((recentBurns) => {
+        const prev = get();
+        // If fresh fetch came back empty but we had prior burns, keep them.
+        if (recentBurns.length === 0 && prev.recentBurns.length > 0) return;
+        const shibPrice = prev.shibPrice;
+        const burns24h = windowedBurns(recentBurns, 86_400, shibPrice);
+        const burns7d = windowedBurns(recentBurns, 604_800, shibPrice);
+        const burns30d = windowedBurns(recentBurns, 2_592_000, shibPrice);
+        const topBurners = calcTopBurners(recentBurns, shibPrice, 10);
+        set({
+          recentBurns: recentBurns.slice(0, 200),
+          burns24h,
+          burns7d,
+          burns30d,
+          topBurners,
+        });
+      })
+      .catch((err) => console.error('[BurnStore] fetchRecentBurns failed:', err))
+      .finally(markDone);
   },
 }));
