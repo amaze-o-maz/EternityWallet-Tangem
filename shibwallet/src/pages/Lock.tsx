@@ -64,6 +64,10 @@ const Lock: React.FC = () => {
     }
 
     setUnlocking(true);
+    // Yield to the browser so React can repaint with "Unlocking..." before
+    // the heavy synchronous crypto (AES-GCP decrypt + scrypt KDF) blocks
+    // the main thread.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     try {
       unlock(password);
       setFailedAttempts(0);
