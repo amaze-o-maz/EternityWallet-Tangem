@@ -288,6 +288,7 @@ const SendNft: React.FC = () => {
           nftContract: contractAddr,
           nftTokenIds: selected.map((s) => s.tokenId),
           nftStandard: selected[0].tokenStandard,
+          nftTotalQuantity: selected.reduce((sum, s) => sum + (s.quantity || 1), 0),
           nftCollectionName: collectionName,
           nftImageUrl: previewImage ?? undefined,
         });
