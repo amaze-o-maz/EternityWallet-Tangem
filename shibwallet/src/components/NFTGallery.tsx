@@ -563,6 +563,23 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     setSelectedCollection(null);
   }, [address, chainId]);
 
+  // When address or chainId changes (e.g. switching accounts), hydrate
+  // from the new address's cache and reset the fetch timer so the TTL
+  // check in the fetch effect doesn't skip the request.
+  const prevFetchAddrRef = useRef(address);
+  const prevFetchChainRef = useRef(chainId);
+  useEffect(() => {
+    if (prevFetchAddrRef.current !== address || prevFetchChainRef.current !== chainId) {
+      const cached = nftCacheRead(address, chainId);
+      setNfts(cached?.items ?? []);
+      setLoading(!cached);
+      setError(null);
+      lastFetchedAtRef.current = 0; // force refetch
+      prevFetchAddrRef.current = address;
+      prevFetchChainRef.current = chainId;
+    }
+  }, [address, chainId]);
+
   useEffect(() => {
     let cancelled = false;
     // On mount: if cache is fresh (< TTL), skip the fetch entirely.
