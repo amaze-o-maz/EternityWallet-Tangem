@@ -731,11 +731,10 @@ const Swap: React.FC = () => {
 
       {/* Confirmation Modal */}
       {showConfirm && quoteResult && fromToken && toToken && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in" onClick={() => !approving && !swapping && setShowConfirm(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in pb-12" onClick={() => !approving && !swapping && setShowConfirm(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
-            style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 48px))' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
