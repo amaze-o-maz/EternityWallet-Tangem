@@ -19,6 +19,7 @@ export interface StoredTransaction {
   nftContract?: string;
   nftTokenIds?: string[];    // one or many (batch)
   nftStandard?: string;      // 'ERC-721' | 'ERC-1155'
+  nftTotalQuantity?: number; // sum of all copies sent (may exceed tokenIds length for ERC-1155)
   nftCollectionName?: string;
   nftImageUrl?: string;
 }

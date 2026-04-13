@@ -72,6 +72,7 @@ interface Transaction {
   nftContract?: string;
   nftTokenIds?: string[];
   nftStandard?: string;
+  nftTotalQuantity?: number;
   nftCollectionName?: string;
   nftImageUrl?: string;
 }
@@ -386,7 +387,7 @@ const History: React.FC = () => {
                 let amount: string;
                 let symbol: string;
                 if (isNftSend) {
-                  const count = tx.nftTokenIds?.length ?? 1;
+                  const count = tx.nftTotalQuantity ?? tx.nftTokenIds?.length ?? 1;
                   amount = `${count}`;
                   symbol = tx.nftCollectionName ?? 'NFT';
                 } else if (tx.tokenSymbol && tx.tokenDecimal) {
