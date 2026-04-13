@@ -278,6 +278,12 @@ const History: React.FC = () => {
     fromTokenSymbol: lt.fromTokenSymbol,
     toTokenSymbol: lt.toTokenSymbol,
     toAmount: lt.toAmount,
+    nftContract: lt.nftContract,
+    nftTokenIds: lt.nftTokenIds,
+    nftStandard: lt.nftStandard,
+    nftTotalQuantity: lt.nftTotalQuantity,
+    nftCollectionName: lt.nftCollectionName,
+    nftImageUrl: lt.nftImageUrl,
     isLocal: true,
   }));
 
