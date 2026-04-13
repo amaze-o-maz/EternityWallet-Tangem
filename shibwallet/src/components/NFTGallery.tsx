@@ -10,6 +10,7 @@ interface NFTItem {
   contractName: string;
   tokenStandard: string;
   imageUrl: string | null;
+  balance: number; // copies owned (ERC-1155 can be >1)
 }
 
 interface NFTGalleryProps {
@@ -124,9 +125,10 @@ const NFTCard: React.FC<{
   nft: NFTItem;
   selectionMode?: boolean;
   isSelected?: boolean;
+  selectedQty?: number;
   onLongPress?: () => void;
   onTap?: () => void;
-}> = ({ nft, selectionMode, isSelected, onLongPress, onTap }) => {
+}> = ({ nft, selectionMode, isSelected, selectedQty, onLongPress, onTap }) => {
   const [imgError, setImgError] = useState(false);
   const [imgLoading, setImgLoading] = useState(true);
   const truncatedId =
@@ -208,6 +210,22 @@ const NFTCard: React.FC<{
             {nft.tokenStandard}
           </span>
         </div>
+        {/* ERC-1155 balance badge (bottom-right) */}
+        {nft.balance > 1 && (
+          <div className="absolute bottom-2 right-2">
+            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-black/70 backdrop-blur-sm text-white border border-white/[0.12]">
+              ×{nft.balance}
+            </span>
+          </div>
+        )}
+        {/* Selected quantity overlay (bottom-left) */}
+        {isSelected && selectedQty !== undefined && selectedQty > 0 && nft.balance > 1 && (
+          <div className="absolute bottom-2 left-2">
+            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-[#FF6900] text-white">
+              {selectedQty}/{nft.balance}
+            </span>
+          </div>
+        )}
       </div>
       <div className="p-3">
         <p className="text-xs font-semibold text-white truncate">{nft.contractName || 'Unknown Collection'}</p>
@@ -219,7 +237,7 @@ const NFTCard: React.FC<{
 
 const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   const navigate = useNavigate();
-  const { selected, toggle, clearSelection, isSelected } = useNftSelectionStore();
+  const { selected, toggle, clearSelection, isSelected, getQuantity } = useNftSelectionStore();
   const selectionMode = selected.length > 0;
 
   // Hydrate from cache synchronously so re-opening the tab shows the last
@@ -342,12 +360,14 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
             } else if (item.metadata?.image) {
               imageUrl = resolveUri(item.metadata.image);
             }
+            const standard = item.token_type ?? (item.token?.type === 'ERC-1155' ? 'ERC-1155' : 'ERC-721');
             return {
               contractAddress: item.token?.address_hash ?? item.token?.address ?? '',
               tokenId: item.id ?? '0',
               contractName: item.token?.name ?? 'Unknown',
-              tokenStandard: item.token_type ?? (item.token?.type === 'ERC-1155' ? 'ERC-1155' : 'ERC-721'),
+              tokenStandard: standard,
               imageUrl,
+              balance: standard === 'ERC-1155' ? parseInt(item.value ?? '1', 10) || 1 : 1,
             };
           });
         }
@@ -616,6 +636,8 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
         contractName: nft.contractName,
         tokenStandard: nft.tokenStandard,
         imageUrl: nft.imageUrl,
+        quantity: 1,
+        balance: nft.balance,
       };
       toggle(sel);
     },
@@ -734,7 +756,10 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
                            bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
                            hover:shadow-[0_0_15px_rgba(255,105,0,0.3)] transition-all active:scale-95"
               >
-                Send{selected.length > 1 ? ` (${selected.length})` : ''}
+                Send{(() => {
+                  const totalQty = selected.reduce((sum, s) => sum + (s.quantity || 1), 0);
+                  return totalQty > 1 ? ` (${totalQty})` : '';
+                })()}
               </button>
             </div>
           ) : (
@@ -755,6 +780,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
                 nft={nft}
                 selectionMode={selectionMode}
                 isSelected={isSelected(nft.contractAddress, nft.tokenId)}
+                selectedQty={getQuantity(nft.contractAddress, nft.tokenId)}
                 onLongPress={() => handleToggleSelect(nft)}
                 onTap={() => handleToggleSelect(nft)}
               />

@@ -152,7 +152,7 @@ const SendNft: React.FC = () => {
         const nftAddr = contractAddr as `0x${string}`;
 
         if (isErc1155 && selected.length > 1) {
-          // safeBatchTransferFrom
+          // safeBatchTransferFrom — multiple token IDs, each with its own quantity
           data = encodeFunctionData({
             abi: ERC1155_ABI,
             functionName: 'safeBatchTransferFrom',
@@ -160,16 +160,16 @@ const SendNft: React.FC = () => {
               from,
               to,
               selected.map((s) => BigInt(s.tokenId)),
-              selected.map(() => 1n),
+              selected.map((s) => BigInt(s.quantity || 1)),
               '0x',
             ],
           });
         } else if (isErc1155) {
-          // single ERC-1155
+          // single ERC-1155 token ID (may transfer multiple copies)
           data = encodeFunctionData({
             abi: ERC1155_ABI,
             functionName: 'safeTransferFrom',
-            args: [from, to, BigInt(selected[0].tokenId), 1n, '0x'],
+            args: [from, to, BigInt(selected[0].tokenId), BigInt(selected[0].quantity || 1), '0x'],
           });
         } else {
           // ERC-721
@@ -248,7 +248,7 @@ const SendNft: React.FC = () => {
             from,
             to,
             selected.map((s) => BigInt(s.tokenId)),
-            selected.map(() => 1n),
+            selected.map((s) => BigInt(s.quantity || 1)),
             '0x',
           ],
           ...gasOpts,
@@ -258,7 +258,7 @@ const SendNft: React.FC = () => {
           address: nftAddr,
           abi: ERC1155_ABI,
           functionName: 'safeTransferFrom',
-          args: [from, to, BigInt(selected[0].tokenId), 1n, '0x'],
+          args: [from, to, BigInt(selected[0].tokenId), BigInt(selected[0].quantity || 1), '0x'],
           ...gasOpts,
         });
       } else {
@@ -523,7 +523,7 @@ const SendNft: React.FC = () => {
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Items</span>
             <span className="text-white font-medium">
-              {selected.length} {selected[0].tokenStandard}
+              {selected.reduce((sum, s) => sum + (s.quantity || 1), 0)} {selected[0].tokenStandard}
             </span>
           </div>
           <div className="flex justify-between text-sm">
@@ -632,7 +632,7 @@ const SendNft: React.FC = () => {
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-400">Items</span>
-                <span className="text-white font-medium">{selected.length > 0 ? selected.length : 'Sent'}</span>
+                <span className="text-white font-medium">{selected.length > 0 ? selected.reduce((sum, s) => sum + (s.quantity || 1), 0) : 'Sent'}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-400">To</span>
