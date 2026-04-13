@@ -567,7 +567,7 @@ const SendNft: React.FC = () => {
           <div className="border-t border-white/[0.06] pt-3 mt-3">
             <p className="text-xs text-gray-500 leading-relaxed">
               {isErc1155 && selected.length > 1
-                ? `This will batch-transfer ${selected.length} NFTs in a single transaction.`
+                ? `This will batch-transfer ${selected.reduce((sum, s) => sum + (s.quantity || 1), 0)} NFTs in a single transaction.`
                 : 'Please verify all details. NFT transfers cannot be reversed.'}
             </p>
           </div>
