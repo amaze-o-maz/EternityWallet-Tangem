@@ -202,7 +202,10 @@ export async function approveToken(
   }
 
   const chain = buildViemChain(network);
-  const gasPrice = await publicClient.getGasPrice();
+  const [gasPrice, nonce] = await Promise.all([
+    publicClient.getGasPrice(),
+    publicClient.getTransactionCount({ address: account.address, blockTag: 'pending' }),
+  ]);
 
   // Approve max to avoid repeated approvals
   const hash = await walletClient.writeContract({
@@ -211,6 +214,7 @@ export async function approveToken(
     functionName: 'approve',
     args: [spenderAddress, maxUint256],
     gasPrice,
+    nonce,
     chain,
     account,
   });
@@ -258,8 +262,12 @@ export async function executeSwap(
 
   const chain = buildViemChain(network);
 
-  // Fetch gas price upfront — Shibarium uses legacy gas pricing
-  const gasPrice = await publicClient.getGasPrice();
+  // Fetch gas price and nonce upfront — pass both to skip viem's
+  // prepareTransactionRequest RPC calls (eth_fillTransaction, eth_getTransactionCount).
+  const [gasPrice, nonce] = await Promise.all([
+    publicClient.getGasPrice(),
+    publicClient.getTransactionCount({ address: account.address, blockTag: 'pending' }),
+  ]);
 
   if (inputIsNative) {
     // Native -> Token: use swapExactETHForTokens
@@ -270,6 +278,7 @@ export async function executeSwap(
       args: [amountOutMin, path, account.address, swapDeadline],
       value: amountIn,
       gasPrice,
+      nonce,
       chain,
       account,
     });
@@ -283,6 +292,7 @@ export async function executeSwap(
       functionName: 'swapExactTokensForETH',
       args: [amountIn, amountOutMin, path, account.address, swapDeadline],
       gasPrice,
+      nonce,
       chain,
       account,
     });
@@ -295,6 +305,7 @@ export async function executeSwap(
     functionName: 'swapExactTokensForTokens',
     args: [amountIn, amountOutMin, path, account.address, swapDeadline],
     gasPrice,
+    nonce,
     chain,
     account,
   });

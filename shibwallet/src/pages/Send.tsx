@@ -50,6 +50,7 @@ const Send: React.FC = () => {
   const [loadingBalances, setLoadingBalances] = useState(true);
   const [gasEstimate, setGasEstimate] = useState<bigint | null>(null);
   const [gasPrice, setGasPrice] = useState<bigint | null>(null);
+  const [txNonce, setTxNonce] = useState<number | null>(null);
   const [estimatingGas, setEstimatingGas] = useState(false);
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [tokenImgLoaded, setTokenImgLoaded] = useState(false);
@@ -184,23 +185,18 @@ const Send: React.FC = () => {
     const estimate = async () => {
       setEstimatingGas(true);
       try {
-        if (isNativeToken(selectedToken)) {
-          const gas = await publicClient.estimateGas({
-            account: address as `0x${string}`,
-            to: effectiveAddress as `0x${string}`,
-            value: parsedAmount,
-          });
-          setGasEstimate(gas);
-        } else {
-          const gas = await publicClient.estimateGas({
-            account: address as `0x${string}`,
-            to: selectedToken.address,
-            data: encodeFunctionData(effectiveAddress as `0x${string}`, parsedAmount),
-          });
-          setGasEstimate(gas);
-        }
-        const gp = await publicClient.getGasPrice();
+        const gasArgs = isNativeToken(selectedToken)
+          ? { account: address as `0x${string}`, to: effectiveAddress as `0x${string}`, value: parsedAmount }
+          : { account: address as `0x${string}`, to: selectedToken.address, data: encodeFunctionData(effectiveAddress as `0x${string}`, parsedAmount) };
+
+        const [gas, gp, nonce] = await Promise.all([
+          publicClient.estimateGas(gasArgs),
+          publicClient.getGasPrice(),
+          publicClient.getTransactionCount({ address: address as `0x${string}`, blockTag: 'pending' }),
+        ]);
+        setGasEstimate(gas);
         setGasPrice(gp);
+        setTxNonce(nonce);
       } catch {
         setGasEstimate(null);
       } finally {
@@ -306,11 +302,13 @@ const Send: React.FC = () => {
       const parsedAmount = parseUnits(amount, selectedToken.decimals);
       let hash: `0x${string}`;
 
-      // Pass pre-computed gas AND gasPrice to skip both eth_estimateGas
-      // and eth_gasPrice RPC calls — we already have these from the review step.
-      const gasOpts: Record<string, bigint> = {};
+      // Pass pre-computed gas, gasPrice, and nonce to skip most RPC calls
+      // in viem's prepareTransactionRequest — avoids eth_estimateGas,
+      // eth_gasPrice, and eth_getTransactionCount.
+      const gasOpts: Record<string, any> = {};
       if (gasEstimate) gasOpts.gas = gasEstimate;
       if (gasPrice) gasOpts.gasPrice = gasPrice;
+      if (txNonce !== null) gasOpts.nonce = txNonce;
 
       if (isNativeToken(selectedToken)) {
         hash = await walletClient.sendTransaction({
@@ -355,7 +353,7 @@ const Send: React.FC = () => {
     } finally {
       setSending(false);
     }
-  }, [selectedToken, privateKey, network, viemChain, publicClient, amount, toAddress, address, addTransaction, chainId]);
+  }, [selectedToken, privateKey, network, viemChain, publicClient, amount, toAddress, address, addTransaction, chainId, gasEstimate, gasPrice, txNonce]);
 
   const handleCopyHash = useCallback(() => {
     if (!txHash) return;
@@ -641,6 +639,7 @@ const Send: React.FC = () => {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
+            style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 48px))' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}

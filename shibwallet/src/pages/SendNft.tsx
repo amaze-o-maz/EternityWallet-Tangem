@@ -35,6 +35,7 @@ const SendNft: React.FC = () => {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [gasEstimate, setGasEstimate] = useState<bigint | null>(null);
   const [gasPrice, setGasPrice] = useState<bigint | null>(null);
+  const [txNonce, setTxNonce] = useState<number | null>(null);
   const [estimatingGas, setEstimatingGas] = useState(false);
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -179,14 +180,14 @@ const SendNft: React.FC = () => {
           });
         }
 
-        const gas = await publicClient.estimateGas({
-          account: from,
-          to: nftAddr,
-          data,
-        });
+        const [gas, gp, nonce] = await Promise.all([
+          publicClient.estimateGas({ account: from, to: nftAddr, data }),
+          publicClient.getGasPrice(),
+          publicClient.getTransactionCount({ address: from, blockTag: 'pending' }),
+        ]);
         setGasEstimate(gas);
-        const gp = await publicClient.getGasPrice();
         setGasPrice(gp);
+        setTxNonce(nonce);
       } catch {
         setGasEstimate(null);
       } finally {
@@ -230,11 +231,13 @@ const SendNft: React.FC = () => {
       const nftAddr = contractAddr as `0x${string}`;
       let hash: `0x${string}`;
 
-      // Pass pre-computed gas AND gasPrice to skip both eth_estimateGas
-      // and eth_gasPrice RPC calls — we already have these from the review step.
-      const gasOpts: Record<string, bigint> = {};
+      // Pass pre-computed gas, gasPrice, and nonce to skip most RPC calls
+      // in viem's prepareTransactionRequest — avoids eth_estimateGas,
+      // eth_gasPrice, and eth_getTransactionCount.
+      const gasOpts: Record<string, any> = {};
       if (gasEstimate) gasOpts.gas = gasEstimate;
       if (gasPrice) gasOpts.gasPrice = gasPrice;
+      if (txNonce !== null) gasOpts.nonce = txNonce;
 
       if (isErc1155 && selected.length > 1) {
         hash = await walletClient.writeContract({
@@ -317,7 +320,7 @@ const SendNft: React.FC = () => {
     }
   }, [
     privateKey, network, viemChain, publicClient, selected,
-    address, effectiveAddress, contractAddr, isErc1155, gasEstimate, gasPrice,
+    address, effectiveAddress, contractAddr, isErc1155, gasEstimate, gasPrice, txNonce,
     addTransaction, chainId, collectionName, previewImage,
   ]);
 
@@ -577,6 +580,7 @@ const SendNft: React.FC = () => {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
+            style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 48px))' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-end mb-2">
