@@ -395,7 +395,7 @@ const History: React.FC = () => {
                 if (isNftSend) {
                   const count = tx.nftTotalQuantity ?? tx.nftTokenIds?.length ?? 1;
                   amount = `${count}`;
-                  symbol = tx.nftCollectionName ?? 'NFT';
+                  symbol = 'NFT';
                 } else if (tx.tokenSymbol && tx.tokenDecimal) {
                   // Token transfer
                   const decimals = parseInt(tx.tokenDecimal, 10);
