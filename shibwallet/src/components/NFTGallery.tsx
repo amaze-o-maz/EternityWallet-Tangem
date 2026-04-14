@@ -620,10 +620,43 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     }
   };
 
+  // Re-apply the pending-sent filter on visibility change / storage events so
+  // that returning from a successful send immediately hides the sent NFTs
+  // even if `nfts` state still happens to hold them (belt-and-suspenders on
+  // top of the fetch-time filter).
+  const [pendingTick, setPendingTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setPendingTick((n) => n + 1);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') bump();
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'shibwallet_pending_sent_nfts') bump();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', bump);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', bump);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  // The rendered list of NFTs always goes through the pending-sent filter
+  // before reaching the UI. This guards against any code path that writes
+  // to `nfts` without pre-filtering, and reacts to pendingTick bumps so a
+  // new send hides its tokens without needing a fresh fetch.
+  const visibleNfts = useMemo(
+    () => filterPendingSent(nfts, getPendingSent(chainId, address)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nfts, chainId, address, pendingTick],
+  );
+
   // Group NFTs by collection (contract address)
   const collections = useMemo(() => {
     const map = new Map<string, { name: string; standard: string; nfts: NFTItem[] }>();
-    for (const nft of nfts) {
+    for (const nft of visibleNfts) {
       const key = nft.contractAddress.toLowerCase();
       if (!map.has(key)) {
         map.set(key, { name: nft.contractName, standard: nft.tokenStandard, nfts: [] });
@@ -633,7 +666,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     return Array.from(map.entries())
       .map(([addr, data]) => ({ address: addr, ...data }))
       .sort((a, b) => b.nfts.length - a.nfts.length);
-  }, [nfts]);
+  }, [visibleNfts]);
 
   // null = show all collections, string = show that collection's NFTs
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
@@ -743,7 +776,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     );
   }
 
-  if (nfts.length === 0) {
+  if (visibleNfts.length === 0) {
     return (
       <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-10 text-center">
         <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
