@@ -358,9 +358,11 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
           let allItems = [...data.items];
           let nextParams = data.next_page_params;
 
-          // Fetch up to 3 additional pages (max ~200 NFTs)
+          // Walk every page the explorer offers so collections that live
+          // past the first few pages aren't silently dropped. Hard cap at
+          // 20 pages (~1000 NFTs) as a safety net against runaway loops.
           let page = 0;
-          while (nextParams && page < 3) {
+          while (nextParams && page < 20) {
             const params = new URLSearchParams();
             for (const [k, v] of Object.entries(nextParams)) {
               params.set(k, String(v));
@@ -765,9 +767,20 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">{activeCollection.name}</p>
             <p className="text-[11px] text-gray-500">
-              {activeCollection.nfts.length} item{activeCollection.nfts.length !== 1 ? 's' : ''}
+              {(() => {
+                // ERC-1155: sum balances so "126 items" reflects total copies,
+                // not just unique tokenIds. ERC-721 balances are always 1.
+                const total = isErc1155Collection
+                  ? activeCollection.nfts.reduce((sum, n) => sum + (n.balance || 1), 0)
+                  : activeCollection.nfts.length;
+                return `${total} item${total !== 1 ? 's' : ''}`;
+              })()}
               <span className="mx-1.5 text-gray-700">·</span>
               {activeCollection.standard}
+              <span className="mx-1.5 text-gray-700">·</span>
+              <span className="font-mono">
+                {`${activeCollection.address.slice(0, 6)}...${activeCollection.address.slice(-4)}`}
+              </span>
             </p>
           </div>
 
@@ -825,10 +838,15 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   // === Top-level: Collection tiles grid ===
   return (
     <div>
-      {/* Summary */}
-      <p className="text-xs text-gray-500 mb-3 px-1">
-        {nfts.length} NFT{nfts.length !== 1 ? 's' : ''} in {collections.length} collection{collections.length !== 1 ? 's' : ''}
-      </p>
+      {/* Summary — sum balances so ERC-1155 copies are counted, not just unique ids */}
+      {(() => {
+        const totalCount = nfts.reduce((sum, n) => sum + (n.balance || 1), 0);
+        return (
+          <p className="text-xs text-gray-500 mb-3 px-1">
+            {totalCount} NFT{totalCount !== 1 ? 's' : ''} in {collections.length} collection{collections.length !== 1 ? 's' : ''}
+          </p>
+        );
+      })()}
 
       <div className="grid grid-cols-2 gap-3">
         {collections.map((collection, ci) => {
@@ -889,10 +907,12 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
                   </div>
                 )}
 
-                {/* Count badge */}
+                {/* Count badge — sum balances for ERC-1155 so copies count */}
                 <div className="absolute top-2 right-2">
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/70 backdrop-blur-sm text-white border border-white/[0.1]">
-                    {collection.nfts.length}
+                    {collection.standard === 'ERC-1155'
+                      ? collection.nfts.reduce((sum, n) => sum + (n.balance || 1), 0)
+                      : collection.nfts.length}
                   </span>
                 </div>
 
