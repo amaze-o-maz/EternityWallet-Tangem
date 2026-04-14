@@ -423,7 +423,7 @@ const History: React.FC = () => {
 
                 // Display label
                 const txLabel = isNftSend
-                  ? `NFT Sent`
+                  ? (isSent ? 'NFT Sent' : 'NFT Received')
                   : isSwap
                     ? `Swap ${tx.fromTokenSymbol ?? ''} → ${tx.toTokenSymbol ?? ''}`
                     : isSent ? 'Sent' : 'Received';
@@ -451,7 +451,7 @@ const History: React.FC = () => {
                       `}
                     >
                       {isNftSend ? (
-                        <ArrowUpRight size={18} />
+                        isSent ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />
                       ) : isSwap ? (
                         <ArrowDownUp size={18} />
                       ) : isSent ? (

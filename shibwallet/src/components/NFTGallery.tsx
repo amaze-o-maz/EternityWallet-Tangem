@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createPublicClient, http, fallback } from 'viem';
 import { getNetworkByChainId } from '../lib/chains';
 import { useNftSelectionStore, type SelectedNFT } from '../store/nftSelectionStore';
+import { getPendingSent, getPendingSentEntry, type PendingSentMap } from '../lib/pendingSentNfts';
 
 interface NFTItem {
   contractAddress: string;
@@ -49,6 +50,30 @@ function nftCacheRead(address: string, chainId: number): NFTCacheEntry | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Filter an NFT list against the pending-sent map, subtracting quantities
+ * just sent so they don't reappear while the indexer catches up.
+ * - ERC-721: hide entirely if any pending entry exists for that tokenId.
+ * - ERC-1155: reduce `balance` by the pending quantity; hide if ≤ 0.
+ */
+function filterPendingSent(items: NFTItem[], pending: PendingSentMap): NFTItem[] {
+  if (!items.length || Object.keys(pending).length === 0) return items;
+  const out: NFTItem[] = [];
+  for (const item of items) {
+    const entry = getPendingSentEntry(pending, item.contractAddress, item.tokenId);
+    if (!entry) {
+      out.push(item);
+      continue;
+    }
+    if (item.tokenStandard === 'ERC-1155') {
+      const newBalance = item.balance - entry.quantity;
+      if (newBalance > 0) out.push({ ...item, balance: newBalance });
+    }
+    // ERC-721 (or anything non-1155): drop entirely
+  }
+  return out;
 }
 
 function nftCacheWrite(address: string, chainId: number, items: NFTItem[]) {
@@ -249,7 +274,9 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const [nfts, setNfts] = useState<NFTItem[]>(initialCache?.items ?? []);
+  const [nfts, setNfts] = useState<NFTItem[]>(
+    filterPendingSent(initialCache?.items ?? [], getPendingSent(chainId, address)),
+  );
   // Only show the skeleton when we have nothing to display yet.
   const [loading, setLoading] = useState(!initialCache);
   const [error, setError] = useState<string | null>(null);
@@ -403,17 +430,21 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
         }
       }
 
-      setNfts(items);
-      nftCacheWrite(address, chainId, items);
+      // Hide NFTs the user just sent but the indexer hasn't dropped yet.
+      const visibleItems = filterPendingSent(items, getPendingSent(chainId, address));
+      setNfts(visibleItems);
+      // Cache the filtered view so a re-open doesn't briefly show the sent NFT
+      // again between hydration and the next filter pass.
+      nftCacheWrite(address, chainId, visibleItems);
       lastFetchedAtRef.current = Date.now();
 
       // For Ethereum, always fetch on-chain tokenURI to get fresh images
       // (Blockscout can cache stale pre-reveal images for collections like Sheboshis)
       // For other chains, only fetch for items missing images
-      if (chainId === 1 && items.length > 0) {
-        loadTokenImages(items, network, true);
-      } else if (items.some((item) => !item.imageUrl)) {
-        loadTokenImages(items, network, false);
+      if (chainId === 1 && visibleItems.length > 0) {
+        loadTokenImages(visibleItems, network, true);
+      } else if (visibleItems.some((item) => !item.imageUrl)) {
+        loadTokenImages(visibleItems, network, false);
       }
     } catch (err) {
       console.error('[NFTGallery] Fetch failed:', err);
@@ -591,7 +622,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   useEffect(() => {
     if (prevFetchAddrRef.current !== address || prevFetchChainRef.current !== chainId) {
       const cached = nftCacheRead(address, chainId);
-      setNfts(cached?.items ?? []);
+      setNfts(filterPendingSent(cached?.items ?? [], getPendingSent(chainId, address)));
       setLoading(!cached);
       setError(null);
       lastFetchedAtRef.current = 0; // force refetch
