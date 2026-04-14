@@ -21,6 +21,7 @@ import { isShibName, resolveShibName, formatShibName } from '../lib/sns';
 import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { ERC721_ABI, ERC1155_ABI } from '../lib/abis';
 import { fetchPrices } from '../lib/prices';
+import { markNftsSent } from '../lib/pendingSentNfts';
 
 const SendNft: React.FC = () => {
   const navigate = useNavigate();
@@ -306,6 +307,23 @@ const SendNft: React.FC = () => {
           delete all[key];
           localStorage.setItem('shibwallet_nft_cache', JSON.stringify(all));
         }
+      } catch { /* ignore */ }
+
+      // Mark the just-sent NFTs as pending so the gallery hides them even
+      // if the Blockscout indexer takes a minute to catch up. Without this
+      // a user who sends one NFT then immediately opens the gallery again
+      // will still see the just-sent token and hit ERC721InsufficientApproval
+      // when they try to send it a second time.
+      try {
+        markNftsSent(
+          chainId,
+          address!,
+          selected.map((s) => ({
+            contractAddress: s.contractAddress,
+            tokenId: s.tokenId,
+            quantity: s.quantity || 1,
+          })),
+        );
       } catch { /* ignore */ }
 
       // NOTE: Do NOT call clearSelection() here. It updates the Zustand
