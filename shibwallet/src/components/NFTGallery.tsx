@@ -4,6 +4,8 @@ import { createPublicClient, http, fallback } from 'viem';
 import { getNetworkByChainId } from '../lib/chains';
 import { useNftSelectionStore, type SelectedNFT } from '../store/nftSelectionStore';
 import { getPendingSent, getPendingSentEntry, type PendingSentMap } from '../lib/pendingSentNfts';
+import { getHiddenCollections, hideCollection, unhideCollection } from '../lib/hiddenCollections';
+import toast from 'react-hot-toast';
 
 interface NFTItem {
   contractAddress: string;
@@ -282,6 +284,36 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   const [error, setError] = useState<string | null>(null);
   const lastFetchedAtRef = useRef<number>(initialCache?.at ?? 0);
 
+  // Per-wallet set of hidden collection addresses (lowercased).
+  const [hiddenSet, setHiddenSet] = useState<Set<string>>(
+    () => getHiddenCollections(chainId, address),
+  );
+  const [showHidden, setShowHidden] = useState(false);
+
+  // Refresh hidden set when wallet / chain changes.
+  useEffect(() => {
+    setHiddenSet(getHiddenCollections(chainId, address));
+    setShowHidden(false);
+  }, [address, chainId]);
+
+  const handleHideCollection = useCallback(
+    (contractAddress: string, name: string) => {
+      hideCollection(chainId, address, contractAddress);
+      setHiddenSet(getHiddenCollections(chainId, address));
+      toast.success(`Hid "${name}"`, { duration: 2000 });
+    },
+    [chainId, address],
+  );
+
+  const handleUnhideCollection = useCallback(
+    (contractAddress: string, name: string) => {
+      unhideCollection(chainId, address, contractAddress);
+      setHiddenSet(getHiddenCollections(chainId, address));
+      toast.success(`Restored "${name}"`, { duration: 2000 });
+    },
+    [chainId, address],
+  );
+
   // Clear selection when wallet address or chain changes — but NOT on
   // unmount, because navigating to /wallet/send-nft unmounts this
   // component and we need the selection to survive.
@@ -360,9 +392,11 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
 
           // Walk every page the explorer offers so collections that live
           // past the first few pages aren't silently dropped. Hard cap at
-          // 20 pages (~1000 NFTs) as a safety net against runaway loops.
+          // 100 pages (~30k NFTs with 50/page, ~5k+ entries in practice)
+          // as a safety net — whales with many ERC-1155 collections can
+          // easily exceed the old 20-page cap.
           let page = 0;
-          while (nextParams && page < 20) {
+          while (nextParams && page < 100) {
             const params = new URLSearchParams();
             for (const [k, v] of Object.entries(nextParams)) {
               params.set(k, String(v));
@@ -604,12 +638,15 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   // null = show all collections, string = show that collection's NFTs
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
 
-  // Auto-select if only 1 collection
+  // Auto-select if only 1 visible collection (hidden ones don't count —
+  // otherwise hiding the single collection you own would still auto-drill
+  // into it).
   useEffect(() => {
-    if (collections.length === 1) {
-      setSelectedCollection(collections[0].address);
+    const visible = collections.filter((c) => !hiddenSet.has(c.address.toLowerCase()));
+    if (visible.length === 1) {
+      setSelectedCollection(visible[0].address);
     }
-  }, [collections.length]);
+  }, [collections, hiddenSet]);
 
   // Reset selection when chain/address changes
   useEffect(() => {
@@ -836,107 +873,197 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   }
 
   // === Top-level: Collection tiles grid ===
+  const visibleCollections = collections.filter(
+    (c) => !hiddenSet.has(c.address.toLowerCase()),
+  );
+  const hiddenCollections = collections.filter((c) =>
+    hiddenSet.has(c.address.toLowerCase()),
+  );
+
+  const visibleTotalCount = visibleCollections.reduce(
+    (sum, c) => sum + c.nfts.reduce((s, n) => s + (n.balance || 1), 0),
+    0,
+  );
+
   return (
     <div>
       {/* Summary — sum balances so ERC-1155 copies are counted, not just unique ids */}
-      {(() => {
-        const totalCount = nfts.reduce((sum, n) => sum + (n.balance || 1), 0);
-        return (
-          <p className="text-xs text-gray-500 mb-3 px-1">
-            {totalCount} NFT{totalCount !== 1 ? 's' : ''} in {collections.length} collection{collections.length !== 1 ? 's' : ''}
-          </p>
-        );
-      })()}
+      <p className="text-xs text-gray-500 mb-3 px-1">
+        {visibleTotalCount} NFT{visibleTotalCount !== 1 ? 's' : ''} in {visibleCollections.length} collection{visibleCollections.length !== 1 ? 's' : ''}
+      </p>
 
       <div className="grid grid-cols-2 gap-3">
-        {collections.map((collection, ci) => {
-          const hue = parseInt(collection.address.slice(2, 8), 16) % 360;
-          const previewNfts = collection.nfts.filter((n) => n.imageUrl).slice(0, 4);
-          // Fill remaining slots if we don't have 4 images
-          const gridCount = Math.min(collection.nfts.length, 4);
+        {visibleCollections.map((collection, ci) => (
+          <CollectionTile
+            key={collection.address}
+            collection={collection}
+            index={ci}
+            hidden={false}
+            onOpen={() => setSelectedCollection(collection.address)}
+            onLongPress={() => handleHideCollection(collection.address, collection.name)}
+          />
+        ))}
+      </div>
 
-          return (
-            <button
-              key={collection.address}
-              onClick={() => setSelectedCollection(collection.address)}
-              className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl overflow-hidden
-                         transition-all duration-300 hover:border-white/[0.12] hover:shadow-lg
-                         active:scale-[0.97] text-left group"
-              style={{ animation: `slide-up-fade 0.4s ease-out ${ci * 50}ms both` }}
-            >
-              {/* Mosaic thumbnail grid */}
-              <div className="aspect-square relative overflow-hidden">
-                {previewNfts.length >= 4 ? (
-                  // 2x2 mosaic
-                  <div className="grid grid-cols-2 w-full h-full">
-                    {previewNfts.slice(0, 4).map((nft, i) => (
-                      <img
-                        key={nft.tokenId}
-                        src={nft.imageUrl!}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover"
-                        style={{
-                          borderRight: i % 2 === 0 ? '1px solid rgba(255,255,255,0.04)' : undefined,
-                          borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.04)' : undefined,
-                        }}
-                      />
-                    ))}
-                  </div>
-                ) : previewNfts.length >= 1 ? (
-                  // Single featured image
-                  <img
-                    src={previewNfts[0].imageUrl!}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full h-full object-cover"
+      {hiddenCollections.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setShowHidden((v) => !v)}
+            className="w-full text-center text-xs font-medium text-gray-500 hover:text-gray-300
+                       bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.06] rounded-xl
+                       py-2.5 transition-colors active:scale-[0.99]"
+          >
+            {showHidden ? '▾ Hide hidden' : '▸ Show hidden'} ({hiddenCollections.length})
+          </button>
+
+          {showHidden && (
+            <>
+              <p className="text-[10px] text-gray-600 mt-3 mb-2 px-1 text-center">
+                Long-press a hidden collection to restore it.
+              </p>
+              <div className="grid grid-cols-2 gap-3 opacity-70">
+                {hiddenCollections.map((collection, ci) => (
+                  <CollectionTile
+                    key={collection.address}
+                    collection={collection}
+                    index={ci}
+                    hidden
+                    onOpen={() => setSelectedCollection(collection.address)}
+                    onLongPress={() => handleUnhideCollection(collection.address, collection.name)}
                   />
-                ) : (
-                  // Gradient placeholder
-                  <div
-                    className="w-full h-full flex items-center justify-center"
-                    style={{
-                      background: `linear-gradient(135deg, hsl(${hue}, 60%, 18%) 0%, hsl(${(hue + 40) % 360}, 50%, 10%) 100%)`,
-                    }}
-                  >
-                    <span className="text-3xl font-bold text-white/20">
-                      {collection.name.split(/[\s-_]+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')}
-                    </span>
-                  </div>
-                )}
-
-                {/* Count badge — sum balances for ERC-1155 so copies count */}
-                <div className="absolute top-2 right-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/70 backdrop-blur-sm text-white border border-white/[0.1]">
-                    {collection.standard === 'ERC-1155'
-                      ? collection.nfts.reduce((sum, n) => sum + (n.balance || 1), 0)
-                      : collection.nfts.length}
-                  </span>
-                </div>
-
-                {/* Bottom gradient overlay for text readability */}
-                <div
-                  className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
-                  style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))' }}
-                />
+                ))}
               </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
-              {/* Collection info */}
-              <div className="p-3">
-                <p className="text-xs font-semibold text-white truncate group-hover:text-[#FF6900] transition-colors">
-                  {collection.name}
-                </p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/[0.06] text-gray-500">
-                    {collection.standard}
-                  </span>
-                </div>
-              </div>
-            </button>
-          );
-        })}
+interface CollectionTileProps {
+  collection: { address: string; name: string; standard: string; nfts: NFTItem[] };
+  index: number;
+  hidden: boolean;
+  onOpen: () => void;
+  onLongPress: () => void;
+}
+
+const CollectionTile: React.FC<CollectionTileProps> = ({
+  collection,
+  index,
+  hidden,
+  onOpen,
+  onLongPress,
+}) => {
+  const hue = parseInt(collection.address.slice(2, 8), 16) % 360;
+  const previewNfts = collection.nfts.filter((n) => n.imageUrl).slice(0, 4);
+  const totalCount =
+    collection.standard === 'ERC-1155'
+      ? collection.nfts.reduce((sum, n) => sum + (n.balance || 1), 0)
+      : collection.nfts.length;
+
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
+
+  const onPointerDown = () => {
+    didLongPress.current = false;
+    pressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      onLongPress();
+    }, LONG_PRESS_MS);
+  };
+  const onPointerUp = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    if (!didLongPress.current) onOpen();
+  };
+  const onPointerLeave = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+  };
+
+  return (
+    <div
+      className={`bg-white/[0.03] backdrop-blur-xl border ${hidden ? 'border-white/[0.04] border-dashed' : 'border-white/[0.06]'} rounded-2xl overflow-hidden
+                 transition-all duration-300 hover:border-white/[0.12] hover:shadow-lg
+                 active:scale-[0.97] text-left group select-none cursor-pointer`}
+      style={{ animation: `slide-up-fade 0.4s ease-out ${index * 50}ms both` }}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Mosaic thumbnail grid */}
+      <div className="aspect-square relative overflow-hidden">
+        {previewNfts.length >= 4 ? (
+          <div className="grid grid-cols-2 w-full h-full">
+            {previewNfts.slice(0, 4).map((nft, i) => (
+              <img
+                key={nft.tokenId}
+                src={nft.imageUrl!}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-cover"
+                style={{
+                  borderRight: i % 2 === 0 ? '1px solid rgba(255,255,255,0.04)' : undefined,
+                  borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.04)' : undefined,
+                }}
+              />
+            ))}
+          </div>
+        ) : previewNfts.length >= 1 ? (
+          <img
+            src={previewNfts[0].imageUrl!}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{
+              background: `linear-gradient(135deg, hsl(${hue}, 60%, 18%) 0%, hsl(${(hue + 40) % 360}, 50%, 10%) 100%)`,
+            }}
+          >
+            <span className="text-3xl font-bold text-white/20">
+              {collection.name.split(/[\s-_]+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('')}
+            </span>
+          </div>
+        )}
+
+        {/* Count badge */}
+        <div className="absolute top-2 right-2">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/70 backdrop-blur-sm text-white border border-white/[0.1]">
+            {totalCount}
+          </span>
+        </div>
+
+        {hidden && (
+          <div className="absolute top-2 left-2">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-black/70 backdrop-blur-sm text-gray-300 border border-white/[0.1]">
+              Hidden
+            </span>
+          </div>
+        )}
+
+        {/* Bottom gradient overlay for text readability */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
+          style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))' }}
+        />
+      </div>
+
+      {/* Collection info */}
+      <div className="p-3">
+        <p className="text-xs font-semibold text-white truncate group-hover:text-[#FF6900] transition-colors">
+          {collection.name}
+        </p>
+        <div className="flex items-center gap-1.5 mt-1">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/[0.06] text-gray-500">
+            {collection.standard}
+          </span>
+        </div>
       </div>
     </div>
   );
