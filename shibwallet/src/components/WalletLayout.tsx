@@ -31,8 +31,10 @@ const WalletLayout: React.FC = () => {
 
       {showHeader && <Header />}
 
-      {/* Scrollable content area — persists across navigations */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto relative z-10">
+      {/* Scrollable content area — persists across navigations.
+           No z-index here to avoid creating a stacking context that would
+           trap fixed modals (z-50) below the BottomNav (z-40). */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto relative">
         <div key={location.pathname} className="animate-page-in min-h-full">
           <Outlet />
         </div>
