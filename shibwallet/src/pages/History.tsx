@@ -288,12 +288,49 @@ const History: React.FC = () => {
   }));
 
   const mergeWithLocal = (apiTxs: Transaction[]): Transaction[] => {
-    const apiHashes = new Set(apiTxs.map((tx) => tx.hash.toLowerCase()));
-    // Add local transactions that aren't already in the API results
-    const uniqueLocal = localTxsMapped.filter(
-      (lt) => !apiHashes.has(lt.hash.toLowerCase()),
+    // Build a lookup so we can overlay local metadata (type, swap symbols,
+    // NFT fields) onto API entries with the same hash. Without this, a
+    // successful swap briefly shows as "Swap" from the local store, then
+    // reverts to a generic "Sent" once the API picks it up because the
+    // local tx is filtered out on hash match.
+    const localByHash = new Map(
+      localTxsMapped.map((lt) => [lt.hash.toLowerCase(), lt]),
     );
-    const merged = [...uniqueLocal, ...apiTxs];
+    const seenHashes = new Set<string>();
+    const merged: Transaction[] = [];
+
+    for (const apiTx of apiTxs) {
+      const hashLower = apiTx.hash.toLowerCase();
+      const local = localByHash.get(hashLower);
+      if (local) {
+        // Preserve API-provided fields (gasUsed, isError, value, etc.) but
+        // overlay local-only metadata so swaps/NFT sends keep their label.
+        merged.push({
+          ...apiTx,
+          type: local.type ?? apiTx.type,
+          fromTokenSymbol: local.fromTokenSymbol ?? apiTx.fromTokenSymbol,
+          toTokenSymbol: local.toTokenSymbol ?? apiTx.toTokenSymbol,
+          toAmount: local.toAmount ?? apiTx.toAmount,
+          nftContract: local.nftContract ?? apiTx.nftContract,
+          nftTokenIds: local.nftTokenIds ?? apiTx.nftTokenIds,
+          nftStandard: local.nftStandard ?? apiTx.nftStandard,
+          nftTotalQuantity: local.nftTotalQuantity ?? apiTx.nftTotalQuantity,
+          nftCollectionName: local.nftCollectionName ?? apiTx.nftCollectionName,
+          nftImageUrl: local.nftImageUrl ?? apiTx.nftImageUrl,
+        });
+      } else {
+        merged.push(apiTx);
+      }
+      seenHashes.add(hashLower);
+    }
+
+    // Append local-only transactions (not yet indexed by the explorer API)
+    for (const lt of localTxsMapped) {
+      if (!seenHashes.has(lt.hash.toLowerCase())) {
+        merged.push(lt);
+      }
+    }
+
     // Sort by timestamp descending (most recent first)
     merged.sort((a, b) => parseInt(b.timeStamp, 10) - parseInt(a.timeStamp, 10));
     return merged;

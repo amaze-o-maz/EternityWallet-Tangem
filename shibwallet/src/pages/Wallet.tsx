@@ -8,6 +8,7 @@ import NFTGallery from '../components/NFTGallery';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
+import { useTransactionStore } from '../store/transactionStore';
 import { getNetworkByChainId } from '../lib/chains';
 import { getTokensForChain, isNativeToken, addCustomToken, TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
@@ -192,6 +193,30 @@ const Wallet: React.FC = () => {
     setLoading(true);
     fetchData();
   }, [fetchData]);
+
+  // When the user returns to the wallet page right after a swap/send, the
+  // RPC may still return a pre-tx balance for a few seconds. If a recent
+  // local tx exists for this chain, schedule a couple of silent refetches
+  // so the new balance appears without the user having to hit refresh.
+  const recentTxHash = useTransactionStore((s) => {
+    const chainTxs = s.transactions.filter((t) => t.chainId === chainId);
+    if (chainTxs.length === 0) return null;
+    const latest = chainTxs[0];
+    const ageSeconds = Date.now() / 1000 - parseInt(latest.timeStamp, 10);
+    return ageSeconds < 120 ? latest.hash : null;
+  });
+
+  useEffect(() => {
+    if (!recentTxHash) return;
+    const t1 = setTimeout(() => fetchData(), 2500);
+    const t2 = setTimeout(() => fetchData(), 7000);
+    const t3 = setTimeout(() => fetchData(), 15000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [recentTxHash, fetchData]);
 
   // Calculate total USD value
   const totalUsd = (() => {
