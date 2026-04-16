@@ -635,10 +635,10 @@ const Send: React.FC = () => {
 
       {/* Success notification modal */}
       {showSuccessModal && txHash && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in pb-12" onClick={() => navigate('/wallet')}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in px-4" onClick={() => navigate('/wallet')}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
+            className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-2xl p-6 animate-slide-up-fade shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
