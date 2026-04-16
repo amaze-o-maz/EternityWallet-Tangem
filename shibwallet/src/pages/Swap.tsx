@@ -30,6 +30,33 @@ function stringToColor(str: string): string {
   return `hsl(${hue}, 60%, 40%)`;
 }
 
+/** Compact human-friendly amount:
+ *  - >=1,000,000 → "1.23M"
+ *  - >=1,000 → "12,345.67"
+ *  - >=1 → up to 4 decimals, trailing zeros trimmed
+ *  - <1 → up to 6 decimals, or "<0.000001"
+ */
+function formatAmount(raw: string | number): string {
+  const n = typeof raw === 'number' ? raw : parseFloat(raw);
+  if (!isFinite(n)) return typeof raw === 'string' ? raw : '0';
+  if (n === 0) return '0';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) {
+    return n.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  if (abs >= 1) {
+    // Up to 4 decimals, trim trailing zeros
+    return parseFloat(n.toFixed(4)).toString();
+  }
+  if (abs < 0.000001) return n > 0 ? '<0.000001' : '>-0.000001';
+  return parseFloat(n.toFixed(6)).toString();
+}
+
 const TokenButton: React.FC<{
   token: TokenInfo | null;
   onClick: () => void;
@@ -775,37 +802,51 @@ const Swap: React.FC = () => {
 
               {/* From → To summary */}
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2 min-w-0 shrink-0">
                     <TokenLogo token={fromToken} />
                     <span className="text-white text-sm font-medium">{fromToken.symbol}</span>
                   </div>
-                  <span className="text-white text-base font-semibold">{fromAmount}</span>
+                  <span
+                    className="text-white text-base font-semibold text-right tabular-nums min-w-0 truncate"
+                    title={fromAmount}
+                  >
+                    {formatAmount(fromAmount)}
+                  </span>
                 </div>
                 <div className="flex justify-center my-1">
                   <ArrowDownUp size={16} className="text-gray-500" />
                 </div>
-                <div className="flex items-center justify-between mt-3">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-3 mt-3">
+                  <div className="flex items-center gap-2 min-w-0 shrink-0">
                     <TokenLogo token={toToken} />
                     <span className="text-white text-sm font-medium">{toToken.symbol}</span>
                   </div>
-                  <span className="text-white text-base font-semibold truncate max-w-[200px]">{toAmount}</span>
+                  <span
+                    className="text-white text-base font-semibold text-right tabular-nums min-w-0 truncate"
+                    title={toAmount}
+                  >
+                    {formatAmount(toAmount)}
+                  </span>
                 </div>
               </div>
 
               {/* Details */}
               <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4 space-y-2.5">
                 {exchangeRate !== null && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-400">Rate</span>
-                    <span className="text-white">1 {fromToken.symbol} = {exchangeRate.toFixed(6)} {toToken.symbol}</span>
+                  <div className="flex justify-between gap-3 text-xs">
+                    <span className="text-gray-400 shrink-0">Rate</span>
+                    <span className="text-white text-right truncate tabular-nums" title={`1 ${fromToken.symbol} = ${exchangeRate} ${toToken.symbol}`}>
+                      1 {fromToken.symbol} = {formatAmount(exchangeRate)} {toToken.symbol}
+                    </span>
                   </div>
                 )}
                 {minimumReceived !== null && (
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-400">Min. Received</span>
-                    <span className="text-white">{parseFloat(formatUnits(minimumReceived, toToken.decimals)).toFixed(6)} {toToken.symbol}</span>
+                  <div className="flex justify-between gap-3 text-xs">
+                    <span className="text-gray-400 shrink-0">Min. Received</span>
+                    <span className="text-white text-right truncate tabular-nums" title={formatUnits(minimumReceived, toToken.decimals)}>
+                      {formatAmount(formatUnits(minimumReceived, toToken.decimals))} {toToken.symbol}
+                    </span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs">
