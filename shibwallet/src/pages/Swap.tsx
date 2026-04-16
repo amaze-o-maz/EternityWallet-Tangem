@@ -90,6 +90,29 @@ const SLIPPAGE_OPTIONS: { label: string; value: SlippageOption }[] = [
   { label: 'Custom', value: 'custom' },
 ];
 
+/** Small token logo with colored-initial fallback (used in confirm modal) */
+const TokenLogo: React.FC<{ token: TokenInfo }> = ({ token }) => {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className="relative w-8 h-8 shrink-0">
+      <div
+        className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+        style={{ backgroundColor: stringToColor(token.symbol) }}
+      >
+        {token.symbol.slice(0, 2)}
+      </div>
+      {token.logoUrl && (
+        <>
+          {loaded && (
+            <img src={token.logoUrl} alt={token.symbol} className="w-8 h-8 rounded-full absolute inset-0" />
+          )}
+          <img src={token.logoUrl} alt="" className="hidden" onLoad={() => setLoaded(true)} />
+        </>
+      )}
+    </div>
+  );
+};
+
 const Swap: React.FC = () => {
   const navigate = useNavigate();
   const { address, privateKey, isUnlocked } = useWalletStore();
@@ -734,129 +757,124 @@ const Swap: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in pb-12" onClick={() => !approving && !swapping && setShowConfirm(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-md bg-[#111] border border-white/[0.08] rounded-t-3xl p-6 animate-slide-up-fade"
+            className="relative w-full max-w-md max-h-[80vh] bg-[#111] border border-white/[0.08] rounded-t-3xl flex flex-col animate-slide-up-fade"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-bold text-white">Confirm Swap</h2>
-              <button
-                onClick={() => !approving && !swapping && setShowConfirm(false)}
-                className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-              >
-                <X size={16} />
-              </button>
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto p-6 pb-0">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-white">Confirm Swap</h2>
+                <button
+                  onClick={() => !approving && !swapping && setShowConfirm(false)}
+                  className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* From → To summary */}
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <TokenLogo token={fromToken} />
+                    <span className="text-white text-sm font-medium">{fromToken.symbol}</span>
+                  </div>
+                  <span className="text-white text-base font-semibold">{fromAmount}</span>
+                </div>
+                <div className="flex justify-center my-1">
+                  <ArrowDownUp size={16} className="text-gray-500" />
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <div className="flex items-center gap-2">
+                    <TokenLogo token={toToken} />
+                    <span className="text-white text-sm font-medium">{toToken.symbol}</span>
+                  </div>
+                  <span className="text-white text-base font-semibold truncate max-w-[200px]">{toAmount}</span>
+                </div>
+              </div>
+
+              {/* Details */}
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4 space-y-2.5">
+                {exchangeRate !== null && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Rate</span>
+                    <span className="text-white">1 {fromToken.symbol} = {exchangeRate.toFixed(6)} {toToken.symbol}</span>
+                  </div>
+                )}
+                {minimumReceived !== null && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Min. Received</span>
+                    <span className="text-white">{parseFloat(formatUnits(minimumReceived, toToken.decimals)).toFixed(6)} {toToken.symbol}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Price Impact</span>
+                  <span className={quoteResult.priceImpact > 5 ? 'text-red-400' : quoteResult.priceImpact > 2 ? 'text-yellow-400' : 'text-white'}>
+                    {quoteResult.priceImpact}%
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Slippage</span>
+                  <span className="text-white">{slippagePercent}%</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Fee</span>
+                  <span className="text-white">0.3%</span>
+                </div>
+                {estimatedGasCost && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Est. Gas Fee</span>
+                    <div className="text-right">
+                      <span className="text-white">{estimatedGasCost}</span>
+                      {estimatedGasUsd && (
+                        <span className="text-gray-500 ml-1">({estimatedGasUsd})</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {quoteResult.priceImpact > 5 && (
+                <p className="text-red-400 text-xs text-center mb-2">
+                  Warning: High price impact! You may receive significantly less than expected.
+                </p>
+              )}
             </div>
 
-            {/* From → To summary */}
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                    style={{ backgroundColor: stringToColor(fromToken.symbol) }}
-                  >
-                    {fromToken.symbol.slice(0, 2)}
-                  </div>
-                  <span className="text-white text-sm font-medium">{fromToken.symbol}</span>
-                </div>
-                <span className="text-white text-base font-semibold">{fromAmount}</span>
-              </div>
-              <div className="flex justify-center my-1">
-                <ArrowDownUp size={16} className="text-gray-500" />
-              </div>
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                    style={{ backgroundColor: stringToColor(toToken.symbol) }}
-                  >
-                    {toToken.symbol.slice(0, 2)}
-                  </div>
-                  <span className="text-white text-sm font-medium">{toToken.symbol}</span>
-                </div>
-                <span className="text-white text-base font-semibold">{toAmount}</span>
-              </div>
-            </div>
-
-            {/* Details */}
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-6 space-y-2.5">
-              {exchangeRate !== null && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Rate</span>
-                  <span className="text-white">1 {fromToken.symbol} = {exchangeRate.toFixed(6)} {toToken.symbol}</span>
-                </div>
-              )}
-              {minimumReceived !== null && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Min. Received</span>
-                  <span className="text-white">{parseFloat(formatUnits(minimumReceived, toToken.decimals)).toFixed(6)} {toToken.symbol}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Price Impact</span>
-                <span className={quoteResult.priceImpact > 5 ? 'text-red-400' : quoteResult.priceImpact > 2 ? 'text-yellow-400' : 'text-white'}>
-                  {quoteResult.priceImpact}%
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Slippage</span>
-                <span className="text-white">{slippagePercent}%</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Fee</span>
-                <span className="text-white">0.3%</span>
-              </div>
-              {estimatedGasCost && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">Est. Gas Fee</span>
-                  <div className="text-right">
-                    <span className="text-white">{estimatedGasCost}</span>
-                    {estimatedGasUsd && (
-                      <span className="text-gray-500 ml-1">({estimatedGasUsd})</span>
-                    )}
-                  </div>
-                </div>
+            {/* Fixed action button — always visible at the bottom */}
+            <div className="p-6 pt-2">
+              {needsApproval ? (
+                <button
+                  onClick={handleApprove}
+                  disabled={approving}
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                             text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                             hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                             disabled:opacity-70 disabled:cursor-not-allowed
+                             flex items-center justify-center gap-2"
+                >
+                  {approving && <LoadingSpinner size={18} />}
+                  {approving ? 'Approving...' : `Approve ${fromToken.symbol}`}
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    await handleSwap();
+                    setShowConfirm(false);
+                  }}
+                  disabled={swapping}
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
+                             text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
+                             hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
+                             disabled:opacity-70 disabled:cursor-not-allowed
+                             flex items-center justify-center gap-2"
+                >
+                  {swapping && <LoadingSpinner size={18} />}
+                  {swapping ? 'Swapping...' : 'Confirm Swap'}
+                </button>
               )}
             </div>
-
-            {/* Action buttons: Approve → Swap */}
-            {needsApproval ? (
-              <button
-                onClick={handleApprove}
-                disabled={approving}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
-                           text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
-                           hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
-                           disabled:opacity-70 disabled:cursor-not-allowed
-                           flex items-center justify-center gap-2"
-              >
-                {approving && <LoadingSpinner size={18} />}
-                {approving ? 'Approving...' : `Approve ${fromToken.symbol}`}
-              </button>
-            ) : (
-              <button
-                onClick={async () => {
-                  await handleSwap();
-                  setShowConfirm(false);
-                }}
-                disabled={swapping}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
-                           text-white font-semibold text-base transition-all duration-300 active:scale-[0.97]
-                           hover:shadow-[0_0_25px_rgba(255,105,0,0.3)]
-                           disabled:opacity-70 disabled:cursor-not-allowed
-                           flex items-center justify-center gap-2"
-              >
-                {swapping && <LoadingSpinner size={18} />}
-                {swapping ? 'Swapping...' : 'Confirm Swap'}
-              </button>
-            )}
-
-            {quoteResult.priceImpact > 5 && (
-              <p className="text-red-400 text-xs text-center mt-3">
-                Warning: High price impact! You may receive significantly less than expected.
-              </p>
-            )}
           </div>
         </div>
       )}
