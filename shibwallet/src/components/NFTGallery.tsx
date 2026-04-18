@@ -149,7 +149,7 @@ const NFTPlaceholder: React.FC<{ name: string; contractAddress: string }> = ({ n
 
 const LONG_PRESS_MS = 400;
 
-async function copyImageUrl(url: string) {
+async function copyImageUrlFallback(url: string, reason: string) {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(url);
@@ -163,9 +163,63 @@ async function copyImageUrl(url: string) {
       document.execCommand('copy');
       document.body.removeChild(ta);
     }
-    toast.success('Image URL copied');
+    toast.success(`${reason} — URL copied instead`);
   } catch {
     toast.error('Copy failed');
+  }
+}
+
+/** Convert a non-PNG blob to PNG via canvas so the Clipboard API accepts it. */
+async function blobToPng(blob: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2d context');
+  ctx.drawImage(bitmap, 0, 0);
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error('toBlob failed'))),
+      'image/png',
+    );
+  });
+}
+
+async function copyImageToClipboard(url: string) {
+  // Writing image blobs requires ClipboardItem + navigator.clipboard.write,
+  // which isn't available on all WebViews. Fall back to copying the URL if
+  // the platform can't copy the image bytes.
+  const hasClipboardWrite =
+    typeof (navigator.clipboard as Clipboard | undefined)?.write === 'function' &&
+    typeof (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem ===
+      'function';
+  if (!hasClipboardWrite) {
+    await copyImageUrlFallback(url, 'Image copy not supported');
+    return;
+  }
+
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    let blob = await res.blob();
+    // Clipboard API on most platforms only accepts image/png. Re-encode
+    // anything else (jpeg/webp/gif) via canvas.
+    if (blob.type !== 'image/png') {
+      try {
+        blob = await blobToPng(blob);
+      } catch {
+        await copyImageUrlFallback(url, 'Image format unsupported');
+        return;
+      }
+    }
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    toast.success('Image copied');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '';
+    // CORS blocks, network errors, etc. — fall back to URL so the user
+    // still gets something useful.
+    await copyImageUrlFallback(url, msg.includes('HTTP') ? msg : 'Image fetch blocked');
   }
 }
 
@@ -271,7 +325,7 @@ const NFTCard: React.FC<{
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              copyImageUrl(nft.imageUrl!);
+              copyImageToClipboard(nft.imageUrl!);
               setShowCopy(false);
             }}
             className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 animate-fade-in"
