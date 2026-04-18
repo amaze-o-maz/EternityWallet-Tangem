@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPublicClient, http, fallback } from 'viem';
-import { Copy, Send, Minus, Plus, X, Layers } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { getNetworkByChainId } from '../lib/chains';
 import { useNftSelectionStore, type SelectedNFT } from '../store/nftSelectionStore';
 import { getPendingSent, getPendingSentEntry, type PendingSentMap } from '../lib/pendingSentNfts';
@@ -149,21 +149,13 @@ const NFTPlaceholder: React.FC<{ name: string; contractAddress: string }> = ({ n
 
 const LONG_PRESS_MS = 400;
 
-/** Truncate a token ID or long hex value for display. */
-function truncateMiddle(s: string, head = 6, tail = 4): string {
-  if (s.length <= head + tail + 3) return s;
-  return `${s.slice(0, head)}...${s.slice(-tail)}`;
-}
-
-async function copyText(text: string, label: string) {
+async function copyImageUrl(url: string) {
   try {
-    // Prefer the Clipboard API when available (HTTPS / modern WebView).
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(url);
     } else {
-      // Fallback for older WebViews
       const ta = document.createElement('textarea');
-      ta.value = text;
+      ta.value = url;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
@@ -171,194 +163,11 @@ async function copyText(text: string, label: string) {
       document.execCommand('copy');
       document.body.removeChild(ta);
     }
-    toast.success(`${label} copied`);
+    toast.success('Image URL copied');
   } catch {
     toast.error('Copy failed');
   }
 }
-
-interface NFTActionMenuProps {
-  nft: NFTItem;
-  onClose: () => void;
-  onSendNow: (quantity: number) => void;
-  onAddToSelection: (quantity: number) => void;
-}
-
-const NFTActionMenu: React.FC<NFTActionMenuProps> = ({
-  nft,
-  onClose,
-  onSendNow,
-  onAddToSelection,
-}) => {
-  const isErc1155 = nft.tokenStandard === 'ERC-1155';
-  const maxQty = isErc1155 ? Math.max(nft.balance, 1) : 1;
-  const [qty, setQty] = useState(1);
-  const [qtyInput, setQtyInput] = useState('1');
-
-  useEffect(() => {
-    setQtyInput(String(qty));
-  }, [qty]);
-
-  const clampQty = (n: number) => Math.max(1, Math.min(maxQty, Math.floor(n) || 1));
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in px-4"
-      onClick={onClose}
-    >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-sm bg-[#111] border border-white/[0.08] rounded-2xl overflow-hidden shadow-2xl animate-slide-up-fade"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header — NFT preview */}
-        <div className="flex items-center gap-3 p-4 border-b border-white/[0.06]">
-          <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/[0.08]">
-            {nft.imageUrl ? (
-              <img src={nft.imageUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <NFTPlaceholder name={nft.contractName} contractAddress={nft.contractAddress} />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">
-              {nft.contractName || 'Unknown Collection'}
-            </p>
-            <p className="text-[11px] text-gray-500 font-mono truncate">
-              #{truncateMiddle(nft.tokenId, 8, 6)}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center text-gray-400 hover:text-white transition-colors shrink-0"
-            aria-label="Close"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* ERC-1155 quantity picker */}
-        {isErc1155 && maxQty > 1 && (
-          <div className="p-4 border-b border-white/[0.06]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
-                Quantity
-              </span>
-              <span className="text-[11px] text-gray-500">
-                Balance: <span className="text-gray-300 font-medium">{maxQty}</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.06] rounded-xl p-1.5">
-              <button
-                onClick={() => setQty(clampQty(qty - 1))}
-                disabled={qty <= 1}
-                className="w-9 h-9 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-                aria-label="Decrease quantity"
-              >
-                <Minus size={16} />
-              </button>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={qtyInput}
-                onChange={(e) => {
-                  const cleaned = e.target.value.replace(/[^\d]/g, '');
-                  setQtyInput(cleaned);
-                }}
-                onBlur={() => {
-                  const n = parseInt(qtyInput, 10);
-                  setQty(clampQty(isNaN(n) ? 1 : n));
-                }}
-                className="flex-1 bg-transparent text-center text-white text-base font-semibold tabular-nums focus:outline-none"
-              />
-              <button
-                onClick={() => setQty(clampQty(qty + 1))}
-                disabled={qty >= maxQty}
-                className="w-9 h-9 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-                aria-label="Increase quantity"
-              >
-                <Plus size={16} />
-              </button>
-              <button
-                onClick={() => setQty(maxQty)}
-                disabled={qty >= maxQty}
-                className="px-2.5 h-9 rounded-lg text-[10px] font-bold text-white
-                           bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
-                           disabled:opacity-30 disabled:cursor-not-allowed
-                           transition-all active:scale-95"
-                aria-label="Select all"
-              >
-                MAX
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Action rows */}
-        <div className="p-2">
-          <button
-            onClick={() => copyText(nft.tokenId, 'Token ID')}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-white/[0.04] transition-colors"
-          >
-            <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
-              <Copy size={16} className="text-gray-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-white">Copy Token ID</p>
-              <p className="text-[11px] text-gray-500 font-mono truncate">
-                {truncateMiddle(nft.tokenId, 10, 6)}
-              </p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => copyText(nft.contractAddress, 'Contract address')}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-white/[0.04] transition-colors"
-          >
-            <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
-              <Copy size={16} className="text-gray-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-white">Copy Contract Address</p>
-              <p className="text-[11px] text-gray-500 font-mono truncate">
-                {truncateMiddle(nft.contractAddress, 10, 6)}
-              </p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onAddToSelection(qty)}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-white/[0.04] transition-colors"
-          >
-            <div className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
-              <Layers size={16} className="text-gray-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-white">Add to Selection</p>
-              <p className="text-[11px] text-gray-500">
-                Batch-send multiple NFTs together
-              </p>
-            </div>
-          </button>
-        </div>
-
-        {/* Send button */}
-        <div className="p-4 pt-2 border-t border-white/[0.06]">
-          <button
-            onClick={() => onSendNow(qty)}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
-                       text-white font-semibold text-sm transition-all duration-300 active:scale-[0.97]
-                       hover:shadow-[0_0_20px_rgba(255,105,0,0.3)]
-                       flex items-center justify-center gap-2"
-          >
-            <Send size={16} />
-            Send{isErc1155 && maxQty > 1 && qty > 1 ? ` ${qty}` : ''}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const NFTCard: React.FC<{
   nft: NFTItem;
@@ -370,16 +179,23 @@ const NFTCard: React.FC<{
 }> = ({ nft, selectionMode, isSelected, selectedQty, onLongPress, onTap }) => {
   const [imgError, setImgError] = useState(false);
   const [imgLoading, setImgLoading] = useState(true);
+  const [showCopy, setShowCopy] = useState(false);
   const truncatedId =
     nft.tokenId.length > 8 ? nft.tokenId.slice(0, 4) + '...' + nft.tokenId.slice(-4) : nft.tokenId;
 
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
   const onPointerDown = () => {
     didLongPress.current = false;
     pressTimer.current = setTimeout(() => {
       didLongPress.current = true;
+      if (nft.imageUrl) {
+        setShowCopy(true);
+        if (copyTimer.current) clearTimeout(copyTimer.current);
+        copyTimer.current = setTimeout(() => setShowCopy(false), 3000);
+      }
       onLongPress?.();
     }, LONG_PRESS_MS);
   };
@@ -449,6 +265,22 @@ const NFTCard: React.FC<{
             {nft.tokenStandard}
           </span>
         </div>
+        {/* Copy icon — appears briefly after long-press */}
+        {showCopy && nft.imageUrl && (
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              copyImageUrl(nft.imageUrl!);
+              setShowCopy(false);
+            }}
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 animate-fade-in"
+          >
+            <div className="w-10 h-10 rounded-full bg-black/70 backdrop-blur-sm border border-white/20 flex items-center justify-center active:scale-90 transition-transform">
+              <Copy size={18} className="text-white" />
+            </div>
+          </button>
+        )}
         {/* ERC-1155 balance badge (bottom-right) */}
         {nft.balance > 1 && (
           <div className="absolute bottom-2 right-2">
@@ -476,12 +308,9 @@ const NFTCard: React.FC<{
 
 const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
   const navigate = useNavigate();
-  const { selected, toggle, clearSelection, isSelected, getQuantity, replaceWithSingle } =
+  const { selected, toggle, clearSelection, isSelected, getQuantity } =
     useNftSelectionStore();
   const selectionMode = selected.length > 0;
-
-  // The NFT currently showing its action menu (long-pressed). Null = closed.
-  const [actionMenuNft, setActionMenuNft] = useState<NFTItem | null>(null);
 
   // Hydrate from cache synchronously so re-opening the tab shows the last
   // seen collections instantly instead of flashing a skeleton for 5-10s.
@@ -1094,7 +923,7 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
             </div>
           ) : (
             <p className="text-[10px] text-gray-600 shrink-0 max-w-[90px] text-right leading-tight">
-              Long-press for actions
+              Long-press to select/send
             </p>
           )}
         </div>
@@ -1111,58 +940,12 @@ const NFTGallery: React.FC<NFTGalleryProps> = ({ address, chainId }) => {
                 selectionMode={selectionMode}
                 isSelected={isSelected(nft.contractAddress, nft.tokenId)}
                 selectedQty={getQuantity(nft.contractAddress, nft.tokenId)}
-                // When already in selection mode, long-press keeps the fast
-                // toggle-add/increment behavior. Otherwise the long-press
-                // opens the action menu (copy, quantity, send-now).
-                onLongPress={() =>
-                  selectionMode ? handleToggleSelect(nft) : setActionMenuNft(nft)
-                }
+                onLongPress={() => handleToggleSelect(nft)}
                 onTap={() => handleToggleSelect(nft)}
               />
             </div>
           ))}
         </div>
-
-        {actionMenuNft && (
-          <NFTActionMenu
-            nft={actionMenuNft}
-            onClose={() => setActionMenuNft(null)}
-            onSendNow={(qty) => {
-              replaceWithSingle({
-                contractAddress: actionMenuNft.contractAddress,
-                tokenId: actionMenuNft.tokenId,
-                contractName: actionMenuNft.contractName,
-                tokenStandard: actionMenuNft.tokenStandard,
-                imageUrl: actionMenuNft.imageUrl,
-                quantity: qty,
-                balance: actionMenuNft.balance,
-              });
-              setActionMenuNft(null);
-              navigate('/wallet/send-nft');
-            }}
-            onAddToSelection={(qty) => {
-              const payload: SelectedNFT = {
-                contractAddress: actionMenuNft.contractAddress,
-                tokenId: actionMenuNft.tokenId,
-                contractName: actionMenuNft.contractName,
-                tokenStandard: actionMenuNft.tokenStandard,
-                imageUrl: actionMenuNft.imageUrl,
-                quantity: 1,
-                balance: actionMenuNft.balance,
-              };
-              // toggle() adds at qty=1 on first call, then increments on each
-              // subsequent call (up to balance) for ERC-1155s. Call repeatedly
-              // to reach the requested qty.
-              const already = getQuantity(actionMenuNft.contractAddress, actionMenuNft.tokenId);
-              const needed = Math.max(0, qty - already);
-              for (let i = 0; i < needed; i++) toggle(payload);
-              setActionMenuNft(null);
-              toast.success(
-                qty > 1 ? `Added ${qty} to selection` : 'Added to selection',
-              );
-            }}
-          />
-        )}
       </div>
     );
   }
