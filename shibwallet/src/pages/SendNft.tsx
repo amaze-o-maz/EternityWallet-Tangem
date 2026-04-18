@@ -22,9 +22,11 @@ import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { ERC721_ABI, ERC1155_ABI } from '../lib/abis';
 import { fetchPrices } from '../lib/prices';
 import { markNftsSent } from '../lib/pendingSentNfts';
+import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 
 const SendNft: React.FC = () => {
   const navigate = useNavigate();
+  useAutoLockOnResume();
   const { address, privateKey, isUnlocked } = useWalletStore();
   const chainId = useNetworkStore((s) => s.chainId);
   const addTransaction = useTransactionStore((s) => s.addTransaction);

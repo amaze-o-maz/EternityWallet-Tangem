@@ -5,9 +5,11 @@ import toast from 'react-hot-toast';
 import QRCode from '../components/QRCode';
 import { useWalletStore } from '../store/walletStore';
 import { useShibName } from '../store/snsStore';
+import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 
 const Receive: React.FC = () => {
   const navigate = useNavigate();
+  useAutoLockOnResume();
   const { address, isUnlocked } = useWalletStore();
   const [copied, setCopied] = React.useState(false);
   const shibName = useShibName(address);

@@ -18,9 +18,11 @@ import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { getNetworkByChainId } from '../lib/chains';
 import { isNativePlatform, openNativeDAppBrowser } from '../lib/dappBrowser';
+import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 
 const DAppBrowser: React.FC = () => {
   const navigate = useNavigate();
+  useAutoLockOnResume();
   const [searchParams] = useSearchParams();
   const initialUrl = searchParams.get('url') || 'https://shibaswap.com';
 

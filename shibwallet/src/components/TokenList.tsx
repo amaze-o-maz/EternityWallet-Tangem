@@ -52,7 +52,7 @@ const TokenRow: React.FC<{
   chainId: number;
   onRemoved?: () => void;
 }> = ({ token, balance, price, sparklineData, index, chainId, onRemoved }) => {
-  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgErrored, setImgErrored] = useState(false);
 
   const displayBalance = formatBalance(balance, token.decimals);
   const numericBalance = tokenBalanceToNumber(balance, token.decimals);
@@ -77,19 +77,14 @@ const TokenRow: React.FC<{
         >
           {token.symbol.slice(0, 2)}
         </div>
-        {imgLoaded && (
+        {token.logoUrl && !imgErrored && (
           <img
             src={token.logoUrl}
             alt={token.symbol}
-            className="w-10 h-10 rounded-full shrink-0 absolute inset-0"
+            className="w-10 h-10 rounded-full shrink-0 absolute inset-0 object-cover"
+            onError={() => setImgErrored(true)}
           />
         )}
-        <img
-          src={token.logoUrl}
-          alt=""
-          className="hidden"
-          onLoad={() => setImgLoaded(true)}
-        />
       </div>
 
       {/* Name + symbol */}
