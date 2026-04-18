@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Header from './Header';
 import BottomNav from './BottomNav';
+import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 
 /** Routes where the global Header is hidden (page provides its own header) */
 const NO_HEADER = new Set<string>();
@@ -17,6 +18,8 @@ const WalletLayout: React.FC = () => {
   useEffect(() => {
     scrollRef.current?.scrollTo(0, 0);
   }, [location.pathname]);
+
+  useAutoLockOnResume();
 
   return (
     <div className="safe-top flex flex-col h-screen bg-shib-bg relative overflow-hidden">

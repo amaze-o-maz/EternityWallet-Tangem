@@ -23,6 +23,7 @@ import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
 import { fetchPrices } from '../lib/prices';
+import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 
 function stringToColor(str: string): string {
   let hash = 0;
@@ -35,6 +36,7 @@ function stringToColor(str: string): string {
 
 const Send: React.FC = () => {
   const navigate = useNavigate();
+  useAutoLockOnResume();
   const { address, privateKey, isUnlocked } = useWalletStore();
   const chainId = useNetworkStore((s) => s.chainId);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
@@ -53,7 +55,7 @@ const Send: React.FC = () => {
   const [txNonce, setTxNonce] = useState<number | null>(null);
   const [estimatingGas, setEstimatingGas] = useState(false);
   const [prices, setPrices] = useState<Record<string, number>>({});
-  const [tokenImgLoaded, setTokenImgLoaded] = useState(false);
+  const [tokenImgErrored, setTokenImgErrored] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
 
@@ -108,9 +110,9 @@ const Send: React.FC = () => {
     }
   }, [chainId, selectedToken]);
 
-  // Reset image loaded state when token changes
+  // Reset image error state when token changes so the new logo gets a chance
   useEffect(() => {
-    setTokenImgLoaded(false);
+    setTokenImgErrored(false);
   }, [selectedToken]);
 
   useEffect(() => {
@@ -410,19 +412,14 @@ const Send: React.FC = () => {
                       >
                         {selectedToken.symbol.slice(0, 2)}
                       </div>
-                      {tokenImgLoaded && (
+                      {selectedToken.logoUrl && !tokenImgErrored && (
                         <img
                           src={selectedToken.logoUrl}
                           alt={selectedToken.symbol}
-                          className="w-7 h-7 rounded-full absolute inset-0"
+                          className="w-7 h-7 rounded-full absolute inset-0 object-cover"
+                          onError={() => setTokenImgErrored(true)}
                         />
                       )}
-                      <img
-                        src={selectedToken.logoUrl}
-                        alt=""
-                        className="hidden"
-                        onLoad={() => setTokenImgLoaded(true)}
-                      />
                     </div>
                     <span className="text-white text-sm font-medium">{selectedToken.symbol}</span>
                     <span className="ml-auto text-xs text-gray-500">

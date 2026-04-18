@@ -37,7 +37,7 @@ const TokenSelectorRow: React.FC<{
   onSelect: (token: TokenInfo) => void;
   index: number;
 }> = ({ token, balance, onSelect, index }) => {
-  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgErrored, setImgErrored] = useState(false);
   const displayBalance = formatBalance(balance, token.decimals);
 
   return (
@@ -58,19 +58,14 @@ const TokenSelectorRow: React.FC<{
         >
           {token.symbol.slice(0, 2)}
         </div>
-        {imgLoaded && (
+        {token.logoUrl && !imgErrored && (
           <img
             src={token.logoUrl}
             alt={token.symbol}
-            className="w-10 h-10 rounded-full absolute inset-0"
+            className="w-10 h-10 rounded-full absolute inset-0 object-cover"
+            onError={() => setImgErrored(true)}
           />
         )}
-        <img
-          src={token.logoUrl}
-          alt=""
-          className="hidden"
-          onLoad={() => setImgLoaded(true)}
-        />
       </div>
 
       <div className="flex-1 min-w-0">

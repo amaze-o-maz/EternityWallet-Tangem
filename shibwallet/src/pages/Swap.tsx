@@ -62,11 +62,11 @@ const TokenButton: React.FC<{
   onClick: () => void;
   label: string;
 }> = ({ token, onClick, label }) => {
-  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgErrored, setImgErrored] = useState(false);
 
-  // Reset when token changes
+  // Reset on token change so the new logo gets a fresh chance to load
   useEffect(() => {
-    setImgLoaded(false);
+    setImgErrored(false);
   }, [token?.address]);
 
   return (
@@ -85,19 +85,14 @@ const TokenButton: React.FC<{
             >
               {token.symbol.slice(0, 2)}
             </div>
-            {imgLoaded && (
+            {token.logoUrl && !imgErrored && (
               <img
                 src={token.logoUrl}
                 alt={token.symbol}
-                className="w-6 h-6 rounded-full absolute inset-0"
+                className="w-6 h-6 rounded-full absolute inset-0 object-cover"
+                onError={() => setImgErrored(true)}
               />
             )}
-            <img
-              src={token.logoUrl}
-              alt=""
-              className="hidden"
-              onLoad={() => setImgLoaded(true)}
-            />
           </div>
           <span className="text-white text-sm font-medium">{token.symbol}</span>
         </>
@@ -119,7 +114,10 @@ const SLIPPAGE_OPTIONS: { label: string; value: SlippageOption }[] = [
 
 /** Small token logo with colored-initial fallback (used in confirm modal) */
 const TokenLogo: React.FC<{ token: TokenInfo }> = ({ token }) => {
-  const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+  useEffect(() => {
+    setErrored(false);
+  }, [token.address]);
   return (
     <div className="relative w-8 h-8 shrink-0">
       <div
@@ -128,13 +126,13 @@ const TokenLogo: React.FC<{ token: TokenInfo }> = ({ token }) => {
       >
         {token.symbol.slice(0, 2)}
       </div>
-      {token.logoUrl && (
-        <>
-          {loaded && (
-            <img src={token.logoUrl} alt={token.symbol} className="w-8 h-8 rounded-full absolute inset-0" />
-          )}
-          <img src={token.logoUrl} alt="" className="hidden" onLoad={() => setLoaded(true)} />
-        </>
+      {token.logoUrl && !errored && (
+        <img
+          src={token.logoUrl}
+          alt={token.symbol}
+          className="w-8 h-8 rounded-full absolute inset-0 object-cover"
+          onError={() => setErrored(true)}
+        />
       )}
     </div>
   );

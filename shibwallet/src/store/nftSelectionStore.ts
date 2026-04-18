@@ -19,6 +19,10 @@ interface NFTSelectionState {
 
 interface NFTSelectionActions {
   toggle: (nft: SelectedNFT) => void;
+  /** Replace the entire selection with a single NFT at the given quantity.
+   *  Used by the NFT action menu's "Send Now" flow so the user skips
+   *  multi-select and jumps straight to the send page with this one item. */
+  replaceWithSingle: (nft: SelectedNFT) => void;
   clearSelection: () => void;
   isSelected: (contractAddress: string, tokenId: string) => boolean;
   getQuantity: (contractAddress: string, tokenId: string) => number;
@@ -74,6 +78,18 @@ export const useNftSelectionStore = create<NFTSelectionState & NFTSelectionActio
       // ERC-1155: multi-select within same collection, start quantity at 1
       set({
         selected: [...selected, { ...nft, quantity: nft.quantity || 1 }],
+        collectionAddress: nft.contractAddress.toLowerCase(),
+        collectionStandard: nft.tokenStandard,
+      });
+    },
+
+    replaceWithSingle: (nft) => {
+      const quantity =
+        nft.tokenStandard === 'ERC-1155'
+          ? Math.max(1, Math.min(nft.quantity || 1, nft.balance || 1))
+          : 1;
+      set({
+        selected: [{ ...nft, quantity }],
         collectionAddress: nft.contractAddress.toLowerCase(),
         collectionStandard: nft.tokenStandard,
       });
