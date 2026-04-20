@@ -2,8 +2,6 @@ import React, { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
-  TrendingUp,
-  TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
   Layers,
@@ -12,6 +10,9 @@ import {
   Zap,
   BarChart3,
   ArrowRightLeft,
+  Shield,
+  Gauge,
+  Radio,
 } from 'lucide-react';
 import { useWalletStore } from '../store/walletStore';
 import { useShibFiStore } from '../store/shibfiStore';
@@ -22,6 +23,8 @@ import {
   marketPressureLabel,
   momentumLabel,
 } from '../lib/shibfiSignals';
+
+/* ── Formatters ─────────────────────────────────────────────────────── */
 
 function fmtNum(n: number, decimals = 2): string {
   if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
@@ -42,6 +45,28 @@ function fmtPct(n: number): string {
   const sign = n >= 0 ? '+' : '';
   return `${sign}${n.toFixed(2)}%`;
 }
+
+function fmtHolders(n: number): string {
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n.toLocaleString();
+}
+
+const TOKEN_COLORS: Record<string, string> = {
+  SHIB: 'from-orange-400 to-red-500',
+  BONE: 'from-amber-300 to-amber-600',
+  LEASH: 'from-purple-400 to-purple-600',
+  TREAT: 'from-pink-400 to-rose-500',
+};
+
+const TOKEN_GLOW: Record<string, string> = {
+  SHIB: 'rgba(255,105,0,0.4)',
+  BONE: 'rgba(245,190,60,0.4)',
+  LEASH: 'rgba(168,85,247,0.4)',
+  TREAT: 'rgba(244,114,182,0.4)',
+};
+
+/* ── Main Component ─────────────────────────────────────────────────── */
 
 const ShibFi: React.FC = () => {
   const navigate = useNavigate();
@@ -73,10 +98,12 @@ const ShibFi: React.FC = () => {
       }
     };
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
 
     return () => {
       clearInterval(iv);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -104,303 +131,521 @@ const ShibFi: React.FC = () => {
   if (!isUnlocked) return null;
 
   const isLoading = store.loading && !store.ticker;
+  const priceUp = (store.ticker?.priceChangePct ?? 0) >= 0;
 
   return (
-    <main className="relative z-10 max-w-md mx-auto w-full px-5 pt-5 pb-40">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out' }}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center">
-            <Activity size={18} className="text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-white">ShibFi</h1>
-            <p className="text-[10px] text-gray-500">Market Intelligence</p>
-          </div>
-        </div>
-        <button
-          onClick={() => store.fetchAll()}
-          disabled={store.loading}
-          className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-gray-400
-                     hover:text-white hover:bg-white/[0.08] transition-all disabled:opacity-50"
-        >
-          <RefreshCw size={14} className={store.loading ? 'animate-spin' : ''} />
-        </button>
+    <>
+      {/* ── Ambient background glow ─────────────────────────────────── */}
+      <div
+        className="fixed left-0 right-0 top-0 h-[60vh] pointer-events-none z-0 overflow-hidden"
+        aria-hidden="true"
+      >
+        <div
+          className="absolute left-1/2 -translate-x-1/2 -top-20 w-[500px] h-[500px]"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(59,130,246,0.1) 0%, rgba(139,92,246,0.06) 30%, transparent 60%)',
+            animation: 'halo-breathe 6s ease-in-out infinite',
+          }}
+        />
       </div>
 
-      {/* Signals */}
-      {signals.length > 0 && (
-        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 50ms both' }}>
-          <div className="space-y-2">
-            {signals.map((sig, idx) => (
+      <main className="relative z-10 max-w-md mx-auto w-full px-5 pt-5 pb-40">
+        {/* ── HERO HEADER ──────────────────────────────────────────── */}
+        <section className="relative text-center mb-6" style={{ animation: 'slide-up-fade 0.5s ease-out' }}>
+          <div
+            className="absolute left-1/2 -translate-x-1/2 -top-4 w-60 h-60 pointer-events-none -z-0"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(59,130,246,0.2) 0%, rgba(139,92,246,0.08) 40%, transparent 65%)',
+              animation: 'halo-breathe 5s ease-in-out infinite',
+            }}
+          />
+
+          {/* Icon medallion */}
+          <div className="relative inline-flex items-center justify-center mb-4 z-10">
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: 'radial-gradient(circle, rgba(59,130,246,0.5) 0%, transparent 65%)',
+                filter: 'blur(14px)',
+                transform: 'scale(2)',
+              }}
+            />
+            <div
+              className="relative w-[68px] h-[68px] rounded-full flex items-center justify-center border border-white/10"
+              style={{
+                background:
+                  'radial-gradient(circle at 30% 20%, #93C5FD 0%, #3B82F6 40%, #6D28D9 100%)',
+                boxShadow:
+                  '0 0 40px rgba(59,130,246,0.5), 0 0 80px rgba(139,92,246,0.25), inset 0 2px 0 rgba(255,255,255,0.25)',
+              }}
+            >
+              <Activity
+                size={30}
+                className="text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+                strokeWidth={2.5}
+              />
+            </div>
+          </div>
+
+          {/* Live badge */}
+          <div className="relative inline-flex items-center gap-1.5 px-3 py-1 rounded-full
+                          bg-blue-500/10 border border-blue-500/25 mb-3 z-10">
+            <div className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" />
+            </div>
+            <span className="text-[10px] font-bold text-blue-300 uppercase tracking-[0.2em]">
+              Market Intelligence
+            </span>
+          </div>
+
+          {/* Price hero */}
+          {store.ticker && (
+            <div className="relative z-10">
+              <h1 className="text-[48px] sm:text-[56px] font-black tracking-tight leading-none mb-1 tabular-nums">
+                <span
+                  className="bg-gradient-to-br from-blue-200 via-blue-400 to-purple-500 bg-clip-text text-transparent"
+                  style={{ filter: 'drop-shadow(0 0 20px rgba(59,130,246,0.4))' }}
+                >
+                  {fmtPrice(store.ticker.price / 1000)}
+                </span>
+              </h1>
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-bold ${
+                  priceUp ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                }`}>
+                  {priceUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+                  {fmtPct(store.ticker.priceChangePct)}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-[0.28em]">
+                SHIB / USDT
+              </p>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="space-y-3 py-4 relative z-10">
+              <div className="h-12 w-56 mx-auto rounded bg-white/[0.06] animate-shimmer" />
+              <div className="h-4 w-32 mx-auto rounded bg-white/[0.04] animate-shimmer" />
+            </div>
+          )}
+
+          {/* Refresh */}
+          <button
+            onClick={() => store.fetchAll()}
+            disabled={store.loading}
+            className="absolute top-2 right-0 p-2 rounded-lg text-gray-500 hover:text-white
+                       transition-colors disabled:opacity-40 z-20"
+          >
+            <RefreshCw size={14} className={store.loading ? 'animate-spin' : ''} />
+          </button>
+        </section>
+
+        {/* ── SIGNALS ─────────────────────────────────────────────── */}
+        {signals.length > 0 && (
+          <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 60ms both' }}>
+            <div className="space-y-2">
+              {signals.map((sig, idx) => {
+                const isUrgent = sig.priority <= 1;
+                return (
+                  <div
+                    key={sig.id}
+                    className={`flex items-start gap-3 px-4 py-3.5 rounded-2xl border overflow-hidden relative
+                      ${isUrgent ? 'border-red-500/20' : 'border-white/[0.06]'}`}
+                    style={{
+                      background: isUrgent
+                        ? 'linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.25) 100%)'
+                        : 'linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(0,0,0,0.2) 100%)',
+                      animation: `slide-up-fade 0.35s ease-out ${idx * 50}ms both`,
+                    }}
+                  >
+                    {isUrgent && (
+                      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+                    )}
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      isUrgent ? 'bg-red-500/15' : 'bg-blue-500/10'
+                    }`}>
+                      <span className="text-base">{sig.emoji}</span>
+                    </div>
+                    <p className="text-[13px] text-gray-200 leading-relaxed pt-1.5">{sig.message}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ── INDICATOR PILLS ─────────────────────────────────────── */}
+        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 120ms both' }}>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              {
+                label: 'Burn',
+                value: burnTrend,
+                icon: <Radio size={11} />,
+                color: burnTrend === 'Rising' ? 'text-orange-400' : burnTrend === 'Cooling' ? 'text-blue-400' : 'text-gray-400',
+                bg: burnTrend === 'Rising' ? 'border-orange-500/20' : burnTrend === 'Cooling' ? 'border-blue-500/20' : 'border-white/[0.06]',
+                glow: burnTrend === 'Rising' ? 'rgba(255,105,0,0.08)' : burnTrend === 'Cooling' ? 'rgba(59,130,246,0.08)' : undefined,
+              },
+              {
+                label: 'Pressure',
+                value: pressure,
+                icon: <Gauge size={11} />,
+                color: pressure === 'Long crowded' ? 'text-green-400' : pressure === 'Short heavy' ? 'text-red-400' : 'text-gray-400',
+                bg: pressure === 'Long crowded' ? 'border-green-500/20' : pressure === 'Short heavy' ? 'border-red-500/20' : 'border-white/[0.06]',
+                glow: pressure !== 'Neutral' ? (pressure === 'Long crowded' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)') : undefined,
+              },
+              {
+                label: 'Momentum',
+                value: momentum,
+                icon: <Activity size={11} />,
+                color: momentum === 'Expanding' ? 'text-green-400' : 'text-yellow-400',
+                bg: momentum === 'Expanding' ? 'border-green-500/20' : 'border-yellow-500/20',
+                glow: momentum === 'Expanding' ? 'rgba(34,197,94,0.08)' : 'rgba(234,179,8,0.08)',
+              },
+            ] as const).map((pill, idx) => (
               <div
-                key={sig.id}
-                className="flex items-start gap-3 px-4 py-3 rounded-xl border border-white/[0.06]"
+                key={pill.label}
+                className={`relative px-3 py-3 rounded-xl border overflow-hidden text-center group
+                           hover:scale-[1.02] transition-transform ${pill.bg}`}
                 style={{
-                  background: sig.priority <= 1
-                    ? 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(0,0,0,0.2) 100%)'
-                    : 'linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(0,0,0,0.2) 100%)',
-                  animation: `slide-up-fade 0.35s ease-out ${idx * 40}ms both`,
+                  background: pill.glow
+                    ? `linear-gradient(160deg, ${pill.glow} 0%, rgba(0,0,0,0.2) 100%)`
+                    : 'rgba(255,255,255,0.02)',
+                  animation: `slide-up-fade 0.4s ease-out ${140 + idx * 50}ms both`,
                 }}
               >
-                <span className="text-lg leading-none mt-0.5">{sig.emoji}</span>
-                <p className="text-xs text-gray-200 leading-relaxed">{sig.message}</p>
+                <div className="flex items-center justify-center gap-1 mb-1.5">
+                  <span className="text-gray-500">{pill.icon}</span>
+                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.14em]">{pill.label}</p>
+                </div>
+                <p className={`text-[12px] font-bold ${pill.color}`}>{pill.value}</p>
               </div>
             ))}
           </div>
         </section>
-      )}
 
-      {/* Indicator Pills */}
-      <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 100ms both' }}>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="px-3 py-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] text-center">
-            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">Burn</p>
-            <p className={`text-[11px] font-bold ${
-              burnTrend === 'Rising' ? 'text-orange-400' : burnTrend === 'Cooling' ? 'text-blue-400' : 'text-gray-400'
-            }`}>
-              {burnTrend}
-            </p>
-          </div>
-          <div className="px-3 py-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] text-center">
-            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">Pressure</p>
-            <p className={`text-[11px] font-bold ${
-              pressure === 'Long crowded' ? 'text-green-400' : pressure === 'Short heavy' ? 'text-red-400' : 'text-gray-400'
-            }`}>
-              {pressure}
-            </p>
-          </div>
-          <div className="px-3 py-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] text-center">
-            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">Momentum</p>
-            <p className={`text-[11px] font-bold ${
-              momentum === 'Expanding' ? 'text-green-400' : 'text-yellow-400'
-            }`}>
-              {momentum}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Price Ticker */}
-      {isLoading ? (
-        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 140ms both' }}>
-          <div className="p-5 rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-            <div className="space-y-3">
-              <div className="h-8 w-32 rounded bg-white/[0.06] animate-shimmer" />
-              <div className="h-4 w-48 rounded bg-white/[0.04] animate-shimmer" />
-              <div className="h-4 w-24 rounded bg-white/[0.04] animate-shimmer" />
-            </div>
-          </div>
-        </section>
-      ) : store.ticker && (
-        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 140ms both' }}>
-          <div className="p-5 rounded-2xl border border-white/[0.06] overflow-hidden relative"
-            style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(0,0,0,0.2) 100%)' }}
+        {/* ── VOLUME + RANGE BAR ──────────────────────────────────── */}
+        {store.ticker && (
+          <section
+            className="mb-5 rounded-2xl border border-white/[0.06] overflow-hidden relative"
+            style={{
+              animation: 'slide-up-fade 0.4s ease-out 180ms both',
+              background:
+                'linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(139,92,246,0.04) 50%, rgba(0,0,0,0.2) 100%)',
+            }}
           >
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">SHIB/USDT</p>
-                <p className="text-2xl font-black text-white tabular-nums">
-                  {fmtPrice(store.ticker.price / 1000)}
-                </p>
-              </div>
-              <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${
-                store.ticker.priceChangePct >= 0
-                  ? 'bg-green-500/10 text-green-400'
-                  : 'bg-red-500/10 text-red-400'
-              }`}>
-                {store.ticker.priceChangePct >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                {fmtPct(store.ticker.priceChangePct)}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Volume 24h</p>
-                <p className="text-xs text-white font-semibold tabular-nums mt-0.5">
-                  {fmtNum(store.ticker.volume24h)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">High</p>
-                <p className="text-xs text-green-400 font-semibold tabular-nums mt-0.5">
-                  {fmtPrice(store.ticker.high24h / 1000)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Low</p>
-                <p className="text-xs text-red-400 font-semibold tabular-nums mt-0.5">
-                  {fmtPrice(store.ticker.low24h / 1000)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Funding + OI */}
-      {(store.funding || store.openInterest) && (
-        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 180ms both' }}>
-          <div className="grid grid-cols-2 gap-3">
-            {store.funding && (
-              <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <BarChart3 size={12} className="text-purple-400" />
-                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Funding</p>
+            <div className="px-4 py-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.12em] mb-1">Volume 24h</p>
+                  <p className="text-sm font-bold text-white tabular-nums">{fmtNum(store.ticker.volume24h)}</p>
                 </div>
-                <p className={`text-lg font-bold tabular-nums ${
-                  store.funding.rate > 0 ? 'text-green-400' : store.funding.rate < 0 ? 'text-red-400' : 'text-gray-300'
+                <div className="text-center">
+                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.12em] mb-1">24h High</p>
+                  <p className="text-sm font-bold text-green-400 tabular-nums">
+                    {fmtPrice(store.ticker.high24h / 1000)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.12em] mb-1">24h Low</p>
+                  <p className="text-sm font-bold text-red-400 tabular-nums">
+                    {fmtPrice(store.ticker.low24h / 1000)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Range bar */}
+              <div className="mt-3">
+                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden relative">
+                  <div
+                    className="absolute inset-y-0 rounded-full"
+                    style={{
+                      background: 'linear-gradient(to right, #EF4444, #F59E0B, #22C55E)',
+                      left: '0%',
+                      width: (() => {
+                        const range = store.ticker!.high24h - store.ticker!.low24h;
+                        if (range <= 0) return '50%';
+                        const pos = ((store.ticker!.price - store.ticker!.low24h) / range) * 100;
+                        return `${Math.max(5, Math.min(95, pos))}%`;
+                      })(),
+                    }}
+                  />
+                  {/* Current price marker */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-400"
+                    style={{
+                      left: (() => {
+                        const range = store.ticker!.high24h - store.ticker!.low24h;
+                        if (range <= 0) return '50%';
+                        const pos = ((store.ticker!.price - store.ticker!.low24h) / range) * 100;
+                        return `${Math.max(5, Math.min(95, pos))}%`;
+                      })(),
+                      transform: 'translate(-50%, -50%)',
+                      boxShadow: '0 0 8px rgba(59,130,246,0.6)',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── FUNDING + OPEN INTEREST ─────────────────────────────── */}
+        {(store.funding || store.openInterest) && (
+          <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 220ms both' }}>
+            <div className="grid grid-cols-2 gap-3">
+              {store.funding && (
+                <div
+                  className="relative p-4 rounded-2xl border border-white/[0.06] overflow-hidden"
+                  style={{
+                    background:
+                      'linear-gradient(160deg, rgba(168,85,247,0.08) 0%, rgba(0,0,0,0.2) 100%)',
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <div className="w-6 h-6 rounded-lg bg-purple-500/15 flex items-center justify-center">
+                      <BarChart3 size={12} className="text-purple-400" />
+                    </div>
+                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.14em]">Funding</p>
+                  </div>
+                  <p className={`text-xl font-black tabular-nums leading-none ${
+                    store.funding.rate > 0 ? 'text-green-400' : store.funding.rate < 0 ? 'text-red-400' : 'text-gray-300'
+                  }`}>
+                    {(store.funding.rate * 100).toFixed(4)}%
+                  </p>
+                  <p className={`text-[10px] mt-1.5 font-semibold ${
+                    store.funding.label === 'Long heavy' ? 'text-green-500/70' : store.funding.label === 'Short heavy' ? 'text-red-500/70' : 'text-gray-600'
+                  }`}>
+                    {store.funding.label}
+                  </p>
+                </div>
+              )}
+              {store.openInterest && (
+                <div
+                  className="relative p-4 rounded-2xl border border-white/[0.06] overflow-hidden"
+                  style={{
+                    background:
+                      'linear-gradient(160deg, rgba(6,182,212,0.07) 0%, rgba(0,0,0,0.2) 100%)',
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <div className="w-6 h-6 rounded-lg bg-cyan-500/15 flex items-center justify-center">
+                      <Layers size={12} className="text-cyan-400" />
+                    </div>
+                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.14em]">Open Interest</p>
+                  </div>
+                  <p className="text-xl font-black text-white tabular-nums leading-none">
+                    {fmtNum(store.openInterest.oi)}
+                  </p>
+                  <p className="text-[10px] text-gray-600 mt-1.5 font-semibold">contracts</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ── EXCHANGE FLOWS ──────────────────────────────────────── */}
+        {store.exchangeFlows && (
+          <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 260ms both' }}>
+            <div
+              className="rounded-2xl border border-white/[0.06] overflow-hidden"
+              style={{
+                background:
+                  'linear-gradient(135deg, rgba(139,92,246,0.06) 0%, rgba(0,0,0,0.2) 100%)',
+              }}
+            >
+              <div className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06]">
+                <div className="w-7 h-7 rounded-lg bg-purple-500/15 flex items-center justify-center">
+                  <ArrowRightLeft size={13} className="text-purple-400" />
+                </div>
+                <h3 className="text-xs font-bold text-white">Exchange Flows</h3>
+                <span className="text-[9px] text-gray-600 font-bold">24H</span>
+                <span className={`ml-auto text-[10px] font-bold px-2.5 py-1 rounded-lg ${
+                  store.exchangeFlows.netLabel === 'Net outflow'
+                    ? 'bg-green-500/15 text-green-400 border border-green-500/20'
+                    : store.exchangeFlows.netLabel === 'Net inflow'
+                      ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+                      : 'bg-gray-500/10 text-gray-400 border border-white/[0.06]'
                 }`}>
-                  {(store.funding.rate * 100).toFixed(4)}%
-                </p>
-                <p className="text-[10px] text-gray-500 mt-0.5">{store.funding.label}</p>
+                  {store.exchangeFlows.netLabel}
+                </span>
               </div>
-            )}
-            {store.openInterest && (
-              <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Layers size={12} className="text-cyan-400" />
-                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Open Interest</p>
+
+              <div className="px-4 py-4">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="p-3 rounded-xl bg-red-500/[0.06] border border-red-500/10">
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.12em] mb-1">Inflow</p>
+                    <div className="flex items-center gap-1">
+                      <ArrowDownRight size={14} className="text-red-400" />
+                      <p className="text-[15px] font-bold text-red-400 tabular-nums">
+                        {fmtNum(store.exchangeFlows.inflow24h)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-green-500/[0.06] border border-green-500/10">
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.12em] mb-1">Outflow</p>
+                    <div className="flex items-center gap-1">
+                      <ArrowUpRight size={14} className="text-green-400" />
+                      <p className="text-[15px] font-bold text-green-400 tabular-nums">
+                        {fmtNum(store.exchangeFlows.outflow24h)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-lg font-bold text-white tabular-nums">
-                  {fmtNum(store.openInterest.oi)}
-                </p>
-                <p className="text-[10px] text-gray-500 mt-0.5">contracts</p>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
 
-      {/* Exchange Flows */}
-      {store.exchangeFlows && (
-        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 220ms both' }}>
-          <div className="p-4 rounded-2xl border border-white/[0.06] overflow-hidden"
-            style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.05) 0%, rgba(0,0,0,0.2) 100%)' }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <ArrowRightLeft size={14} className="text-purple-400" />
-              <h3 className="text-xs font-bold text-white">Exchange Flows (24h)</h3>
-              <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                store.exchangeFlows.netLabel === 'Net outflow'
-                  ? 'bg-green-500/10 text-green-400'
-                  : store.exchangeFlows.netLabel === 'Net inflow'
-                    ? 'bg-red-500/10 text-red-400'
-                    : 'bg-gray-500/10 text-gray-400'
-              }`}>
-                {store.exchangeFlows.netLabel}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Inflow</p>
-                <p className="text-sm font-bold text-red-400 tabular-nums mt-0.5">
-                  <ArrowDownRight size={11} className="inline mr-0.5" />
-                  {fmtNum(store.exchangeFlows.inflow24h)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Outflow</p>
-                <p className="text-sm font-bold text-green-400 tabular-nums mt-0.5">
-                  <ArrowUpRight size={11} className="inline mr-0.5" />
-                  {fmtNum(store.exchangeFlows.outflow24h)}
-                </p>
+                {store.exchangeFlows.recentMoves.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.14em] mb-2">
+                      Recent Whale Moves
+                    </p>
+                    {store.exchangeFlows.recentMoves.slice(0, 5).map((move, idx) => (
+                      <div
+                        key={move.hash}
+                        className="flex items-center gap-2.5 py-2 border-b border-white/[0.03] last:border-b-0"
+                        style={{ animation: `slide-up-fade 0.3s ease-out ${idx * 30}ms both` }}
+                      >
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                          move.direction === 'inflow'
+                            ? 'bg-red-500/15'
+                            : 'bg-green-500/15'
+                        }`}>
+                          {move.direction === 'inflow'
+                            ? <ArrowDownRight size={11} className="text-red-400" />
+                            : <ArrowUpRight size={11} className="text-green-400" />
+                          }
+                        </div>
+                        <span className="text-[12px] text-gray-200 font-semibold tabular-nums">
+                          {fmtNum(move.amount)} SHIB
+                        </span>
+                        <span className="text-[10px] text-gray-500 ml-auto font-medium">{move.exchangeName}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
+          </section>
+        )}
 
-            {store.exchangeFlows.recentMoves.length > 0 && (
-              <div className="border-t border-white/[0.06] pt-2.5 space-y-2">
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Recent Moves</p>
-                {store.exchangeFlows.recentMoves.slice(0, 5).map((move) => (
-                  <div key={move.hash} className="flex items-center gap-2 text-[11px]">
-                    <span className={move.direction === 'inflow' ? 'text-red-400' : 'text-green-400'}>
-                      {move.direction === 'inflow' ? '>' : '<'}
-                    </span>
-                    <span className="text-gray-300 font-medium">{fmtNum(move.amount)} SHIB</span>
-                    <span className="text-gray-600 ml-auto">{move.exchangeName}</span>
+        {/* ── SHIBARIUM NETWORK ───────────────────────────────────── */}
+        {store.shibarium && (
+          <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 300ms both' }}>
+            <div
+              className="rounded-2xl border border-white/[0.06] overflow-hidden"
+              style={{
+                background:
+                  'linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(0,0,0,0.2) 100%)',
+              }}
+            >
+              <div className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06]">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+                  <Zap size={13} className="text-emerald-400" fill="currentColor" />
+                </div>
+                <h3 className="text-xs font-bold text-white">Shibarium Network</h3>
+                <div className="ml-auto flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10">
+                  <div className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  </div>
+                  <span className="text-[9px] text-emerald-400 font-bold">LIVE</span>
+                </div>
+              </div>
+
+              <div className="px-4 py-4 grid grid-cols-2 gap-x-4 gap-y-4">
+                {([
+                  { label: 'Transactions', value: fmtNum(store.shibarium.totalTransactions), icon: <ArrowRightLeft size={11} /> },
+                  { label: 'Blocks', value: fmtNum(store.shibarium.totalBlocks), icon: <Layers size={11} /> },
+                  { label: 'Addresses', value: fmtNum(store.shibarium.totalAddresses), icon: <Users size={11} /> },
+                  { label: 'Block Time', value: `${store.shibarium.avgBlockTime.toFixed(1)}s`, icon: <Gauge size={11} /> },
+                ] as const).map((stat, idx) => (
+                  <div
+                    key={stat.label}
+                    className="relative p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]"
+                    style={{ animation: `slide-up-fade 0.35s ease-out ${300 + idx * 40}ms both` }}
+                  >
+                    <div className="flex items-center gap-1 mb-1.5">
+                      <span className="text-emerald-500/60">{stat.icon}</span>
+                      <p className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.1em]">{stat.label}</p>
+                    </div>
+                    <p className="text-[15px] font-bold text-white tabular-nums">{stat.value}</p>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Shibarium Stats */}
-      {store.shibarium && (
-        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 260ms both' }}>
-          <div className="p-4 rounded-2xl border border-white/[0.06] overflow-hidden"
-            style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(0,0,0,0.2) 100%)' }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <Zap size={14} className="text-emerald-400" />
-              <h3 className="text-xs font-bold text-white">Shibarium Network</h3>
             </div>
+          </section>
+        )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Transactions</p>
-                <p className="text-sm font-bold text-white tabular-nums mt-0.5">
-                  {fmtNum(store.shibarium.totalTransactions)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Blocks</p>
-                <p className="text-sm font-bold text-white tabular-nums mt-0.5">
-                  {fmtNum(store.shibarium.totalBlocks)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Addresses</p>
-                <p className="text-sm font-bold text-white tabular-nums mt-0.5">
-                  {fmtNum(store.shibarium.totalAddresses)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Block Time</p>
-                <p className="text-sm font-bold text-white tabular-nums mt-0.5">
-                  {store.shibarium.avgBlockTime.toFixed(1)}s
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Token Holders */}
-      {store.tokenHolders.length > 0 && (
-        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 300ms both' }}>
-          <div className="p-4 rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-            <div className="flex items-center gap-2 mb-3">
-              <Users size={14} className="text-amber-400" />
-              <h3 className="text-xs font-bold text-white">Token Holders</h3>
-            </div>
-
-            <div className="space-y-2.5">
-              {store.tokenHolders.map((token) => (
-                <div key={`${token.symbol}-${token.chain}`} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white">{token.symbol}</span>
-                    <span className="text-[9px] text-gray-600 uppercase">{token.chain}</span>
-                  </div>
-                  <span className="text-xs text-gray-300 font-semibold tabular-nums">
-                    {fmtNum(token.holders, 0)}
-                  </span>
+        {/* ── TOKEN HOLDERS ───────────────────────────────────────── */}
+        {store.tokenHolders.length > 0 && (
+          <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 340ms both' }}>
+            <div
+              className="rounded-2xl border border-white/[0.06] overflow-hidden"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(245,158,11,0.04) 0%, rgba(0,0,0,0.2) 100%)',
+              }}
+            >
+              <div className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06]">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                  <Users size={13} className="text-amber-400" />
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+                <h3 className="text-xs font-bold text-white">Ecosystem Holders</h3>
+              </div>
 
-      {/* Last updated */}
-      {store.lastUpdated && (
-        <p className="text-center text-[10px] text-gray-600 mt-2">
-          Updated {new Date(store.lastUpdated).toLocaleTimeString()}
-        </p>
-      )}
-    </main>
+              <div className="px-4 py-3">
+                {store.tokenHolders.map((token, idx) => {
+                  const grad = TOKEN_COLORS[token.symbol] || 'from-gray-400 to-gray-600';
+                  const glow = TOKEN_GLOW[token.symbol] || 'rgba(156,163,175,0.3)';
+                  return (
+                    <div
+                      key={`${token.symbol}-${token.chain}`}
+                      className="flex items-center gap-3 py-3 border-b border-white/[0.04] last:border-b-0"
+                      style={{ animation: `slide-up-fade 0.3s ease-out ${340 + idx * 40}ms both` }}
+                    >
+                      {/* Token badge */}
+                      <div
+                        className={`w-8 h-8 rounded-full bg-gradient-to-br ${grad} flex items-center justify-center shrink-0`}
+                        style={{ boxShadow: `0 0 12px ${glow}` }}
+                      >
+                        <span className="text-[10px] font-black text-white drop-shadow">
+                          {token.symbol.charAt(0)}
+                        </span>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-bold text-white">{token.symbol}</p>
+                        <p className="text-[10px] text-gray-500 capitalize">{token.chain}</p>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <p className="text-[13px] font-bold text-white tabular-nums">
+                          {fmtHolders(token.holders)}
+                        </p>
+                        <p className="text-[9px] text-gray-600">holders</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── FOOTER ──────────────────────────────────────────────── */}
+        {store.lastUpdated && (
+          <div className="flex items-center justify-center gap-1.5 mt-3 mb-2">
+            <Shield size={10} className="text-gray-600" />
+            <p className="text-[10px] text-gray-600">
+              Updated {new Date(store.lastUpdated).toLocaleTimeString()}
+            </p>
+          </div>
+        )}
+      </main>
+    </>
   );
 };
 
