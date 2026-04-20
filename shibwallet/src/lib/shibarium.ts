@@ -48,7 +48,7 @@ export async function fetchShibariumStats(): Promise<ShibariumStats | null> {
     totalTransactions: parseInt(data.total_transactions, 10) || 0,
     totalBlocks: parseInt(data.total_blocks, 10) || 0,
     totalAddresses: parseInt(data.total_addresses, 10) || 0,
-    avgBlockTime: data.average_block_time ?? 0,
+    avgBlockTime: (data.average_block_time ?? 0) / 1000,
   };
 }
 
@@ -58,16 +58,17 @@ async function fetchHolders(
   address: string,
   chain: 'ethereum' | 'shibarium',
 ): Promise<TokenHolderInfo | null> {
-  const data = await fetchJson<{
-    holders: string;
-    total_supply: string;
-  }>(`${baseUrl}/tokens/${address}`);
+  const data = await fetchJson<Record<string, unknown>>(
+    `${baseUrl}/tokens/${address}`,
+  );
   if (!data) return null;
+  const raw = data.holders ?? data.holder_count ?? data.holders_count ?? 0;
+  const holders = typeof raw === 'number' ? raw : parseInt(String(raw), 10) || 0;
   return {
     symbol,
     chain,
-    holders: parseInt(data.holders, 10) || 0,
-    totalSupply: data.total_supply ?? '0',
+    holders,
+    totalSupply: String(data.total_supply ?? '0'),
   };
 }
 
