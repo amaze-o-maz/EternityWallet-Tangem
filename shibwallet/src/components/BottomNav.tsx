@@ -5,6 +5,7 @@ import {
   Globe,
   RefreshCw,
   Flame,
+  Activity,
   CreditCard,
   Newspaper,
   Clock,
@@ -20,6 +21,7 @@ const ROW1 = [
 ];
 
 const ROW2 = [
+  { path: '/wallet/shibfi', label: 'ShibFi', icon: Activity },
   { path: '/wallet/buy', label: 'Buy', icon: CreditCard },
   { path: '/wallet/news', label: 'The Shib', icon: Newspaper },
   { path: '/wallet/history', label: 'History', icon: Clock },

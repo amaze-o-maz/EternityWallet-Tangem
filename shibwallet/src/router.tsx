@@ -14,6 +14,7 @@ import History from './pages/History';
 import Magazine from './pages/Magazine';
 import Buy from './pages/Buy';
 import Burns from './pages/Burns';
+import ShibFi from './pages/ShibFi';
 import SendNft from './pages/SendNft';
 
 export const router = createBrowserRouter([
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Wallet /> },
       { path: 'swap', element: <Swap /> },
       { path: 'burns', element: <Burns /> },
+      { path: 'shibfi', element: <ShibFi /> },
       { path: 'dapps', element: <DApps /> },
       { path: 'buy', element: <Buy /> },
       { path: 'news', element: <Magazine /> },
