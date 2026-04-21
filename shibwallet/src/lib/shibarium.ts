@@ -11,20 +11,29 @@ export interface ShibariumStats {
 export interface TokenHolderInfo {
   symbol: string;
   chain: 'ethereum' | 'shibarium';
-  holders: number;
+  holders: number | null;
   totalSupply: string;
 }
 
-const ETH_TOKENS: Record<string, `0x${string}`> = {
-  SHIB: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE',
-  BONE: '0x9813037ee2218799597d83D4a5B6F3b6778218d9',
-  LEASH: '0x27C70Cd1946795B66be9d954418546998b546634',
-  TREAT: '0xfbD5fD3f85e9f4c5e8B086efA34e45904aae49bc',
-};
+interface TokenEntry {
+  symbol: string;
+  address: `0x${string}`;
+  chain: 'ethereum' | 'shibarium';
+  baseUrl: string;
+}
 
-const SHIB_TOKENS: Record<string, `0x${string}`> = {
-  TREAT: '0x985e148Ba5B9e09246Be0B110cFb3681E95bf579',
-};
+const ALL_TOKENS: TokenEntry[] = [
+  // Ethereum
+  { symbol: 'SHIB',  address: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE', chain: 'ethereum',  baseUrl: ETH_BLOCKSCOUT },
+  { symbol: 'BONE',  address: '0x9813037ee2218799597d83D4a5B6F3b6778218d9', chain: 'ethereum',  baseUrl: ETH_BLOCKSCOUT },
+  { symbol: 'LEASH', address: '0x27C70Cd1946795B66be9d954418546998b546634', chain: 'ethereum',  baseUrl: ETH_BLOCKSCOUT },
+  { symbol: 'TREAT', address: '0xa02C49Da76A085e4E1EE60A6b920dDbC8db599F4', chain: 'ethereum',  baseUrl: ETH_BLOCKSCOUT },
+  // Shibarium
+  { symbol: 'SHIB',  address: '0x495eea66b0f8b636d441dc6a98d8f5c3d455c4c0', chain: 'shibarium', baseUrl: SHIBARIUM_API },
+  { symbol: 'LEASH', address: '0x65218a41fb92637254b4f8c97448d3df343a3064', chain: 'shibarium', baseUrl: SHIBARIUM_API },
+  { symbol: 'TREAT', address: '0x506d8d2d9c715Eb34F514cc3EF48C7aBD19e2bc7', chain: 'shibarium', baseUrl: SHIBARIUM_API },
+  { symbol: 'WBONE', address: '0xC76F4c819D820369Fb2d7C1531aB3Bb18e6fE8d8', chain: 'shibarium', baseUrl: SHIBARIUM_API },
+];
 
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
@@ -52,36 +61,24 @@ export async function fetchShibariumStats(): Promise<ShibariumStats | null> {
   };
 }
 
-async function fetchHolders(
-  baseUrl: string,
-  symbol: string,
-  address: string,
-  chain: 'ethereum' | 'shibarium',
-): Promise<TokenHolderInfo | null> {
+async function fetchHolders(entry: TokenEntry): Promise<TokenHolderInfo> {
   const data = await fetchJson<Record<string, unknown>>(
-    `${baseUrl}/tokens/${address}`,
+    `${entry.baseUrl}/tokens/${entry.address}`,
   );
-  if (!data) return null;
-  const raw = data.holders ?? data.holder_count ?? data.holders_count ?? 0;
-  const holders = typeof raw === 'number' ? raw : parseInt(String(raw), 10) || 0;
+  if (!data) {
+    return { symbol: entry.symbol, chain: entry.chain, holders: null, totalSupply: '0' };
+  }
+  const raw = data.holders_count ?? data.holders ?? data.holder_count ?? null;
+  const holders = raw === null ? null : (typeof raw === 'number' ? raw : parseInt(String(raw), 10) || 0);
   return {
-    symbol,
-    chain,
+    symbol: entry.symbol,
+    chain: entry.chain,
     holders,
     totalSupply: String(data.total_supply ?? '0'),
   };
 }
 
 export async function fetchTokenHolders(): Promise<TokenHolderInfo[]> {
-  const tasks: Promise<TokenHolderInfo | null>[] = [];
-
-  for (const [symbol, addr] of Object.entries(ETH_TOKENS)) {
-    tasks.push(fetchHolders(ETH_BLOCKSCOUT, symbol, addr, 'ethereum'));
-  }
-  for (const [symbol, addr] of Object.entries(SHIB_TOKENS)) {
-    tasks.push(fetchHolders(SHIBARIUM_API, symbol, addr, 'shibarium'));
-  }
-
-  const results = await Promise.all(tasks);
-  return results.filter((r): r is TokenHolderInfo => r !== null);
+  const results = await Promise.all(ALL_TOKENS.map(fetchHolders));
+  return results;
 }
