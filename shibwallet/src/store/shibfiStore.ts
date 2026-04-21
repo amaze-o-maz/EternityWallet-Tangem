@@ -16,7 +16,7 @@ import {
   type ExchangeFlowSummary,
 } from '../lib/exchangeFlows';
 
-const CACHE_KEY = 'shibwallet_shibfi_cache';
+const CACHE_KEY = 'shibwallet_shibfi_cache_v2';
 const STALE_MS = 60_000;
 
 interface ShibFiState {
