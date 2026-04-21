@@ -23,10 +23,14 @@ interface TokenEntry {
 }
 
 const ALL_TOKENS: TokenEntry[] = [
+  // Ethereum
   { symbol: 'SHIB',  address: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE', chain: 'ethereum',  baseUrl: ETH_BLOCKSCOUT },
   { symbol: 'BONE',  address: '0x9813037ee2218799597d83D4a5B6F3b6778218d9', chain: 'ethereum',  baseUrl: ETH_BLOCKSCOUT },
   { symbol: 'LEASH', address: '0x27C70Cd1946795B66be9d954418546998b546634', chain: 'ethereum',  baseUrl: ETH_BLOCKSCOUT },
   { symbol: 'TREAT', address: '0xa02C49Da76A085e4E1EE60A6b920dDbC8db599F4', chain: 'ethereum',  baseUrl: ETH_BLOCKSCOUT },
+  // Shibarium
+  { symbol: 'SHIB',  address: '0x495eea66b0f8b636d441dc6a98d8f5c3d455c4c0', chain: 'shibarium', baseUrl: SHIBARIUM_API },
+  { symbol: 'LEASH', address: '0x65218a41fb92637254b4f8c97448d3df343a3064', chain: 'shibarium', baseUrl: SHIBARIUM_API },
   { symbol: 'TREAT', address: '0x506d8d2d9c715Eb34F514cc3EF48C7aBD19e2bc7', chain: 'shibarium', baseUrl: SHIBARIUM_API },
   { symbol: 'WBONE', address: '0xC76F4c819D820369Fb2d7C1531aB3Bb18e6fE8d8', chain: 'shibarium', baseUrl: SHIBARIUM_API },
 ];
