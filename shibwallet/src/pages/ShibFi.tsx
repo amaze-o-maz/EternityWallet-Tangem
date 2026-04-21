@@ -57,6 +57,7 @@ const TOKEN_COLORS: Record<string, string> = {
   BONE: 'from-amber-300 to-amber-600',
   LEASH: 'from-purple-400 to-purple-600',
   TREAT: 'from-pink-400 to-rose-500',
+  WBONE: 'from-amber-200 to-amber-500',
 };
 
 const TOKEN_GLOW: Record<string, string> = {
@@ -64,6 +65,7 @@ const TOKEN_GLOW: Record<string, string> = {
   BONE: 'rgba(245,190,60,0.4)',
   LEASH: 'rgba(168,85,247,0.4)',
   TREAT: 'rgba(244,114,182,0.4)',
+  WBONE: 'rgba(245,190,60,0.3)',
 };
 
 /* ── Main Component ─────────────────────────────────────────────────── */
@@ -623,7 +625,7 @@ const ShibFi: React.FC = () => {
 
                       <div className="text-right shrink-0">
                         <p className="text-[13px] font-bold text-white tabular-nums">
-                          {fmtHolders(token.holders)}
+                          {token.holders !== null ? fmtHolders(token.holders) : '—'}
                         </p>
                         <p className="text-[9px] text-gray-600">holders</p>
                       </div>
