@@ -23,6 +23,7 @@ import {
   marketPressureLabel,
   momentumLabel,
 } from '../lib/shibfiSignals';
+import { ETHEREUM_TOKENS, SHIBARIUM_TOKENS } from '../lib/tokens';
 
 /* ── Formatters ─────────────────────────────────────────────────────── */
 
@@ -52,21 +53,10 @@ function fmtHolders(n: number): string {
   return n.toLocaleString();
 }
 
-const TOKEN_COLORS: Record<string, string> = {
-  SHIB: 'from-orange-400 to-red-500',
-  BONE: 'from-amber-300 to-amber-600',
-  LEASH: 'from-purple-400 to-purple-600',
-  TREAT: 'from-pink-400 to-rose-500',
-  WBONE: 'from-amber-200 to-amber-500',
-};
-
-const TOKEN_GLOW: Record<string, string> = {
-  SHIB: 'rgba(255,105,0,0.4)',
-  BONE: 'rgba(245,190,60,0.4)',
-  LEASH: 'rgba(168,85,247,0.4)',
-  TREAT: 'rgba(244,114,182,0.4)',
-  WBONE: 'rgba(245,190,60,0.3)',
-};
+const TOKEN_LOGOS: Record<string, string> = {};
+for (const t of [...ETHEREUM_TOKENS, ...SHIBARIUM_TOKENS]) {
+  if (t.logoUrl && !TOKEN_LOGOS[t.symbol]) TOKEN_LOGOS[t.symbol] = t.logoUrl;
+}
 
 /* ── Main Component ─────────────────────────────────────────────────── */
 
@@ -146,7 +136,7 @@ const ShibFi: React.FC = () => {
           className="absolute left-1/2 -translate-x-1/2 -top-20 w-[500px] h-[500px]"
           style={{
             background:
-              'radial-gradient(circle, rgba(59,130,246,0.1) 0%, rgba(139,92,246,0.06) 30%, transparent 60%)',
+              'radial-gradient(circle, rgba(255,105,0,0.1) 0%, rgba(196,27,14,0.05) 30%, transparent 60%)',
             animation: 'halo-breathe 6s ease-in-out infinite',
           }}
         />
@@ -169,7 +159,7 @@ const ShibFi: React.FC = () => {
             <div
               className="absolute inset-0 rounded-full"
               style={{
-                background: 'radial-gradient(circle, rgba(59,130,246,0.5) 0%, transparent 65%)',
+                background: 'radial-gradient(circle, rgba(255,105,0,0.5) 0%, transparent 65%)',
                 filter: 'blur(14px)',
                 transform: 'scale(2)',
               }}
@@ -178,9 +168,9 @@ const ShibFi: React.FC = () => {
               className="relative w-[68px] h-[68px] rounded-full flex items-center justify-center border border-white/10"
               style={{
                 background:
-                  'radial-gradient(circle at 30% 20%, #93C5FD 0%, #3B82F6 40%, #6D28D9 100%)',
+                  'radial-gradient(circle at 30% 20%, #FFD166 0%, #FF6900 40%, #C41B0E 100%)',
                 boxShadow:
-                  '0 0 40px rgba(59,130,246,0.5), 0 0 80px rgba(139,92,246,0.25), inset 0 2px 0 rgba(255,255,255,0.25)',
+                  '0 0 40px rgba(255,105,0,0.5), 0 0 80px rgba(196,27,14,0.25), inset 0 2px 0 rgba(255,255,255,0.25)',
               }}
             >
               <Activity
@@ -193,12 +183,12 @@ const ShibFi: React.FC = () => {
 
           {/* Live badge */}
           <div className="relative inline-flex items-center gap-1.5 px-3 py-1 rounded-full
-                          bg-blue-500/10 border border-blue-500/25 mb-3 z-10">
+                          bg-orange-500/10 border border-orange-500/25 mb-3 z-10">
             <div className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75 animate-ping" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-blue-500" />
+              <span className="absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-orange-500" />
             </div>
-            <span className="text-[10px] font-bold text-blue-300 uppercase tracking-[0.2em]">
+            <span className="text-[10px] font-bold text-orange-300 uppercase tracking-[0.2em]">
               Market Intelligence
             </span>
           </div>
@@ -208,8 +198,8 @@ const ShibFi: React.FC = () => {
             <div className="relative z-10">
               <h1 className="text-[48px] sm:text-[56px] font-black tracking-tight leading-none mb-1 tabular-nums">
                 <span
-                  className="bg-gradient-to-br from-blue-200 via-blue-400 to-purple-500 bg-clip-text text-transparent"
-                  style={{ filter: 'drop-shadow(0 0 20px rgba(59,130,246,0.4))' }}
+                  className="bg-gradient-to-br from-[#FFE48C] via-[#FF6900] to-[#C41B0E] bg-clip-text text-transparent"
+                  style={{ filter: 'drop-shadow(0 0 20px rgba(255,105,0,0.45))' }}
                 >
                   {fmtPrice(store.ticker.price / 1000)}
                 </span>
@@ -581,61 +571,85 @@ const ShibFi: React.FC = () => {
           </section>
         )}
 
-        {/* ── TOKEN HOLDERS ───────────────────────────────────────── */}
-        {store.tokenHolders.length > 0 && (
-          <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 340ms both' }}>
-            <div
-              className="rounded-2xl border border-white/[0.06] overflow-hidden"
-              style={{
-                background:
-                  'linear-gradient(180deg, rgba(245,158,11,0.04) 0%, rgba(0,0,0,0.2) 100%)',
-              }}
-            >
-              <div className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06]">
-                <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
-                  <Users size={13} className="text-amber-400" />
+        {/* ── TOKEN HOLDERS (combined across chains) ────────────── */}
+        {store.tokenHolders.length > 0 && (() => {
+          const combined = new Map<string, { holders: number; chains: string[] }>();
+          for (const t of store.tokenHolders) {
+            const prev = combined.get(t.symbol);
+            if (prev) {
+              if (t.holders !== null) prev.holders += t.holders;
+              if (!prev.chains.includes(t.chain)) prev.chains.push(t.chain);
+            } else {
+              combined.set(t.symbol, {
+                holders: t.holders ?? 0,
+                chains: [t.chain],
+              });
+            }
+          }
+          const rows = Array.from(combined.entries())
+            .sort((a, b) => b[1].holders - a[1].holders);
+
+          return (
+            <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 340ms both' }}>
+              <div
+                className="rounded-2xl border border-white/[0.06] overflow-hidden"
+                style={{
+                  background:
+                    'linear-gradient(180deg, rgba(245,158,11,0.04) 0%, rgba(0,0,0,0.2) 100%)',
+                }}
+              >
+                <div className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06]">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                    <Users size={13} className="text-amber-400" />
+                  </div>
+                  <h3 className="text-xs font-bold text-white">Ecosystem Holders</h3>
+                  <span className="ml-auto text-[9px] text-gray-600 font-medium">Combined</span>
                 </div>
-                <h3 className="text-xs font-bold text-white">Ecosystem Holders</h3>
-              </div>
 
-              <div className="px-4 py-3">
-                {store.tokenHolders.map((token, idx) => {
-                  const grad = TOKEN_COLORS[token.symbol] || 'from-gray-400 to-gray-600';
-                  const glow = TOKEN_GLOW[token.symbol] || 'rgba(156,163,175,0.3)';
-                  return (
-                    <div
-                      key={`${token.symbol}-${token.chain}`}
-                      className="flex items-center gap-3 py-3 border-b border-white/[0.04] last:border-b-0"
-                      style={{ animation: `slide-up-fade 0.3s ease-out ${340 + idx * 40}ms both` }}
-                    >
-                      {/* Token badge */}
+                <div className="px-4 py-3">
+                  {rows.map(([symbol, data], idx) => {
+                    const logo = TOKEN_LOGOS[symbol];
+                    const chainLabel = data.chains.length > 1
+                      ? 'Ethereum + Shibarium'
+                      : data.chains[0] === 'ethereum' ? 'Ethereum' : 'Shibarium';
+                    return (
                       <div
-                        className={`w-8 h-8 rounded-full bg-gradient-to-br ${grad} flex items-center justify-center shrink-0`}
-                        style={{ boxShadow: `0 0 12px ${glow}` }}
+                        key={symbol}
+                        className="flex items-center gap-3 py-3 border-b border-white/[0.04] last:border-b-0"
+                        style={{ animation: `slide-up-fade 0.3s ease-out ${340 + idx * 40}ms both` }}
                       >
-                        <span className="text-[10px] font-black text-white drop-shadow">
-                          {token.symbol.charAt(0)}
-                        </span>
-                      </div>
+                        {logo ? (
+                          <img
+                            src={logo}
+                            alt={symbol}
+                            className="w-8 h-8 rounded-full shrink-0"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
+                            <span className="text-[10px] font-black text-gray-400">{symbol.charAt(0)}</span>
+                          </div>
+                        )}
 
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-bold text-white">{token.symbol}</p>
-                        <p className="text-[10px] text-gray-500 capitalize">{token.chain}</p>
-                      </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-white">{symbol}</p>
+                          <p className="text-[10px] text-gray-500">{chainLabel}</p>
+                        </div>
 
-                      <div className="text-right shrink-0">
-                        <p className="text-[13px] font-bold text-white tabular-nums">
-                          {token.holders !== null ? fmtHolders(token.holders) : '—'}
-                        </p>
-                        <p className="text-[9px] text-gray-600">holders</p>
+                        <div className="text-right shrink-0">
+                          <p className="text-[13px] font-bold text-white tabular-nums">
+                            {fmtHolders(data.holders)}
+                          </p>
+                          <p className="text-[9px] text-gray-600">holders</p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </section>
-        )}
+            </section>
+          );
+        })()}
 
         {/* ── FOOTER ──────────────────────────────────────────────── */}
         {store.lastUpdated && (
