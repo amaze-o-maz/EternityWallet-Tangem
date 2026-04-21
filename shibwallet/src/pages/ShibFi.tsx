@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -13,7 +13,12 @@ import {
   Shield,
   Gauge,
   Radio,
+  ExternalLink,
+  X,
+  Copy,
+  Check,
 } from 'lucide-react';
+import type { FlowTransaction } from '../lib/exchangeFlows';
 import { useWalletStore } from '../store/walletStore';
 import { useShibFiStore } from '../store/shibfiStore';
 import { useBurnStore } from '../store/burnStore';
@@ -119,6 +124,15 @@ const ShibFi: React.FC = () => {
   );
   const pressure = useMemo(() => marketPressureLabel(store.funding), [store.funding]);
   const momentum = useMemo(() => momentumLabel(store.ticker), [store.ticker]);
+
+  const [selectedMove, setSelectedMove] = useState<FlowTransaction | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copyText = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(label);
+    setTimeout(() => setCopied(null), 1500);
+  };
 
   if (!isUnlocked) return null;
 
@@ -497,8 +511,10 @@ const ShibFi: React.FC = () => {
                     {store.exchangeFlows.recentMoves.slice(0, 5).map((move, idx) => (
                       <div
                         key={move.hash}
-                        className="flex items-center gap-2.5 py-2 border-b border-white/[0.03] last:border-b-0"
+                        className="flex items-center gap-2.5 py-2.5 border-b border-white/[0.03] last:border-b-0
+                                   cursor-pointer active:bg-white/[0.04] transition-colors rounded-lg -mx-1 px-1"
                         style={{ animation: `slide-up-fade 0.3s ease-out ${idx * 30}ms both` }}
+                        onClick={() => setSelectedMove(move)}
                       >
                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
                           move.direction === 'inflow'
@@ -514,6 +530,7 @@ const ShibFi: React.FC = () => {
                           {fmtNum(move.amount)} SHIB
                         </span>
                         <span className="text-[10px] text-gray-500 ml-auto font-medium">{move.exchangeName}</span>
+                        <ExternalLink size={10} className="text-gray-600 shrink-0" />
                       </div>
                     ))}
                   </div>
@@ -661,6 +678,118 @@ const ShibFi: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* ── WHALE MOVE DETAIL CARD ──────────────────────────────── */}
+      {selectedMove && (() => {
+        const m = selectedMove;
+        const usd = m.amount * burnStore.shibPrice;
+        const date = new Date(m.timestamp * 1000);
+        const truncAddr = (a: string) => `${a.slice(0, 10)}...${a.slice(-8)}`;
+        const isIn = m.direction === 'inflow';
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedMove(null)} />
+
+            <div
+              className="relative w-full max-w-md mx-4 mb-4 bg-[#141414] border border-white/[0.08] rounded-3xl p-5 shadow-2xl"
+              style={{ animation: 'slide-up-fade 250ms ease-out' }}
+            >
+              <button
+                onClick={() => setSelectedMove(null)}
+                className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  isIn ? 'bg-red-500/15 border border-red-500/20' : 'bg-green-500/15 border border-green-500/20'
+                }`}>
+                  {isIn
+                    ? <ArrowDownRight size={18} className="text-red-400" />
+                    : <ArrowUpRight size={18} className="text-green-400" />
+                  }
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    {isIn ? 'Exchange Inflow' : 'Exchange Outflow'}
+                  </h3>
+                  <p className="text-[11px] text-gray-500">{m.exchangeName}</p>
+                </div>
+              </div>
+
+              {/* Amount */}
+              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] mb-4">
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">Amount</p>
+                <p className={`text-xl font-black tabular-nums ${isIn ? 'text-red-400' : 'text-green-400'}`}>
+                  {m.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} SHIB
+                </p>
+                {usd > 0 && (
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    ≈ ${usd >= 1000 ? fmtNum(usd) : usd.toFixed(2)} USD
+                  </p>
+                )}
+              </div>
+
+              {/* Details */}
+              <div className="space-y-3 mb-5">
+                <div className="flex justify-between items-start">
+                  <span className="text-[11px] text-gray-500">From</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-gray-300 font-mono">{truncAddr(m.from)}</span>
+                    <button onClick={() => copyText(m.from, 'from')} className="text-gray-600 hover:text-white transition-colors">
+                      {copied === 'from' ? <Check size={11} className="text-green-400" /> : <Copy size={11} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-start">
+                  <span className="text-[11px] text-gray-500">To</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-gray-300 font-mono">{truncAddr(m.to)}</span>
+                    <button onClick={() => copyText(m.to, 'to')} className="text-gray-600 hover:text-white transition-colors">
+                      {copied === 'to' ? <Check size={11} className="text-green-400" /> : <Copy size={11} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-[11px] text-gray-500">Time</span>
+                  <span className="text-[11px] text-gray-300">
+                    {date.toLocaleDateString()} {date.toLocaleTimeString()}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-start">
+                  <span className="text-[11px] text-gray-500">Tx Hash</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-gray-300 font-mono">{truncAddr(m.hash)}</span>
+                    <button onClick={() => copyText(m.hash, 'hash')} className="text-gray-600 hover:text-white transition-colors">
+                      {copied === 'hash' ? <Check size={11} className="text-green-400" /> : <Copy size={11} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Etherscan button */}
+              <button
+                onClick={() => {
+                  navigate(`/wallet/browser?url=${encodeURIComponent(`https://etherscan.io/tx/${m.hash}`)}`);
+                  setSelectedMove(null);
+                }}
+                className="w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2
+                           bg-gradient-to-r from-orange-500 to-red-500 text-white
+                           hover:from-orange-400 hover:to-red-400 active:scale-[0.98]"
+              >
+                <ExternalLink size={14} />
+                View on Etherscan
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 };
