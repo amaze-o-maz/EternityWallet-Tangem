@@ -590,14 +590,16 @@ const ShibFi: React.FC = () => {
 
         {/* ── TOKEN HOLDERS (combined across chains) ────────────── */}
         {store.tokenHolders.length > 0 && (() => {
+          // Merge WBONE into BONE, then combine per-symbol across chains
           const combined = new Map<string, { holders: number; chains: string[] }>();
           for (const t of store.tokenHolders) {
-            const prev = combined.get(t.symbol);
+            const key = t.symbol === 'WBONE' ? 'BONE' : t.symbol;
+            const prev = combined.get(key);
             if (prev) {
               if (t.holders !== null) prev.holders += t.holders;
               if (!prev.chains.includes(t.chain)) prev.chains.push(t.chain);
             } else {
-              combined.set(t.symbol, {
+              combined.set(key, {
                 holders: t.holders ?? 0,
                 chains: [t.chain],
               });
