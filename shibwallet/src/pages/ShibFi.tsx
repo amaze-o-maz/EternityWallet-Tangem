@@ -13,7 +13,6 @@ import {
   Shield,
   Gauge,
   Radio,
-  Crown,
   ExternalLink,
   X,
   Copy,
@@ -288,12 +287,11 @@ const ShibFi: React.FC = () => {
 
         {/* ── INDICATOR PILLS ─────────────────────────────────────── */}
         <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 120ms both' }}>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {([
               {
                 label: 'Burn',
                 value: burnTrend,
-                sub: null,
                 icon: <Radio size={11} />,
                 color: burnTrend === 'Rising' ? 'text-orange-400' : burnTrend === 'Cooling' ? 'text-blue-400' : 'text-gray-400',
                 bg: burnTrend === 'Rising' ? 'border-orange-500/20' : burnTrend === 'Cooling' ? 'border-blue-500/20' : 'border-white/[0.06]',
@@ -302,7 +300,6 @@ const ShibFi: React.FC = () => {
               {
                 label: 'Pressure',
                 value: pressure,
-                sub: null,
                 icon: <Gauge size={11} />,
                 color: pressure === 'Long crowded' ? 'text-green-400' : pressure === 'Short heavy' ? 'text-red-400' : 'text-gray-400',
                 bg: pressure === 'Long crowded' ? 'border-green-500/20' : pressure === 'Short heavy' ? 'border-red-500/20' : 'border-white/[0.06]',
@@ -311,32 +308,10 @@ const ShibFi: React.FC = () => {
               {
                 label: 'Momentum',
                 value: momentum,
-                sub: null,
                 icon: <Activity size={11} />,
                 color: momentum === 'Expanding' ? 'text-green-400' : 'text-yellow-400',
                 bg: momentum === 'Expanding' ? 'border-green-500/20' : 'border-yellow-500/20',
                 glow: momentum === 'Expanding' ? 'rgba(34,197,94,0.08)' : 'rgba(234,179,8,0.08)',
-              },
-              {
-                label: 'DeFi Dominance',
-                value: store.defiDominance?.label ?? '—',
-                sub: store.defiDominance
-                  ? `${store.defiDominance.dominancePct.toFixed(1)}% · #${store.defiDominance.rank}/${store.defiDominance.totalCompared}`
-                  : null,
-                icon: <Crown size={11} />,
-                color:
-                  store.defiDominance?.label === 'Top Dog' ? 'text-orange-400' :
-                  store.defiDominance?.label === 'Alpha' ? 'text-amber-400' :
-                  store.defiDominance?.label === 'Pack' ? 'text-gray-300' :
-                  'text-gray-400',
-                bg:
-                  store.defiDominance?.label === 'Top Dog' ? 'border-orange-500/30' :
-                  store.defiDominance?.label === 'Alpha' ? 'border-amber-500/20' :
-                  'border-white/[0.06]',
-                glow:
-                  store.defiDominance?.label === 'Top Dog' ? 'rgba(255,105,0,0.12)' :
-                  store.defiDominance?.label === 'Alpha' ? 'rgba(245,158,11,0.08)' :
-                  undefined,
               },
             ] as const).map((pill, idx) => (
               <div
@@ -355,9 +330,6 @@ const ShibFi: React.FC = () => {
                   <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.14em]">{pill.label}</p>
                 </div>
                 <p className={`text-[12px] font-bold ${pill.color}`}>{pill.value}</p>
-                {pill.sub && (
-                  <p className="text-[9px] text-gray-600 font-semibold mt-0.5 tabular-nums">{pill.sub}</p>
-                )}
               </div>
             ))}
           </div>
