@@ -105,6 +105,14 @@ const ShibFi: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const shibHolderTotal = useMemo(() => {
+    let total = 0;
+    for (const h of store.tokenHolders) {
+      if (h.symbol === 'SHIB' && h.holders) total += h.holders;
+    }
+    return total;
+  }, [store.tokenHolders]);
+
   const signals = useMemo(() => {
     return computeSignals({
       burns24h: burnStore.burns24h,
@@ -116,9 +124,10 @@ const ShibFi: React.FC = () => {
       exchangeFlows: store.exchangeFlows,
       defiDominance: store.defiDominance,
       holderDelta: store.holderDelta,
+      shibHolderTotal,
       shibPrice: burnStore.shibPrice,
     });
-  }, [store.funding, store.openInterest, store.ticker, store.exchangeFlows, store.defiDominance, store.holderDelta, burnStore.burns24h, burnStore.burns7d, burnStore.burns30d, burnStore.shibPrice]);
+  }, [store.funding, store.openInterest, store.ticker, store.exchangeFlows, store.defiDominance, store.holderDelta, shibHolderTotal, burnStore.burns24h, burnStore.burns7d, burnStore.burns30d, burnStore.shibPrice]);
 
   const burnTrend = useMemo(
     () => burnTrendLabel(burnStore.burns24h, burnStore.burns7d),
