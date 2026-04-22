@@ -447,7 +447,46 @@ const ShibFi: React.FC = () => {
                   <p className="text-xl font-black text-white tabular-nums leading-none">
                     {fmtNum(store.openInterest.oi)}
                   </p>
-                  <p className="text-[10px] text-gray-600 mt-1.5 font-semibold">contracts</p>
+                  <p className="text-[10px] text-gray-600 mt-1.5 font-semibold">
+                    SHIB
+                    {store.openInterest.perExchange?.length
+                      ? ` · ${store.openInterest.perExchange.length} exchange${store.openInterest.perExchange.length > 1 ? 's' : ''}`
+                      : ''}
+                  </p>
+                  {store.openInterest.perExchange && store.openInterest.perExchange.length > 0 && (
+                    <>
+                      <div className="mt-2.5 flex h-1 w-full overflow-hidden rounded-full bg-white/[0.04]">
+                        {store.openInterest.perExchange.map((e, i) => {
+                          const pct = (e.oi / store.openInterest!.oi) * 100;
+                          const colors = ['#06b6d4', '#8b5cf6', '#f59e0b'];
+                          return (
+                            <div
+                              key={e.exchange}
+                              style={{
+                                width: `${pct}%`,
+                                background: colors[i % colors.length],
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                        {store.openInterest.perExchange.map((e, i) => {
+                          const colors = ['#06b6d4', '#8b5cf6', '#f59e0b'];
+                          const pct = (e.oi / store.openInterest!.oi) * 100;
+                          return (
+                            <span key={e.exchange} className="text-[9px] text-gray-500 font-semibold flex items-center gap-1">
+                              <span
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ background: colors[i % colors.length] }}
+                              />
+                              {e.exchange} {pct.toFixed(0)}%
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

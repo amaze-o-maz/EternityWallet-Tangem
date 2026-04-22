@@ -71,13 +71,13 @@ const Header: React.FC = () => {
 
   return (
     <>
-      <header className="relative flex items-center justify-between px-3 py-2.5 sticky top-0 z-40
+      <header className="relative flex items-center justify-between px-4 py-2.5 sticky top-0 z-40
                           bg-white/[0.03] backdrop-blur-2xl border-b border-white/[0.06]">
         {/* Left: Logo + Wordmark (tap logo for theme picker) */}
-        <div className="flex items-center gap-2 shrink-0 relative" ref={themeRef}>
+        <div className="flex items-center gap-1.5 shrink-0 relative" ref={themeRef}>
           <button
             onClick={() => setThemeOpen(!themeOpen)}
-            className="relative active:scale-90 transition-transform duration-150"
+            className="relative active:scale-90 transition-transform duration-150 p-0.5"
           >
             <div
               className="absolute inset-0 rounded-full"
@@ -87,9 +87,9 @@ const Header: React.FC = () => {
                 filter: 'blur(4px)',
               }}
             />
-            <ShibLogo size={26} className="relative z-10" />
+            <ShibLogo size={24} className="relative z-10" />
           </button>
-          <span className="text-sm font-bold tracking-tight select-none">
+          <span className="text-xs font-bold tracking-tight select-none">
             <span className="text-white">Shib</span>
             <span className="gradient-text">Wallet</span>
           </span>
