@@ -221,18 +221,13 @@ const ShibFi: React.FC = () => {
           {/* Road to $0.01 hero */}
           {store.ticker && (() => {
             const realPrice = store.ticker.price / 1000;
-            const target = 0.01;
-            const logFloor = -8;
-            const logTarget = Math.log10(target);
-            const logPrice = Math.log10(Math.max(realPrice, 1e-9));
-            const pct = Math.min(100, Math.max(0, ((logPrice - logFloor) / (logTarget - logFloor)) * 100));
             const leadingZeros = realPrice >= 1 ? 0 : Math.max(0, -Math.floor(Math.log10(realPrice)) - 1);
             const targetZeros = 1;
             const zerosToKill = Math.max(0, leadingZeros - targetZeros);
 
             return (
               <div className="relative z-10">
-                <h1 className="text-[32px] sm:text-[38px] font-black tracking-tight leading-none mb-2">
+                <h1 className="text-[32px] sm:text-[38px] font-black tracking-tight leading-none mb-4">
                   <span
                     className="bg-gradient-to-br from-[#FFE48C] via-[#FF6900] to-[#C41B0E] bg-clip-text text-transparent"
                     style={{ filter: 'drop-shadow(0 0 20px rgba(255,105,0,0.45))' }}
@@ -240,28 +235,6 @@ const ShibFi: React.FC = () => {
                     Road to $0.01
                   </span>
                 </h1>
-
-                {/* Progress bar */}
-                <div className="mx-auto max-w-[260px] mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[9px] text-gray-500 font-bold tabular-nums">{fmtPrice(realPrice)}</span>
-                    <span className="text-[9px] text-gray-500 font-bold">$0.01</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden border border-white/[0.04]">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${pct}%`,
-                        background: 'linear-gradient(90deg, #C41B0E, #FF6900, #FFE48C)',
-                        boxShadow: '0 0 8px rgba(255,105,0,0.5)',
-                        transition: 'width 0.6s ease-out',
-                      }}
-                    />
-                  </div>
-                  <p className="text-center text-[10px] text-gray-500 font-bold mt-1 tabular-nums">
-                    {pct.toFixed(1)}% on log scale
-                  </p>
-                </div>
 
                 {/* Zeros to kill + daily change */}
                 <div className="flex items-center justify-center gap-3 flex-wrap">

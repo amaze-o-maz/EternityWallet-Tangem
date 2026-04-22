@@ -168,7 +168,7 @@ export function computeSignals(input: SignalInput): Signal[] {
     if (input.holderDelta > 5000) {
       signals.push({
         id: 'holders-surge',
-        emoji: '🐕',
+        emoji: '🫡',
         message: `Holder count surging — +${fmtB(input.holderDelta)} new SHIB holders recently`,
         priority: 1,
       });
@@ -185,7 +185,7 @@ export function computeSignals(input: SignalInput): Signal[] {
     if (input.shibHolderTotal > 1_500_000) {
       signals.push({
         id: 'holders-army',
-        emoji: '🐕',
+        emoji: '🫡',
         message: `ShibArmy ${fmtB(input.shibHolderTotal)} holders strong — Ethereum + Shibarium combined`,
         priority: 4,
       });
