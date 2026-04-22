@@ -21,7 +21,35 @@ import {
 } from '../lib/defiDominance';
 
 const CACHE_KEY = 'shibwallet_shibfi_cache_v3';
+const HOLDER_BASELINE_KEY = 'shibwallet_holder_baseline';
 const STALE_MS = 60_000;
+const BASELINE_WINDOW_MS = 48 * 60 * 60 * 1000; // refresh baseline every 48h
+
+interface HolderBaseline {
+  count: number;
+  timestamp: number;
+}
+
+function readHolderBaseline(): HolderBaseline | null {
+  try {
+    const raw = localStorage.getItem(HOLDER_BASELINE_KEY);
+    return raw ? (JSON.parse(raw) as HolderBaseline) : null;
+  } catch { return null; }
+}
+
+function saveHolderBaseline(count: number) {
+  try {
+    localStorage.setItem(HOLDER_BASELINE_KEY, JSON.stringify({ count, timestamp: Date.now() }));
+  } catch {}
+}
+
+function computeShibHolderTotal(holders: TokenHolderInfo[]): number {
+  let total = 0;
+  for (const h of holders) {
+    if (h.symbol === 'SHIB' && h.holders) total += h.holders;
+  }
+  return total;
+}
 
 interface ShibFiState {
   funding: FundingData | null;
@@ -31,6 +59,7 @@ interface ShibFiState {
   tokenHolders: TokenHolderInfo[];
   exchangeFlows: ExchangeFlowSummary | null;
   defiDominance: DefiDominance | null;
+  holderDelta: number | null;
   loading: boolean;
   lastUpdated: number | null;
 }
@@ -79,6 +108,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
   tokenHolders: INITIAL.tokenHolders ?? [],
   exchangeFlows: INITIAL.exchangeFlows ?? null,
   defiDominance: INITIAL.defiDominance ?? null,
+  holderDelta: null,
   loading: false,
   lastUpdated: INITIAL.lastUpdated ?? null,
 
@@ -139,10 +169,22 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
       .catch((e) => console.error('[ShibFi] shibarium stats:', e))
       .finally(markDone);
 
-    // 3. Token holders
+    // 3. Token holders + holder delta tracking
     fetchTokenHolders()
       .then((holders) => {
-        if (holders.length > 0) set({ tokenHolders: holders });
+        if (holders.length > 0) {
+          const current = computeShibHolderTotal(holders);
+          const baseline = readHolderBaseline();
+          if (baseline) {
+            set({ tokenHolders: holders, holderDelta: current - baseline.count });
+            if (Date.now() - baseline.timestamp > BASELINE_WINDOW_MS) {
+              saveHolderBaseline(current);
+            }
+          } else {
+            saveHolderBaseline(current);
+            set({ tokenHolders: holders, holderDelta: null });
+          }
+        }
       })
       .catch((e) => console.error('[ShibFi] token holders:', e))
       .finally(markDone);

@@ -20,6 +20,7 @@ interface SignalInput {
   exchangeFlows: ExchangeFlowSummary | null;
   defiDominance: DefiDominance | null;
   shibPrice: number;
+  holderDelta: number | null;
 }
 
 export function computeSignals(input: SignalInput): Signal[] {
@@ -157,6 +158,25 @@ export function computeSignals(input: SignalInput): Signal[] {
         emoji: '🏦',
         message: `Exchange inflow rising — ${fmtB(inflow24h)} SHIB deposited`,
         priority: 2,
+      });
+    }
+  }
+
+  // ── Holder count surge ──
+  if (input.holderDelta !== null && input.holderDelta > 0) {
+    if (input.holderDelta > 5000) {
+      signals.push({
+        id: 'holders-surge',
+        emoji: '🐕',
+        message: `Holder count surging — +${fmtB(input.holderDelta)} new holders across ecosystem`,
+        priority: 1,
+      });
+    } else if (input.holderDelta > 1000) {
+      signals.push({
+        id: 'holders-growing',
+        emoji: '👥',
+        message: `Ecosystem growing — +${fmtB(input.holderDelta)} new holders recently`,
+        priority: 3,
       });
     }
   }
