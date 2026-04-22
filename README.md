@@ -44,7 +44,6 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 - **Exchange flows** — 24h inflow/outflow with recent whale move details (tap for full tx info + Etherscan link)
 - **Shibarium network stats** — live transaction count, blocks, addresses, and block time
 - **Ecosystem holders** — combined Ethereum + Shibarium holder counts for SHIB, BONE, LEASH, TREAT
-- **DeFi dominance** — SHIB's share of ETH memecoin DEX volume vs PEPE, FLOKI, MOG, BONK
 - Auto-refresh every 60s with visibility-aware revalidation and localStorage caching
 
 ### SHIB Burns Tracker (Hall of Flame)
