@@ -115,9 +115,10 @@ const ShibFi: React.FC = () => {
       ticker: store.ticker,
       exchangeFlows: store.exchangeFlows,
       defiDominance: store.defiDominance,
+      holderDelta: store.holderDelta,
       shibPrice: burnStore.shibPrice,
     });
-  }, [store.funding, store.openInterest, store.ticker, store.exchangeFlows, store.defiDominance, burnStore.burns24h, burnStore.burns7d, burnStore.burns30d, burnStore.shibPrice]);
+  }, [store.funding, store.openInterest, store.ticker, store.exchangeFlows, store.defiDominance, store.holderDelta, burnStore.burns24h, burnStore.burns7d, burnStore.burns30d, burnStore.shibPrice]);
 
   const burnTrend = useMemo(
     () => burnTrendLabel(burnStore.burns24h, burnStore.burns7d),
@@ -208,30 +209,67 @@ const ShibFi: React.FC = () => {
             </span>
           </div>
 
-          {/* Price hero */}
-          {store.ticker && (
-            <div className="relative z-10">
-              <h1 className="text-[48px] sm:text-[56px] font-black tracking-tight leading-none mb-1 tabular-nums">
-                <span
-                  className="bg-gradient-to-br from-[#FFE48C] via-[#FF6900] to-[#C41B0E] bg-clip-text text-transparent"
-                  style={{ filter: 'drop-shadow(0 0 20px rgba(255,105,0,0.45))' }}
-                >
-                  {fmtPrice(store.ticker.price / 1000)}
-                </span>
-              </h1>
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-bold ${
-                  priceUp ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
-                }`}>
-                  {priceUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
-                  {fmtPct(store.ticker.priceChangePct)}
-                </span>
+          {/* Road to $0.01 hero */}
+          {store.ticker && (() => {
+            const realPrice = store.ticker.price / 1000;
+            const target = 0.01;
+            const logFloor = -8;
+            const logTarget = Math.log10(target);
+            const logPrice = Math.log10(Math.max(realPrice, 1e-9));
+            const pct = Math.min(100, Math.max(0, ((logPrice - logFloor) / (logTarget - logFloor)) * 100));
+            const leadingZeros = realPrice >= 1 ? 0 : Math.max(0, -Math.floor(Math.log10(realPrice)) - 1);
+            const targetZeros = 1;
+            const zerosToKill = Math.max(0, leadingZeros - targetZeros);
+
+            return (
+              <div className="relative z-10">
+                <h1 className="text-[32px] sm:text-[38px] font-black tracking-tight leading-none mb-2">
+                  <span
+                    className="bg-gradient-to-br from-[#FFE48C] via-[#FF6900] to-[#C41B0E] bg-clip-text text-transparent"
+                    style={{ filter: 'drop-shadow(0 0 20px rgba(255,105,0,0.45))' }}
+                  >
+                    Road to $0.01
+                  </span>
+                </h1>
+
+                {/* Progress bar */}
+                <div className="mx-auto max-w-[260px] mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[9px] text-gray-500 font-bold tabular-nums">{fmtPrice(realPrice)}</span>
+                    <span className="text-[9px] text-gray-500 font-bold">$0.01</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden border border-white/[0.04]">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${pct}%`,
+                        background: 'linear-gradient(90deg, #C41B0E, #FF6900, #FFE48C)',
+                        boxShadow: '0 0 8px rgba(255,105,0,0.5)',
+                        transition: 'width 0.6s ease-out',
+                      }}
+                    />
+                  </div>
+                  <p className="text-center text-[10px] text-gray-500 font-bold mt-1 tabular-nums">
+                    {pct.toFixed(1)}% on log scale
+                  </p>
+                </div>
+
+                {/* Zeros to kill + daily change */}
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                    <Zap size={11} className="text-orange-400" />
+                    <span className="text-[11px] font-black text-orange-400 tabular-nums">{zerosToKill} zeros to go</span>
+                  </span>
+                  <span className={`inline-flex items-center gap-0.5 px-2 py-1 rounded-lg text-[11px] font-bold ${
+                    priceUp ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  }`}>
+                    {priceUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+                    {fmtPct(store.ticker.priceChangePct)}
+                  </span>
+                </div>
               </div>
-              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-[0.28em]">
-                SHIB / USDT
-              </p>
-            </div>
-          )}
+            );
+          })()}
 
           {isLoading && (
             <div className="space-y-3 py-4 relative z-10">
