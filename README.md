@@ -35,6 +35,18 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 - Swap confirmation with minimum received calculation
 - Support for Native-to-Token, Token-to-Native, and Token-to-Token swaps
 
+### ShibFi — Market Intelligence
+- **Road to $0.01** hero with live zero-countdown and 24h price change
+- **Real-time signals engine** — prioritized alerts for burn acceleration, funding extremes, volume surges, exchange whale flows, holder growth, DeFi dominance, and price moves
+- **Indicator pills** — at-a-glance burn trend, market pressure, and momentum status
+- **Volume & range bar** — 24h high/low with current price marker
+- **Funding & open interest** — multi-exchange aggregated OI with per-exchange breakdown
+- **Exchange flows** — 24h inflow/outflow with recent whale move details (tap for full tx info + Etherscan link)
+- **Shibarium network stats** — live transaction count, blocks, addresses, and block time
+- **Ecosystem holders** — combined Ethereum + Shibarium holder counts for SHIB, BONE, LEASH, TREAT
+- **DeFi dominance** — SHIB's share of ETH memecoin DEX volume vs PEPE, FLOKI, MOG, BONK
+- Auto-refresh every 60s with visibility-aware revalidation and localStorage caching
+
 ### SHIB Burns Tracker (Hall of Flame)
 - Real-time SHIB burn statistics — total burned, burn rate, recent burns
 - Leaderboard of top burners with ENS/SNS name resolution
@@ -79,6 +91,8 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 | Name Resolution | SNS (Shib Name Service via Cloudflare DoH), ENS (ensideas.com + viem fallback) |
 | News | WordPress REST API with embedded media |
 | Burns | Etherscan API + custom burn tracking |
+| Market Intelligence | Binance, OKX, Bybit (funding/OI/ticker), Whale Alert (exchange flows), DexScreener (DeFi dominance) |
+| Shibarium Stats | Shibariumscan API (network stats + token holders) |
 | Crypto | @scure/bip39, @scure/bip32, crypto-js |
 | Mobile | Capacitor (Android) |
 | dApp Browser | Android WebView + JavaScript injection (EIP-1193) |
@@ -154,6 +168,11 @@ shibwallet/
 │   │   ├── ens.ts         #   ENS reverse resolution (ensideas.com + viem fallback, 24h cache)
 │   │   ├── sns.ts         #   SNS (.shib) name resolution via Cloudflare DoH
 │   │   ├── burns.ts       #   SHIB burn data fetching + aggregation
+│   │   ├── marketData.ts  #   Funding rates, open interest, ticker data
+│   │   ├── exchangeFlows.ts # Exchange inflow/outflow + whale move tracking
+│   │   ├── defiDominance.ts # SHIB vs memecoin DEX volume (DexScreener)
+│   │   ├── shibarium.ts   #   Shibarium network stats + token holders
+│   │   ├── shibfiSignals.ts # Signal engine (burn, funding, volume, holder, flow alerts)
 │   │   └── dappBrowser.ts #   EIP-1193 provider injection for WebView
 │   ├── pages/             # Route pages
 │   │   ├── Wallet.tsx     #   Main dashboard (balances, tokens, NFTs)
@@ -163,6 +182,7 @@ shibwallet/
 │   │   ├── Swap.tsx       #   ShibaSwap DEX interface
 │   │   ├── History.tsx    #   Transaction history (on-chain + local, cached)
 │   │   ├── Burns.tsx      #   SHIB burn tracker / Hall of Flame leaderboard
+│   │   ├── ShibFi.tsx     #   Market Intelligence dashboard
 │   │   ├── Magazine.tsx   #   Shiba ecosystem news feed
 │   │   ├── Buy.tsx        #   Fiat on-ramp
 │   │   ├── DApps.tsx      #   Curated dApp directory
@@ -178,6 +198,7 @@ shibwallet/
 │       ├── burnStore.ts          # SHIB burn data cache
 │       ├── newsStore.ts          # News/magazine article cache with localStorage persistence
 │       ├── nftSelectionStore.ts  # Ephemeral NFT selection state for send flow
+│       ├── shibfiStore.ts         # ShibFi market data cache + parallel fetching
 │       ├── snsStore.ts           # SNS name cache
 │       └── themeStore.ts         # Theme preferences
 ├── android/               # Capacitor Android project with native WebView dApp browser
