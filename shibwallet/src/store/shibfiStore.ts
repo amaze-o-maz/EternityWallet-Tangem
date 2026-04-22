@@ -23,7 +23,7 @@ import {
 const CACHE_KEY = 'shibwallet_shibfi_cache_v3';
 const HOLDER_BASELINE_KEY = 'shibwallet_holder_baseline';
 const STALE_MS = 60_000;
-const BASELINE_WINDOW_MS = 48 * 60 * 60 * 1000; // refresh baseline every 48h
+const BASELINE_WINDOW_MS = 6 * 60 * 60 * 1000; // refresh baseline every 6h
 
 interface HolderBaseline {
   count: number;

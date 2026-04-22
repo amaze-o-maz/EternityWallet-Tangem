@@ -21,6 +21,7 @@ interface SignalInput {
   defiDominance: DefiDominance | null;
   shibPrice: number;
   holderDelta: number | null;
+  shibHolderTotal: number;
 }
 
 export function computeSignals(input: SignalInput): Signal[] {
@@ -162,21 +163,38 @@ export function computeSignals(input: SignalInput): Signal[] {
     }
   }
 
-  // ── Holder count surge ──
+  // ── Holder signals ──
   if (input.holderDelta !== null && input.holderDelta > 0) {
     if (input.holderDelta > 5000) {
       signals.push({
         id: 'holders-surge',
         emoji: '🐕',
-        message: `Holder count surging — +${fmtB(input.holderDelta)} new holders across ecosystem`,
+        message: `Holder count surging — +${fmtB(input.holderDelta)} new SHIB holders recently`,
         priority: 1,
       });
     } else if (input.holderDelta > 1000) {
       signals.push({
         id: 'holders-growing',
         emoji: '👥',
-        message: `Ecosystem growing — +${fmtB(input.holderDelta)} new holders recently`,
+        message: `Ecosystem growing — +${fmtB(input.holderDelta)} new SHIB holders recently`,
         priority: 3,
+      });
+    }
+  }
+  if (input.shibHolderTotal > 0 && !signals.some((s) => s.id.startsWith('holders'))) {
+    if (input.shibHolderTotal > 1_500_000) {
+      signals.push({
+        id: 'holders-army',
+        emoji: '🐕',
+        message: `ShibArmy ${fmtB(input.shibHolderTotal)} holders strong — Ethereum + Shibarium combined`,
+        priority: 4,
+      });
+    } else if (input.shibHolderTotal > 1_000_000) {
+      signals.push({
+        id: 'holders-milestone',
+        emoji: '👥',
+        message: `${fmtB(input.shibHolderTotal)} SHIB holders across Ethereum + Shibarium`,
+        priority: 5,
       });
     }
   }
