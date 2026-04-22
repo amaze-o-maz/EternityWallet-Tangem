@@ -82,12 +82,47 @@ export function computeSignals(input: SignalInput): Signal[] {
   // ── OI + Price divergence ──
   if (input.oi && input.ticker) {
     const pctChange = Math.abs(input.ticker.priceChangePct);
-    if (input.oi.oi > 0 && pctChange < 2) {
+    if (input.oi.oi > 0 && pctChange < 3) {
       signals.push({
         id: 'oi-flat',
         emoji: '⚡',
         message: 'OI building with flat price — potential breakout setup',
+        priority: 3,
+      });
+    }
+  }
+
+  // ── Volume signals ──
+  if (input.ticker) {
+    const vol = input.ticker.volume24h;
+    const pct = input.ticker.priceChangePct;
+    if (vol > 8_000_000_000) {
+      signals.push({
+        id: 'vol-extreme',
+        emoji: '🔊',
+        message: `Extreme volume — ${fmtB(vol)} contracts traded in 24h`,
+        priority: 1,
+      });
+    } else if (vol > 4_000_000_000 && pct > 1) {
+      signals.push({
+        id: 'vol-bullish',
+        emoji: '📊',
+        message: `Volume surging at ${fmtB(vol)} with price up ${pct.toFixed(1)}% — bullish momentum`,
         priority: 2,
+      });
+    } else if (vol > 4_000_000_000 && pct < -1) {
+      signals.push({
+        id: 'vol-bearish',
+        emoji: '📊',
+        message: `Heavy volume at ${fmtB(vol)} — selling pressure with price down ${Math.abs(pct).toFixed(1)}%`,
+        priority: 2,
+      });
+    } else if (vol > 4_000_000_000) {
+      signals.push({
+        id: 'vol-active',
+        emoji: '📊',
+        message: `Active market — ${fmtB(vol)} contracts traded in 24h`,
+        priority: 4,
       });
     }
   }
@@ -148,19 +183,34 @@ export function computeSignals(input: SignalInput): Signal[] {
 
   // ── Price move ──
   if (input.ticker) {
-    if (input.ticker.priceChangePct > 10) {
+    const pct = input.ticker.priceChangePct;
+    if (pct > 10) {
       signals.push({
         id: 'price-surge',
         emoji: '🚀',
-        message: `Price surging +${input.ticker.priceChangePct.toFixed(1)}% in 24h`,
-        priority: 1,
+        message: `Price surging +${pct.toFixed(1)}% in 24h`,
+        priority: 0,
       });
-    } else if (input.ticker.priceChangePct < -10) {
+    } else if (pct > 5) {
+      signals.push({
+        id: 'price-rally',
+        emoji: '📈',
+        message: `Strong rally — price up ${pct.toFixed(1)}% in 24h`,
+        priority: 2,
+      });
+    } else if (pct < -10) {
       signals.push({
         id: 'price-drop',
         emoji: '⚠️',
-        message: `Sharp decline ${input.ticker.priceChangePct.toFixed(1)}% in 24h`,
-        priority: 1,
+        message: `Sharp decline ${pct.toFixed(1)}% in 24h`,
+        priority: 0,
+      });
+    } else if (pct < -5) {
+      signals.push({
+        id: 'price-dip',
+        emoji: '📉',
+        message: `Price pulling back ${pct.toFixed(1)}% in 24h`,
+        priority: 2,
       });
     }
   }
