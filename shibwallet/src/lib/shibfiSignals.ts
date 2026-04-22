@@ -1,6 +1,7 @@
 import type { TimeBucket } from './burns';
 import type { FundingData, OpenInterestData, TickerData } from './marketData';
 import type { ExchangeFlowSummary } from './exchangeFlows';
+import type { DefiDominance } from './defiDominance';
 
 export interface Signal {
   id: string;
@@ -17,6 +18,7 @@ interface SignalInput {
   oi: OpenInterestData | null;
   ticker: TickerData | null;
   exchangeFlows: ExchangeFlowSummary | null;
+  defiDominance: DefiDominance | null;
   shibPrice: number;
 }
 
@@ -120,6 +122,26 @@ export function computeSignals(input: SignalInput): Signal[] {
         emoji: '🏦',
         message: `Exchange inflow rising — ${fmtB(inflow24h)} SHIB deposited`,
         priority: 2,
+      });
+    }
+  }
+
+  // ── DeFi dominance ──
+  if (input.defiDominance) {
+    const { label, dominancePct, rank } = input.defiDominance;
+    if (label === 'Top Dog') {
+      signals.push({
+        id: 'dom-top-dog',
+        emoji: '👑',
+        message: `SHIB leading the pack — ${dominancePct.toFixed(1)}% of memecoin DEX volume`,
+        priority: 1,
+      });
+    } else if (label === 'Alpha') {
+      signals.push({
+        id: 'dom-alpha',
+        emoji: '🐕',
+        message: `SHIB #${rank} by memecoin DEX volume — ${dominancePct.toFixed(1)}% share`,
+        priority: 3,
       });
     }
   }

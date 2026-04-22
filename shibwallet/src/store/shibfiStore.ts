@@ -15,8 +15,12 @@ import {
   fetchExchangeFlows,
   type ExchangeFlowSummary,
 } from '../lib/exchangeFlows';
+import {
+  fetchDefiDominance,
+  type DefiDominance,
+} from '../lib/defiDominance';
 
-const CACHE_KEY = 'shibwallet_shibfi_cache_v2';
+const CACHE_KEY = 'shibwallet_shibfi_cache_v3';
 const STALE_MS = 60_000;
 
 interface ShibFiState {
@@ -26,6 +30,7 @@ interface ShibFiState {
   shibarium: ShibariumStats | null;
   tokenHolders: TokenHolderInfo[];
   exchangeFlows: ExchangeFlowSummary | null;
+  defiDominance: DefiDominance | null;
   loading: boolean;
   lastUpdated: number | null;
 }
@@ -57,6 +62,7 @@ function saveCache(state: ShibFiState) {
         shibarium: state.shibarium,
         tokenHolders: state.tokenHolders,
         exchangeFlows: state.exchangeFlows,
+        defiDominance: state.defiDominance,
         lastUpdated: state.lastUpdated,
       }),
     );
@@ -72,6 +78,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
   shibarium: INITIAL.shibarium ?? null,
   tokenHolders: INITIAL.tokenHolders ?? [],
   exchangeFlows: INITIAL.exchangeFlows ?? null,
+  defiDominance: INITIAL.defiDominance ?? null,
   loading: false,
   lastUpdated: INITIAL.lastUpdated ?? null,
 
@@ -87,6 +94,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
         shibarium: data.shibarium ?? null,
         tokenHolders: data.tokenHolders ?? [],
         exchangeFlows: data.exchangeFlows ?? null,
+        defiDominance: data.defiDominance ?? null,
         lastUpdated: data.lastUpdated ?? null,
       });
       return true;
@@ -106,7 +114,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
     set({ loading: true });
 
     // All sources in parallel — each updates its own slice.
-    let pending = 4;
+    let pending = 5;
     const markDone = () => {
       pending--;
       if (pending === 0) {
@@ -115,7 +123,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
       }
     };
 
-    // 1. Market data (funding + OI + ticker from Binance)
+    // 1. Market data (funding + multi-venue OI + ticker)
     fetchMarketData()
       .then(({ funding, openInterest, ticker }) => {
         set({ funding, openInterest, ticker });
@@ -145,6 +153,14 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
         if (flows) set({ exchangeFlows: flows });
       })
       .catch((e) => console.error('[ShibFi] exchange flows:', e))
+      .finally(markDone);
+
+    // 5. DeFi dominance (SHIB share of ETH memecoin DEX volume)
+    fetchDefiDominance()
+      .then((dom) => {
+        if (dom) set({ defiDominance: dom });
+      })
+      .catch((e) => console.error('[ShibFi] defi dominance:', e))
       .finally(markDone);
   },
 }));
