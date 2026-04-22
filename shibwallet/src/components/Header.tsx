@@ -73,11 +73,11 @@ const Header: React.FC = () => {
     <>
       <header className="relative flex items-center justify-between px-4 py-2.5 sticky top-0 z-40
                           bg-white/[0.03] backdrop-blur-2xl border-b border-white/[0.06]">
-        {/* Left: Logo (tap for theme picker) */}
-        <div className="flex items-center shrink-0 relative" ref={themeRef}>
+        {/* Left: Logo + Wordmark (tap logo for theme picker) */}
+        <div className="flex items-center gap-1.5 shrink-0 relative" ref={themeRef}>
           <button
             onClick={() => setThemeOpen(!themeOpen)}
-            className="relative active:scale-90 transition-transform duration-150 p-1"
+            className="relative active:scale-90 transition-transform duration-150 p-0.5"
           >
             <div
               className="absolute inset-0 rounded-full"
@@ -87,8 +87,12 @@ const Header: React.FC = () => {
                 filter: 'blur(4px)',
               }}
             />
-            <ShibLogo size={30} className="relative z-10" />
+            <ShibLogo size={24} className="relative z-10" />
           </button>
+          <span className="text-xs font-bold tracking-tight select-none">
+            <span className="text-white">Shib</span>
+            <span className="gradient-text">Wallet</span>
+          </span>
 
           {/* Theme picker popover */}
           {themeOpen && (
@@ -138,7 +142,7 @@ const Header: React.FC = () => {
 
         {/* Right: Network + Address + Settings (only when unlocked) */}
         {isUnlocked && (
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <NetworkBadge />
             <AddressPill />
             <button
