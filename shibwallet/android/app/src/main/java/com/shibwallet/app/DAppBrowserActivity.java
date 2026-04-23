@@ -44,6 +44,7 @@ import java.math.BigInteger;
 public class DAppBrowserActivity extends Activity {
     private WebView webView;
     private ProgressBar progressBar;
+    private TextView urlLabel;
     private String walletAddress = "";
     private String privateKey = "";
     private int chainId = 109;
@@ -91,10 +92,54 @@ public class DAppBrowserActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT
         ));
 
+        // Toolbar
+        LinearLayout toolbar = new LinearLayout(this);
+        toolbar.setOrientation(LinearLayout.HORIZONTAL);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setBackgroundColor(Color.parseColor("#0D0D0D"));
+        toolbar.setPadding(dp(8), dp(4), dp(8), dp(4));
+        toolbar.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        // Close button
+        TextView closeBtn = makeToolbarButton("✕"); // ✕
+        closeBtn.setOnClickListener(v -> finish());
+        toolbar.addView(closeBtn);
+
+        // Back button
+        TextView backBtn = makeToolbarButton("←"); // ←
+        backBtn.setOnClickListener(v -> { if (webView != null && webView.canGoBack()) webView.goBack(); });
+        toolbar.addView(backBtn);
+
+        // Forward button
+        TextView fwdBtn = makeToolbarButton("→"); // →
+        fwdBtn.setOnClickListener(v -> { if (webView != null && webView.canGoForward()) webView.goForward(); });
+        toolbar.addView(fwdBtn);
+
+        // Refresh button
+        TextView refreshBtn = makeToolbarButton("↻"); // ↻
+        refreshBtn.setOnClickListener(v -> { if (webView != null) webView.reload(); });
+        toolbar.addView(refreshBtn);
+
+        // URL label
+        urlLabel = new TextView(this);
+        urlLabel.setSingleLine(true);
+        urlLabel.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        urlLabel.setTextColor(Color.parseColor("#888888"));
+        urlLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        urlLabel.setPadding(dp(8), 0, dp(8), 0);
+        LinearLayout.LayoutParams urlParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        urlLabel.setLayoutParams(urlParams);
+        try { urlLabel.setText(new java.net.URL(url).getHost()); } catch (Exception e) { urlLabel.setText(url); }
+        toolbar.addView(urlLabel);
+
+        root.addView(toolbar);
+
         // Progress bar
         progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progressBar.setLayoutParams(new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 4
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(2)
         ));
         progressBar.setMax(100);
         progressBar.setProgress(0);
@@ -151,6 +196,9 @@ public class DAppBrowserActivity extends Activity {
                     .replace("__CHAIN_ID__", String.valueOf(chainId))
                     .replace("__RPC_URL__", rpcUrl);
                 view.evaluateJavascript(script, null);
+
+                // Update URL label
+                try { urlLabel.setText(new java.net.URL(url).getHost()); } catch (Exception e) { urlLabel.setText(url); }
 
                 // Notify the parent about page info
                 sendEvent("pageLoaded", url, view.getTitle());
@@ -565,6 +613,23 @@ public class DAppBrowserActivity extends Activity {
 
     private int dp(int dp) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, getResources().getDisplayMetrics());
+    }
+
+    private TextView makeToolbarButton(String label) {
+        TextView btn = new TextView(this);
+        btn.setText(label);
+        btn.setTextColor(Color.parseColor("#AAAAAA"));
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        btn.setGravity(Gravity.CENTER);
+        int size = dp(40);
+        btn.setLayoutParams(new LinearLayout.LayoutParams(size, size));
+        btn.setClickable(true);
+        btn.setFocusable(true);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(10));
+        bg.setColor(Color.TRANSPARENT);
+        btn.setBackground(bg);
+        return btn;
     }
 
     private static byte[] hexStringToByteArray(String s) {

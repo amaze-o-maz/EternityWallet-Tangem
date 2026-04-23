@@ -526,7 +526,7 @@ const Swap: React.FC = () => {
             </div>
 
             <button
-              onClick={() => navigate(`/wallet/browser?url=${encodeURIComponent(getExplorerTxUrl(chainId, txHash))}`)}
+              onClick={() => navigate(`/wallet/browser?url=${encodeURIComponent(getExplorerTxUrl(chainId, txHash))}`, { replace: true })}
               className="inline-flex items-center gap-1.5 text-sm text-[#FF6900] hover:text-[#FFB800] transition-colors mb-6"
             >
               View on Explorer
