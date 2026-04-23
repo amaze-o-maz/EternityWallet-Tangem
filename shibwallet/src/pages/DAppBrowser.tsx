@@ -17,7 +17,7 @@ import {
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { getNetworkByChainId } from '../lib/chains';
-import { isNativePlatform, openNativeDAppBrowser } from '../lib/dappBrowser';
+import { isNativePlatform, openNativeDAppBrowser, markBrowserOpen } from '../lib/dappBrowser';
 import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 
 const DAppBrowser: React.FC = () => {
@@ -46,6 +46,7 @@ const DAppBrowser: React.FC = () => {
   // On native, launch the native WebView browser with Web3 injection
   useEffect(() => {
     if (isNativePlatform() && address && privateKey) {
+      markBrowserOpen();
       openNativeDAppBrowser({
         url: initialUrl,
         address,
