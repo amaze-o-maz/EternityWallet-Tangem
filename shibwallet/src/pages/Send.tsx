@@ -711,10 +711,8 @@ const Send: React.FC = () => {
             )}
 
             {/* Action buttons */}
-            <a
-              href={getExplorerTxUrl(chainId, txHash)}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => navigate(`/wallet/browser?url=${encodeURIComponent(getExplorerTxUrl(chainId, txHash))}`)}
               className="w-full py-3.5 rounded-xl border border-white/[0.08] bg-white/[0.03]
                          text-white font-medium text-sm transition-all duration-300 active:scale-[0.97]
                          hover:border-[#FF6900]/30 hover:shadow-[0_0_15px_rgba(255,105,0,0.08)]
@@ -722,7 +720,7 @@ const Send: React.FC = () => {
             >
               View on Explorer
               <ExternalLink size={14} />
-            </a>
+            </button>
             <button
               onClick={() => navigate('/wallet')}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
