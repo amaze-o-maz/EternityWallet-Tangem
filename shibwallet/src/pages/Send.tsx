@@ -712,7 +712,7 @@ const Send: React.FC = () => {
 
             {/* Action buttons */}
             <button
-              onClick={() => navigate(`/wallet/browser?url=${encodeURIComponent(getExplorerTxUrl(chainId, txHash))}`)}
+              onClick={() => navigate(`/wallet/browser?url=${encodeURIComponent(getExplorerTxUrl(chainId, txHash))}`, { replace: true })}
               className="w-full py-3.5 rounded-xl border border-white/[0.08] bg-white/[0.03]
                          text-white font-medium text-sm transition-all duration-300 active:scale-[0.97]
                          hover:border-[#FF6900]/30 hover:shadow-[0_0_15px_rgba(255,105,0,0.08)]
