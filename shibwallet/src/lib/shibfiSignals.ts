@@ -3,6 +3,7 @@ import type { FundingData, OpenInterestData, TickerData } from './marketData';
 import type { ExchangeFlowSummary } from './exchangeFlows';
 import type { DefiDominance } from './defiDominance';
 import type { HolderGrowth } from '../store/shibfiStore';
+import type { ShibariumStats } from './shibarium';
 
 export interface Signal {
   id: string;
@@ -20,6 +21,7 @@ interface SignalInput {
   ticker: TickerData | null;
   exchangeFlows: ExchangeFlowSummary | null;
   defiDominance: DefiDominance | null;
+  shibarium: ShibariumStats | null;
   shibPrice: number;
   holderGrowth: HolderGrowth | null;
   shibHolderTotal: number;
@@ -28,7 +30,7 @@ interface SignalInput {
 export function computeSignals(input: SignalInput): Signal[] {
   const signals: Signal[] = [];
 
-  // ── Burn signals (bullish only) ──
+  // ── Burn signals ──
   const avg7dPerDay = input.burns7d.amount / 7;
   const burn24h = input.burns24h.amount;
 
@@ -48,7 +50,17 @@ export function computeSignals(input: SignalInput): Signal[] {
     });
   }
 
-  // ── Funding signals (bullish only) ──
+  // Burn total milestone
+  if (input.burns30d.amount > 0) {
+    signals.push({
+      id: 'burn-active',
+      emoji: '🔥',
+      message: `${fmtB(input.burns30d.amount)} SHIB burned in 30 days — supply shrinking`,
+      priority: 6,
+    });
+  }
+
+  // ── Funding signals ──
   if (input.funding) {
     const rate = input.funding.rate;
     if (rate > 0.0005) {
@@ -65,10 +77,17 @@ export function computeSignals(input: SignalInput): Signal[] {
         message: `Longs paying heavy premium — funding ${(rate * 100).toFixed(3)}%`,
         priority: 3,
       });
+    } else if (rate >= 0) {
+      signals.push({
+        id: 'funding-healthy',
+        emoji: '💪',
+        message: 'Funding rate healthy — balanced market with room to run',
+        priority: 6,
+      });
     }
   }
 
-  // ── OI + Price divergence ──
+  // ── OI signals ──
   if (input.oi && input.ticker) {
     const pctChange = Math.abs(input.ticker.priceChangePct);
     if (input.oi.oi > 0 && pctChange < 3) {
@@ -80,8 +99,16 @@ export function computeSignals(input: SignalInput): Signal[] {
       });
     }
   }
+  if (input.oi && input.oi.oi > 0) {
+    signals.push({
+      id: 'oi-strong',
+      emoji: '💎',
+      message: `${fmtB(input.oi.oi)} SHIB in open interest — strong trader conviction`,
+      priority: 7,
+    });
+  }
 
-  // ── Volume signals (bullish / neutral only) ──
+  // ── Volume signals ──
   if (input.ticker) {
     const vol = input.ticker.volume24h;
     const pct = input.ticker.priceChangePct;
@@ -106,10 +133,17 @@ export function computeSignals(input: SignalInput): Signal[] {
         message: `Active market — ${fmtB(vol)} contracts traded in 24h`,
         priority: 4,
       });
+    } else if (vol > 1_000_000_000) {
+      signals.push({
+        id: 'vol-steady',
+        emoji: '📊',
+        message: `${fmtB(vol)} contracts traded — SHIB staying liquid`,
+        priority: 7,
+      });
     }
   }
 
-  // ── Volume + price compression ──
+  // ── Price compression ──
   if (input.ticker) {
     const range = input.ticker.high24h - input.ticker.low24h;
     const midPrice = (input.ticker.high24h + input.ticker.low24h) / 2;
@@ -123,7 +157,20 @@ export function computeSignals(input: SignalInput): Signal[] {
     }
   }
 
-  // ── Exchange flow signals (bullish only) ──
+  // ── Price resilience (flat is bullish framing) ──
+  if (input.ticker) {
+    const pct = input.ticker.priceChangePct;
+    if (pct >= -2 && pct <= 2) {
+      signals.push({
+        id: 'price-stable',
+        emoji: '🛡️',
+        message: 'Price holding steady — accumulation zone',
+        priority: 6,
+      });
+    }
+  }
+
+  // ── Exchange flow signals ──
   if (input.exchangeFlows) {
     const { outflow24h, netLabel } = input.exchangeFlows;
     if (netLabel === 'Net outflow' && outflow24h > 1_000_000_000) {
@@ -185,6 +232,33 @@ export function computeSignals(input: SignalInput): Signal[] {
         message: `SHIB #${rank} by memecoin DEX volume — ${dominancePct.toFixed(1)}% share`,
         priority: 3,
       });
+    } else if (dominancePct > 5) {
+      signals.push({
+        id: 'dom-contender',
+        emoji: '🐕',
+        message: `SHIB holding ${dominancePct.toFixed(1)}% of memecoin DEX volume`,
+        priority: 5,
+      });
+    }
+  }
+
+  // ── Shibarium network ──
+  if (input.shibarium) {
+    if (input.shibarium.totalTransactions > 0) {
+      signals.push({
+        id: 'shib-network',
+        emoji: '⛓️',
+        message: `Shibarium processed ${fmtB(input.shibarium.totalTransactions)} transactions — L2 thriving`,
+        priority: 5,
+      });
+    }
+    if (input.shibarium.totalAddresses > 100_000) {
+      signals.push({
+        id: 'shib-addresses',
+        emoji: '🌐',
+        message: `${fmtB(input.shibarium.totalAddresses)} addresses on Shibarium — network expanding`,
+        priority: 6,
+      });
     }
   }
 
@@ -208,6 +282,14 @@ export function computeSignals(input: SignalInput): Signal[] {
     }
   }
 
+  // ── Ecosystem signal (always positive) ──
+  signals.push({
+    id: 'ecosystem',
+    emoji: '🚀',
+    message: 'SHIB ecosystem expanding — burns, L2, DeFi all active',
+    priority: 8,
+  });
+
   signals.sort((a, b) => a.priority - b.priority);
   return signals.slice(0, 6);
 }
@@ -216,6 +298,7 @@ function fmtB(n: number): string {
   if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
   if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return n.toLocaleString();
 }
 

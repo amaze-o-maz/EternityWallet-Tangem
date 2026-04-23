@@ -23,7 +23,7 @@ import {
 const CACHE_KEY = 'shibwallet_shibfi_cache_v3';
 const HOLDER_SNAPSHOTS_KEY = 'shibwallet_holder_snapshots';
 const STALE_MS = 60_000;
-const SNAPSHOT_MIN_INTERVAL_MS = 60 * 60 * 1000; // at most 1 snapshot per hour
+const SNAPSHOT_MIN_INTERVAL_MS = 5 * 60 * 1000; // record at most 1 per 5 minutes
 const MAX_SNAPSHOT_AGE_MS = 400 * 24 * 60 * 60 * 1000; // keep ~13 months
 
 interface HolderSnapshot {
@@ -65,7 +65,7 @@ function addSnapshot(count: number): HolderSnapshot[] {
 
 function findClosestBefore(snaps: HolderSnapshot[], ageMs: number): HolderSnapshot | null {
   const target = Date.now() - ageMs;
-  const window = ageMs * 0.3; // 30% tolerance
+  const window = ageMs * 0.3;
   let best: HolderSnapshot | null = null;
   let bestDist = Infinity;
   for (const s of snaps) {
@@ -79,14 +79,19 @@ function findClosestBefore(snaps: HolderSnapshot[], ageMs: number): HolderSnapsh
 }
 
 function computeHolderGrowth(snaps: HolderSnapshot[], current: number): HolderGrowth {
+  if (snaps.length < 2) return {};
+
   const DAY = 24 * 60 * 60 * 1000;
   const growth: HolderGrowth = {};
+  const oldest = snaps[0];
+
   const periods = [
     { key: 'day' as const, ms: DAY },
     { key: 'week' as const, ms: 7 * DAY },
     { key: 'month' as const, ms: 30 * DAY },
     { key: 'year' as const, ms: 365 * DAY },
   ];
+
   for (const { key, ms } of periods) {
     const snap = findClosestBefore(snaps, ms);
     if (snap) {
@@ -94,6 +99,13 @@ function computeHolderGrowth(snaps: HolderSnapshot[], current: number): HolderGr
       if (delta > 0) growth[key] = delta;
     }
   }
+
+  // Fallback: if no period matched yet, use oldest snapshot we have
+  if (!growth.day && !growth.week && !growth.month && !growth.year && oldest) {
+    const delta = current - oldest.count;
+    if (delta > 0) growth.day = delta;
+  }
+
   return growth;
 }
 
@@ -197,7 +209,6 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
     if (get().loading) return;
     set({ loading: true });
 
-    // All sources in parallel — each updates its own slice.
     let pending = 5;
     const markDone = () => {
       pending--;
@@ -207,7 +218,6 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
       }
     };
 
-    // 1. Market data (funding + multi-venue OI + ticker)
     fetchMarketData()
       .then(({ funding, openInterest, ticker }) => {
         set({ funding, openInterest, ticker });
@@ -215,7 +225,6 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
       .catch((e) => console.error('[ShibFi] market data:', e))
       .finally(markDone);
 
-    // 2. Shibarium network stats
     fetchShibariumStats()
       .then((stats) => {
         if (stats) set({ shibarium: stats });
@@ -223,7 +232,6 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
       .catch((e) => console.error('[ShibFi] shibarium stats:', e))
       .finally(markDone);
 
-    // 3. Token holders + snapshot-based growth tracking
     fetchTokenHolders()
       .then((holders) => {
         if (holders.length > 0) {
@@ -236,7 +244,6 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
       .catch((e) => console.error('[ShibFi] token holders:', e))
       .finally(markDone);
 
-    // 4. Exchange flows
     fetchExchangeFlows()
       .then((flows) => {
         if (flows) set({ exchangeFlows: flows });
@@ -244,7 +251,6 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
       .catch((e) => console.error('[ShibFi] exchange flows:', e))
       .finally(markDone);
 
-    // 5. DeFi dominance (SHIB share of ETH memecoin DEX volume)
     fetchDefiDominance()
       .then((dom) => {
         if (dom) set({ defiDominance: dom });
