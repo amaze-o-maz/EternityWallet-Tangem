@@ -123,11 +123,11 @@ const ShibFi: React.FC = () => {
       ticker: store.ticker,
       exchangeFlows: store.exchangeFlows,
       defiDominance: store.defiDominance,
-      holderDelta: store.holderDelta,
+      holderGrowth: store.holderGrowth,
       shibHolderTotal,
       shibPrice: burnStore.shibPrice,
     });
-  }, [store.funding, store.openInterest, store.ticker, store.exchangeFlows, store.defiDominance, store.holderDelta, shibHolderTotal, burnStore.burns24h, burnStore.burns7d, burnStore.burns30d, burnStore.shibPrice]);
+  }, [store.funding, store.openInterest, store.ticker, store.exchangeFlows, store.defiDominance, store.holderGrowth, shibHolderTotal, burnStore.burns24h, burnStore.burns7d, burnStore.burns30d, burnStore.shibPrice]);
 
   const burnTrend = useMemo(
     () => burnTrendLabel(burnStore.burns24h, burnStore.burns7d),
