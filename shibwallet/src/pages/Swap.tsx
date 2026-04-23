@@ -525,15 +525,13 @@ const Swap: React.FC = () => {
               </p>
             </div>
 
-            <a
-              href={getExplorerTxUrl(chainId, txHash)}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => navigate(`/wallet/browser?url=${encodeURIComponent(getExplorerTxUrl(chainId, txHash))}`)}
               className="inline-flex items-center gap-1.5 text-sm text-[#FF6900] hover:text-[#FFB800] transition-colors mb-6"
             >
               View on Explorer
               <ExternalLink size={14} />
-            </a>
+            </button>
             <div>
               <button
                 onClick={() => navigate('/wallet')}
