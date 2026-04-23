@@ -21,26 +21,80 @@ import {
 } from '../lib/defiDominance';
 
 const CACHE_KEY = 'shibwallet_shibfi_cache_v3';
-const HOLDER_BASELINE_KEY = 'shibwallet_holder_baseline';
+const HOLDER_SNAPSHOTS_KEY = 'shibwallet_holder_snapshots';
 const STALE_MS = 60_000;
-const BASELINE_WINDOW_MS = 6 * 60 * 60 * 1000; // refresh baseline every 6h
+const SNAPSHOT_MIN_INTERVAL_MS = 60 * 60 * 1000; // at most 1 snapshot per hour
+const MAX_SNAPSHOT_AGE_MS = 400 * 24 * 60 * 60 * 1000; // keep ~13 months
 
-interface HolderBaseline {
+interface HolderSnapshot {
   count: number;
   timestamp: number;
 }
 
-function readHolderBaseline(): HolderBaseline | null {
-  try {
-    const raw = localStorage.getItem(HOLDER_BASELINE_KEY);
-    return raw ? (JSON.parse(raw) as HolderBaseline) : null;
-  } catch { return null; }
+export interface HolderGrowth {
+  day?: number;
+  week?: number;
+  month?: number;
+  year?: number;
 }
 
-function saveHolderBaseline(count: number) {
+function readSnapshots(): HolderSnapshot[] {
   try {
-    localStorage.setItem(HOLDER_BASELINE_KEY, JSON.stringify({ count, timestamp: Date.now() }));
+    const raw = localStorage.getItem(HOLDER_SNAPSHOTS_KEY);
+    return raw ? (JSON.parse(raw) as HolderSnapshot[]) : [];
+  } catch { return []; }
+}
+
+function saveSnapshots(snaps: HolderSnapshot[]) {
+  try {
+    localStorage.setItem(HOLDER_SNAPSHOTS_KEY, JSON.stringify(snaps));
   } catch {}
+}
+
+function addSnapshot(count: number): HolderSnapshot[] {
+  const snaps = readSnapshots();
+  const now = Date.now();
+  const last = snaps[snaps.length - 1];
+  if (last && now - last.timestamp < SNAPSHOT_MIN_INTERVAL_MS) return snaps;
+  snaps.push({ count, timestamp: now });
+  const cutoff = now - MAX_SNAPSHOT_AGE_MS;
+  const trimmed = snaps.filter((s) => s.timestamp >= cutoff);
+  saveSnapshots(trimmed);
+  return trimmed;
+}
+
+function findClosestBefore(snaps: HolderSnapshot[], ageMs: number): HolderSnapshot | null {
+  const target = Date.now() - ageMs;
+  const window = ageMs * 0.3; // 30% tolerance
+  let best: HolderSnapshot | null = null;
+  let bestDist = Infinity;
+  for (const s of snaps) {
+    const dist = Math.abs(s.timestamp - target);
+    if (dist < bestDist && s.timestamp <= target + window) {
+      bestDist = dist;
+      best = s;
+    }
+  }
+  return best;
+}
+
+function computeHolderGrowth(snaps: HolderSnapshot[], current: number): HolderGrowth {
+  const DAY = 24 * 60 * 60 * 1000;
+  const growth: HolderGrowth = {};
+  const periods = [
+    { key: 'day' as const, ms: DAY },
+    { key: 'week' as const, ms: 7 * DAY },
+    { key: 'month' as const, ms: 30 * DAY },
+    { key: 'year' as const, ms: 365 * DAY },
+  ];
+  for (const { key, ms } of periods) {
+    const snap = findClosestBefore(snaps, ms);
+    if (snap) {
+      const delta = current - snap.count;
+      if (delta > 0) growth[key] = delta;
+    }
+  }
+  return growth;
 }
 
 function computeShibHolderTotal(holders: TokenHolderInfo[]): number {
@@ -59,7 +113,7 @@ interface ShibFiState {
   tokenHolders: TokenHolderInfo[];
   exchangeFlows: ExchangeFlowSummary | null;
   defiDominance: DefiDominance | null;
-  holderDelta: number | null;
+  holderGrowth: HolderGrowth | null;
   loading: boolean;
   lastUpdated: number | null;
 }
@@ -108,7 +162,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
   tokenHolders: INITIAL.tokenHolders ?? [],
   exchangeFlows: INITIAL.exchangeFlows ?? null,
   defiDominance: INITIAL.defiDominance ?? null,
-  holderDelta: null,
+  holderGrowth: null,
   loading: false,
   lastUpdated: INITIAL.lastUpdated ?? null,
 
@@ -169,21 +223,14 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
       .catch((e) => console.error('[ShibFi] shibarium stats:', e))
       .finally(markDone);
 
-    // 3. Token holders + holder delta tracking
+    // 3. Token holders + snapshot-based growth tracking
     fetchTokenHolders()
       .then((holders) => {
         if (holders.length > 0) {
           const current = computeShibHolderTotal(holders);
-          const baseline = readHolderBaseline();
-          if (baseline) {
-            set({ tokenHolders: holders, holderDelta: current - baseline.count });
-            if (Date.now() - baseline.timestamp > BASELINE_WINDOW_MS) {
-              saveHolderBaseline(current);
-            }
-          } else {
-            saveHolderBaseline(current);
-            set({ tokenHolders: holders, holderDelta: null });
-          }
+          const snaps = addSnapshot(current);
+          const growth = computeHolderGrowth(snaps, current);
+          set({ tokenHolders: holders, holderGrowth: growth });
         }
       })
       .catch((e) => console.error('[ShibFi] token holders:', e))
