@@ -1,7 +1,3 @@
-const COINGECKO_GLOBAL = 'https://api.coingecko.com/api/v3/global';
-const FEAR_GREED_API = 'https://api.alternative.me/fng/';
-const COINCAP_GLOBAL = 'https://api.coincap.io/v2/assets?limit=1';
-
 export interface MarketOverview {
   totalMarketCap: number;
   totalVolume24h: number;
@@ -12,89 +8,102 @@ export interface MarketOverview {
   fearGreedLabel: string;
 }
 
-interface CoinGeckoGlobal {
-  data?: {
-    total_market_cap?: Record<string, number>;
-    total_volume?: Record<string, number>;
-    market_cap_change_percentage_24h_usd?: number;
-    market_cap_percentage?: Record<string, number>;
-  };
-}
+const FEAR_GREED_API = 'https://api.alternative.me/fng/';
 
-interface FearGreedResponse {
-  data?: { value?: string; value_classification?: string }[];
-}
-
-async function fetchGlobalFromCoinGecko(): Promise<{
+interface GlobalData {
   totalMarketCap: number;
   totalVolume24h: number;
   marketCapChange24h: number;
   btcDominance: number;
-} | null> {
+}
+
+async function fetchGlobalFromCoinPaprika(): Promise<GlobalData | null> {
   try {
-    const res = await fetch(COINGECKO_GLOBAL, { signal: AbortSignal.timeout(10_000) });
+    const res = await fetch('https://api.coinpaprika.com/v1/global', {
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) return null;
-    const json = (await res.json()) as CoinGeckoGlobal;
-    const d = json.data;
-    if (!d) return null;
+    const d = await res.json();
     return {
-      totalMarketCap: d.total_market_cap?.usd ?? 0,
-      totalVolume24h: d.total_volume?.usd ?? 0,
-      marketCapChange24h: d.market_cap_change_percentage_24h_usd ?? 0,
-      btcDominance: d.market_cap_percentage?.btc ?? 0,
+      totalMarketCap: d.market_cap_usd ?? 0,
+      totalVolume24h: d.volume_24h_usd ?? 0,
+      marketCapChange24h: d.market_cap_change_24h ?? 0,
+      btcDominance: d.bitcoin_dominance_percentage ?? 60,
     };
   } catch {
     return null;
   }
 }
 
-async function fetchGlobalFromCoinCap(): Promise<{
-  totalMarketCap: number;
-  totalVolume24h: number;
-  marketCapChange24h: number;
-  btcDominance: number;
-} | null> {
+async function fetchGlobalFromCoinGecko(): Promise<GlobalData | null> {
   try {
-    const res = await fetch('https://api.coincap.io/v2/assets?limit=20', {
-      signal: AbortSignal.timeout(10_000),
-    });
+    const url =
+      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true';
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
-    const json = await res.json();
-    const assets = json.data as { marketCapUsd?: string; volumeUsd24Hr?: string; changePercent24Hr?: string; id?: string }[];
-    if (!Array.isArray(assets) || assets.length === 0) return null;
-
-    let totalMarketCap = 0;
-    let totalVolume24h = 0;
-    let btcCap = 0;
-    let weightedChange = 0;
-
-    for (const a of assets) {
-      const cap = parseFloat(a.marketCapUsd ?? '0');
-      const vol = parseFloat(a.volumeUsd24Hr ?? '0');
-      const chg = parseFloat(a.changePercent24Hr ?? '0');
-      totalMarketCap += cap;
-      totalVolume24h += vol;
-      weightedChange += chg * cap;
-      if (a.id === 'bitcoin') btcCap = cap;
-    }
-
-    // Top 20 is ~85% of total market; scale up estimate
-    totalMarketCap *= 1.18;
-    totalVolume24h *= 1.25;
-    const marketCapChange24h = totalMarketCap > 0 ? weightedChange / (totalMarketCap / 1.18) : 0;
-    const btcDominance = totalMarketCap > 0 ? (btcCap / totalMarketCap) * 100 * 1.18 : 60;
-
-    return { totalMarketCap, totalVolume24h, marketCapChange24h, btcDominance };
+    const data = await res.json();
+    const btcCap = data.bitcoin?.usd_market_cap ?? 0;
+    const ethCap = data.ethereum?.usd_market_cap ?? 0;
+    if (btcCap === 0) return null;
+    const btcVol = data.bitcoin?.usd_24h_vol ?? 0;
+    const ethVol = data.ethereum?.usd_24h_vol ?? 0;
+    const knownCap = btcCap + ethCap;
+    const knownVol = btcVol + ethVol;
+    const share = 0.70;
+    return {
+      totalMarketCap: knownCap / share,
+      totalVolume24h: knownVol / share,
+      marketCapChange24h: data.bitcoin?.usd_24h_change ?? 0,
+      btcDominance: (btcCap / (knownCap / share)) * 100,
+    };
   } catch {
     return null;
   }
 }
 
+async function fetchGlobalFromCryptoCompare(): Promise<GlobalData | null> {
+  try {
+    const url =
+      'https://min-api.cryptocompare.com/data/pricemultifull?fsyms=BTC,ETH&tsyms=USD';
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const btc = data.RAW?.BTC?.USD;
+    const eth = data.RAW?.ETH?.USD;
+    if (!btc || !btc.MKTCAP) return null;
+    const btcCap = btc.MKTCAP ?? 0;
+    const ethCap = eth?.MKTCAP ?? 0;
+    const btcVol = btc.TOTALVOLUME24HTO ?? 0;
+    const ethVol = eth?.TOTALVOLUME24HTO ?? 0;
+    const share = 0.70;
+    const knownCap = btcCap + ethCap;
+    const knownVol = btcVol + ethVol;
+    return {
+      totalMarketCap: knownCap / share,
+      totalVolume24h: knownVol / share,
+      marketCapChange24h: btc.CHANGEPCT24HOUR ?? 0,
+      btcDominance: (btcCap / (knownCap / share)) * 100,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchGlobalData(): Promise<GlobalData | null> {
+  const paprika = await fetchGlobalFromCoinPaprika();
+  if (paprika && paprika.totalMarketCap > 0) return paprika;
+  const gecko = await fetchGlobalFromCoinGecko();
+  if (gecko && gecko.totalMarketCap > 0) return gecko;
+  const cc = await fetchGlobalFromCryptoCompare();
+  if (cc && cc.totalMarketCap > 0) return cc;
+  return null;
+}
+
 async function fetchFearGreed(): Promise<{ value: number; label: string }> {
   try {
     const res = await fetch(FEAR_GREED_API, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return { value: 50, label: 'Neutral' };
-    const json = (await res.json()) as FearGreedResponse;
+    if (!res.ok) throw new Error('F&G failed');
+    const json = await res.json();
     if (json.data && json.data.length > 0) {
       return {
         value: parseInt(json.data[0].value ?? '50', 10),
@@ -107,7 +116,7 @@ async function fetchFearGreed(): Promise<{ value: number; label: string }> {
 
 export async function fetchMarketOverview(): Promise<MarketOverview | null> {
   const [globalData, fg] = await Promise.all([
-    fetchGlobalFromCoinGecko().then((r) => r ?? fetchGlobalFromCoinCap()),
+    fetchGlobalData(),
     fetchFearGreed(),
   ]);
 
@@ -118,7 +127,10 @@ export async function fetchMarketOverview(): Promise<MarketOverview | null> {
   );
 
   return {
-    ...globalData,
+    totalMarketCap: globalData.totalMarketCap,
+    totalVolume24h: globalData.totalVolume24h,
+    marketCapChange24h: globalData.marketCapChange24h,
+    btcDominance: globalData.btcDominance,
     altcoinIndex,
     fearGreedValue: fg.value,
     fearGreedLabel: fg.label,
