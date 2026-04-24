@@ -356,6 +356,96 @@ const ShibFi: React.FC = () => {
           </div>
         </section>
 
+        {/* ── MARKET OVERVIEW ──────────────────────────────────────── */}
+        {store.marketOverview && (() => {
+          const mo = store.marketOverview;
+          const fgColor = mo.fearGreedValue >= 60 ? 'text-green-400' : mo.fearGreedValue >= 40 ? 'text-yellow-400' : 'text-red-400';
+          const fgBg = mo.fearGreedValue >= 60 ? 'border-green-500/20' : mo.fearGreedValue >= 40 ? 'border-yellow-500/20' : 'border-red-500/20';
+          const fgGlow = mo.fearGreedValue >= 60 ? 'rgba(34,197,94,0.08)' : mo.fearGreedValue >= 40 ? 'rgba(234,179,8,0.08)' : 'rgba(239,68,68,0.08)';
+          const altColor = mo.altcoinIndex >= 50 ? 'text-green-400' : mo.altcoinIndex >= 30 ? 'text-yellow-400' : 'text-red-400';
+          const altBg = mo.altcoinIndex >= 50 ? 'border-green-500/20' : mo.altcoinIndex >= 30 ? 'border-yellow-500/20' : 'border-red-500/20';
+          const altGlow = mo.altcoinIndex >= 50 ? 'rgba(34,197,94,0.08)' : mo.altcoinIndex >= 30 ? 'rgba(234,179,8,0.08)' : 'rgba(239,68,68,0.08)';
+          const mcUp = mo.marketCapChange24h >= 0;
+
+          return (
+            <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 140ms both' }}>
+              <div
+                className="rounded-2xl border border-white/[0.06] overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,105,0,0.04) 0%, rgba(0,0,0,0.2) 100%)',
+                }}
+              >
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+                  <div className="w-6 h-6 rounded-lg bg-orange-500/15 flex items-center justify-center">
+                    <Activity size={12} className="text-orange-400" />
+                  </div>
+                  <h3 className="text-xs font-bold text-white">Market Overview</h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 px-3 py-3">
+                  {/* Total Market Cap */}
+                  <div
+                    className="relative px-3 py-3 rounded-xl border border-white/[0.06] overflow-hidden"
+                    style={{ background: 'rgba(255,255,255,0.02)' }}
+                  >
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-[9px] text-orange-500/60">🔸</span>
+                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">Total Market Cap</p>
+                    </div>
+                    <p className="text-[15px] font-bold text-white tabular-nums">${fmtNum(mo.totalMarketCap)}</p>
+                    <p className={`text-[10px] font-semibold mt-0.5 ${mcUp ? 'text-green-500/70' : 'text-red-500/70'}`}>
+                      {mcUp ? '▲' : '▼'} {Math.abs(mo.marketCapChange24h).toFixed(1)}% 24h
+                    </p>
+                  </div>
+
+                  {/* 24h Volume */}
+                  <div
+                    className="relative px-3 py-3 rounded-xl border border-white/[0.06] overflow-hidden"
+                    style={{ background: 'rgba(255,255,255,0.02)' }}
+                  >
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-[9px] text-orange-500/60">🔸</span>
+                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">24h Volume</p>
+                    </div>
+                    <p className="text-[15px] font-bold text-white tabular-nums">${fmtNum(mo.totalVolume24h)}</p>
+                    <p className="text-[10px] font-semibold mt-0.5 text-gray-600">
+                      Global crypto
+                    </p>
+                  </div>
+
+                  {/* Fear & Greed */}
+                  <div
+                    className={`relative px-3 py-3 rounded-xl border overflow-hidden ${fgBg}`}
+                    style={{ background: `linear-gradient(160deg, ${fgGlow} 0%, rgba(0,0,0,0.2) 100%)` }}
+                  >
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-[9px] text-orange-500/60">🔸</span>
+                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">Fear & Greed</p>
+                    </div>
+                    <p className={`text-[15px] font-bold tabular-nums ${fgColor}`}>{mo.fearGreedValue}</p>
+                    <p className={`text-[10px] font-semibold mt-0.5 ${fgColor} opacity-70`}>{mo.fearGreedLabel}</p>
+                  </div>
+
+                  {/* Altcoin Index */}
+                  <div
+                    className={`relative px-3 py-3 rounded-xl border overflow-hidden ${altBg}`}
+                    style={{ background: `linear-gradient(160deg, ${altGlow} 0%, rgba(0,0,0,0.2) 100%)` }}
+                  >
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-[9px] text-orange-500/60">🔸</span>
+                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">Altcoin Index</p>
+                    </div>
+                    <p className={`text-[15px] font-bold tabular-nums ${altColor}`}>{mo.altcoinIndex}/100</p>
+                    <p className="text-[10px] font-semibold mt-0.5 text-gray-600">
+                      BTC dom {mo.btcDominance.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
         {/* ── VOLUME + RANGE BAR ──────────────────────────────────── */}
         {store.ticker && (
           <section

@@ -19,6 +19,10 @@ import {
   fetchDefiDominance,
   type DefiDominance,
 } from '../lib/defiDominance';
+import {
+  fetchMarketOverview,
+  type MarketOverview,
+} from '../lib/marketOverview';
 
 const CACHE_KEY = 'shibwallet_shibfi_cache_v3';
 const HOLDER_SNAPSHOTS_KEY = 'shibwallet_holder_snapshots';
@@ -125,6 +129,7 @@ interface ShibFiState {
   tokenHolders: TokenHolderInfo[];
   exchangeFlows: ExchangeFlowSummary | null;
   defiDominance: DefiDominance | null;
+  marketOverview: MarketOverview | null;
   holderGrowth: HolderGrowth | null;
   loading: boolean;
   lastUpdated: number | null;
@@ -158,6 +163,7 @@ function saveCache(state: ShibFiState) {
         tokenHolders: state.tokenHolders,
         exchangeFlows: state.exchangeFlows,
         defiDominance: state.defiDominance,
+        marketOverview: state.marketOverview,
         lastUpdated: state.lastUpdated,
       }),
     );
@@ -174,6 +180,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
   tokenHolders: INITIAL.tokenHolders ?? [],
   exchangeFlows: INITIAL.exchangeFlows ?? null,
   defiDominance: INITIAL.defiDominance ?? null,
+  marketOverview: (INITIAL as any).marketOverview ?? null,
   holderGrowth: null,
   loading: false,
   lastUpdated: INITIAL.lastUpdated ?? null,
@@ -191,6 +198,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
         tokenHolders: data.tokenHolders ?? [],
         exchangeFlows: data.exchangeFlows ?? null,
         defiDominance: data.defiDominance ?? null,
+        marketOverview: data.marketOverview ?? null,
         lastUpdated: data.lastUpdated ?? null,
       });
       return true;
@@ -209,7 +217,7 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
     if (get().loading) return;
     set({ loading: true });
 
-    let pending = 5;
+    let pending = 6;
     const markDone = () => {
       pending--;
       if (pending === 0) {
@@ -256,6 +264,13 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
         if (dom) set({ defiDominance: dom });
       })
       .catch((e) => console.error('[ShibFi] defi dominance:', e))
+      .finally(markDone);
+
+    fetchMarketOverview()
+      .then((overview) => {
+        if (overview) set({ marketOverview: overview });
+      })
+      .catch((e) => console.error('[ShibFi] market overview:', e))
       .finally(markDone);
   },
 }));
