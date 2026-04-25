@@ -232,13 +232,6 @@ export function computeSignals(input: SignalInput): Signal[] {
         message: `SHIB #${rank} by memecoin DEX volume — ${dominancePct.toFixed(1)}% share`,
         priority: 3,
       });
-    } else if (dominancePct > 5) {
-      signals.push({
-        id: 'dom-contender',
-        emoji: '🐕',
-        message: `SHIB holding ${dominancePct.toFixed(1)}% of memecoin DEX volume`,
-        priority: 5,
-      });
     }
   }
 
