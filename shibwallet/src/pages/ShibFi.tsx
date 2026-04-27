@@ -17,6 +17,8 @@ import {
   X,
   Copy,
   Check,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import type { FlowTransaction } from '../lib/exchangeFlows';
 import { useWalletStore } from '../store/walletStore';
@@ -139,6 +141,9 @@ const ShibFi: React.FC = () => {
 
   const [selectedMove, setSelectedMove] = useState<FlowTransaction | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [showAllWhales, setShowAllWhales] = useState(false);
+  const toggleSection = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const copyText = (text: string, label: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
@@ -272,18 +277,23 @@ const ShibFi: React.FC = () => {
           </button>
         </section>
 
-        {/* ── SIGNALS ─────────────────────────────────────────────── */}
+        {/* ── SIGNALS CAROUSEL ──────────────────────────────────── */}
         {signals.length > 0 && (
-          <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 60ms both' }}>
-            <div className="space-y-2">
+          <section className="mb-5 -mx-5" style={{ animation: 'slide-up-fade 0.4s ease-out 60ms both' }}>
+            <div
+              className="flex gap-2.5 overflow-x-auto px-5 pb-2 snap-x snap-mandatory scrollbar-hide"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {signals.map((sig, idx) => {
                 const isUrgent = sig.priority <= 1;
                 return (
                   <div
                     key={sig.id}
-                    className={`flex items-start gap-3 px-4 py-3.5 rounded-2xl border overflow-hidden relative
+                    className={`flex items-start gap-2.5 px-3.5 py-3 rounded-2xl border overflow-hidden relative shrink-0 snap-start
                       ${isUrgent ? 'border-red-500/20' : 'border-white/[0.06]'}`}
                     style={{
+                      width: '75vw',
+                      maxWidth: '300px',
                       background: isUrgent
                         ? 'linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.25) 100%)'
                         : 'linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(0,0,0,0.2) 100%)',
@@ -293,12 +303,12 @@ const ShibFi: React.FC = () => {
                     {isUrgent && (
                       <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
                     )}
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                       isUrgent ? 'bg-red-500/15' : 'bg-blue-500/10'
                     }`}>
-                      <span className="text-base">{sig.emoji}</span>
+                      <span className="text-sm">{sig.emoji}</span>
                     </div>
-                    <p className="text-[13px] text-gray-200 leading-relaxed pt-1.5">{sig.message}</p>
+                    <p className="text-[12px] text-gray-200 leading-snug pt-1">{sig.message}</p>
                   </div>
                 );
               })}
@@ -306,69 +316,47 @@ const ShibFi: React.FC = () => {
           </section>
         )}
 
-        {/* ── INDICATOR PILLS ─────────────────────────────────────── */}
-        <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 120ms both' }}>
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              {
-                label: 'Burn',
-                value: burnTrend,
-                icon: <Radio size={11} />,
-                color: burnTrend === 'Rising' ? 'text-orange-400' : burnTrend === 'Cooling' ? 'text-blue-400' : 'text-gray-400',
-                bg: burnTrend === 'Rising' ? 'border-orange-500/20' : burnTrend === 'Cooling' ? 'border-blue-500/20' : 'border-white/[0.06]',
-                glow: burnTrend === 'Rising' ? 'rgba(255,105,0,0.08)' : burnTrend === 'Cooling' ? 'rgba(59,130,246,0.08)' : undefined,
-              },
-              {
-                label: 'Pressure',
-                value: pressure,
-                icon: <Gauge size={11} />,
-                color: pressure === 'Long crowded' ? 'text-green-400' : pressure === 'Short heavy' ? 'text-red-400' : 'text-gray-400',
-                bg: pressure === 'Long crowded' ? 'border-green-500/20' : pressure === 'Short heavy' ? 'border-red-500/20' : 'border-white/[0.06]',
-                glow: pressure !== 'Neutral' ? (pressure === 'Long crowded' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)') : undefined,
-              },
-              {
-                label: 'Momentum',
-                value: momentum,
-                icon: <Activity size={11} />,
-                color: momentum === 'Expanding' ? 'text-green-400' : 'text-yellow-400',
-                bg: momentum === 'Expanding' ? 'border-green-500/20' : 'border-yellow-500/20',
-                glow: momentum === 'Expanding' ? 'rgba(34,197,94,0.08)' : 'rgba(234,179,8,0.08)',
-              },
-            ] as const).map((pill, idx) => (
-              <div
-                key={pill.label}
-                className={`relative px-3 py-3 rounded-xl border overflow-hidden text-center group
-                           hover:scale-[1.02] transition-transform ${pill.bg}`}
-                style={{
-                  background: pill.glow
-                    ? `linear-gradient(160deg, ${pill.glow} 0%, rgba(0,0,0,0.2) 100%)`
-                    : 'rgba(255,255,255,0.02)',
-                  animation: `slide-up-fade 0.4s ease-out ${140 + idx * 50}ms both`,
-                }}
-              >
-                <div className="flex items-center justify-center gap-1 mb-1.5">
-                  <span className="text-gray-500">{pill.icon}</span>
-                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.14em]">{pill.label}</p>
-                </div>
-                <p className={`text-[12px] font-bold ${pill.color}`}>{pill.value}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── MARKET OVERVIEW ──────────────────────────────────────── */}
-        {store.marketOverview && (() => {
+        {/* ── MARKET OVERVIEW (with indicator pills) ────────────── */}
+        {(() => {
           const mo = store.marketOverview;
-          const fgColor = mo.fearGreedValue >= 60 ? 'text-green-400' : mo.fearGreedValue >= 40 ? 'text-yellow-400' : 'text-red-400';
-          const fgBg = mo.fearGreedValue >= 60 ? 'border-green-500/20' : mo.fearGreedValue >= 40 ? 'border-yellow-500/20' : 'border-red-500/20';
-          const fgGlow = mo.fearGreedValue >= 60 ? 'rgba(34,197,94,0.08)' : mo.fearGreedValue >= 40 ? 'rgba(234,179,8,0.08)' : 'rgba(239,68,68,0.08)';
-          const altColor = mo.altcoinIndex >= 50 ? 'text-green-400' : mo.altcoinIndex >= 30 ? 'text-yellow-400' : 'text-red-400';
-          const altBg = mo.altcoinIndex >= 50 ? 'border-green-500/20' : mo.altcoinIndex >= 30 ? 'border-yellow-500/20' : 'border-red-500/20';
-          const altGlow = mo.altcoinIndex >= 50 ? 'rgba(34,197,94,0.08)' : mo.altcoinIndex >= 30 ? 'rgba(234,179,8,0.08)' : 'rgba(239,68,68,0.08)';
-          const mcUp = mo.marketCapChange24h >= 0;
+          const fgVal = mo?.fearGreedValue ?? 50;
+          const fgLabel = mo?.fearGreedLabel ?? 'Neutral';
+          const fgColor = fgVal >= 60 ? 'text-green-400' : fgVal >= 40 ? 'text-yellow-400' : 'text-red-400';
+          const fgStroke = fgVal >= 60 ? '#22c55e' : fgVal >= 40 ? '#eab308' : '#ef4444';
+          const altVal = mo?.altcoinIndex ?? 30;
+          const altColor = altVal >= 50 ? 'text-green-400' : altVal >= 30 ? 'text-yellow-400' : 'text-red-400';
+          const altBg = altVal >= 50 ? 'border-green-500/20' : altVal >= 30 ? 'border-yellow-500/20' : 'border-red-500/20';
+          const altGlow = altVal >= 50 ? 'rgba(34,197,94,0.08)' : altVal >= 30 ? 'rgba(234,179,8,0.08)' : 'rgba(239,68,68,0.08)';
+          const mcUp = (mo?.marketCapChange24h ?? 0) >= 0;
+
+          const gaugeRadius = 32;
+          const gaugeStroke = 5;
+          const gaugeCirc = Math.PI * gaugeRadius;
+          const gaugeOffset = gaugeCirc - (fgVal / 100) * gaugeCirc;
+
+          const indicatorPills = [
+            {
+              label: 'Burn',
+              value: burnTrend,
+              icon: <Radio size={10} />,
+              color: burnTrend === 'Rising' ? 'text-orange-400' : burnTrend === 'Cooling' ? 'text-blue-400' : 'text-gray-400',
+            },
+            {
+              label: 'Pressure',
+              value: pressure,
+              icon: <Gauge size={10} />,
+              color: pressure === 'Long crowded' ? 'text-green-400' : pressure === 'Short heavy' ? 'text-red-400' : 'text-gray-400',
+            },
+            {
+              label: 'Momentum',
+              value: momentum,
+              icon: <Activity size={10} />,
+              color: momentum === 'Expanding' ? 'text-green-400' : 'text-yellow-400',
+            },
+          ];
 
           return (
-            <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 140ms both' }}>
+            <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 120ms both' }}>
               <div
                 className="rounded-2xl border border-white/[0.06] overflow-hidden"
                 style={{
@@ -382,64 +370,101 @@ const ShibFi: React.FC = () => {
                   <h3 className="text-xs font-bold text-white">Market Overview</h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 px-3 py-3">
-                  {/* Total Market Cap */}
-                  <div
-                    className="relative px-3 py-3 rounded-xl border border-white/[0.06] overflow-hidden"
-                    style={{ background: 'rgba(255,255,255,0.02)' }}
-                  >
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="text-[9px] text-orange-500/60">🔸</span>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">Total Market Cap</p>
+                {mo && (
+                  <div className="grid grid-cols-2 gap-2.5 px-3 pt-3">
+                    {/* Total Market Cap */}
+                    <div
+                      className="relative px-3 py-2.5 rounded-xl border border-white/[0.06] overflow-hidden"
+                      style={{ background: 'rgba(255,255,255,0.02)' }}
+                    >
+                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em] mb-0.5">Total Market Cap</p>
+                      <p className="text-[15px] font-bold text-white tabular-nums">${fmtNum(mo.totalMarketCap)}</p>
+                      <p className={`text-[10px] font-semibold mt-0.5 ${mcUp ? 'text-green-500/70' : 'text-red-500/70'}`}>
+                        {mcUp ? '▲' : '▼'} {Math.abs(mo.marketCapChange24h).toFixed(1)}% 24h
+                      </p>
                     </div>
-                    <p className="text-[15px] font-bold text-white tabular-nums">${fmtNum(mo.totalMarketCap)}</p>
-                    <p className={`text-[10px] font-semibold mt-0.5 ${mcUp ? 'text-green-500/70' : 'text-red-500/70'}`}>
-                      {mcUp ? '▲' : '▼'} {Math.abs(mo.marketCapChange24h).toFixed(1)}% 24h
-                    </p>
-                  </div>
 
-                  {/* 24h Volume */}
-                  <div
-                    className="relative px-3 py-3 rounded-xl border border-white/[0.06] overflow-hidden"
-                    style={{ background: 'rgba(255,255,255,0.02)' }}
-                  >
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="text-[9px] text-orange-500/60">🔸</span>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">24h Volume</p>
+                    {/* 24h Volume */}
+                    <div
+                      className="relative px-3 py-2.5 rounded-xl border border-white/[0.06] overflow-hidden"
+                      style={{ background: 'rgba(255,255,255,0.02)' }}
+                    >
+                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em] mb-0.5">24h Volume</p>
+                      <p className="text-[15px] font-bold text-white tabular-nums">${fmtNum(mo.totalVolume24h)}</p>
+                      <p className="text-[10px] font-semibold mt-0.5 text-gray-600">Global crypto</p>
                     </div>
-                    <p className="text-[15px] font-bold text-white tabular-nums">${fmtNum(mo.totalVolume24h)}</p>
-                    <p className="text-[10px] font-semibold mt-0.5 text-gray-600">
-                      Global crypto
-                    </p>
-                  </div>
 
-                  {/* Fear & Greed */}
-                  <div
-                    className={`relative px-3 py-3 rounded-xl border overflow-hidden ${fgBg}`}
-                    style={{ background: `linear-gradient(160deg, ${fgGlow} 0%, rgba(0,0,0,0.2) 100%)` }}
-                  >
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="text-[9px] text-orange-500/60">🔸</span>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">Fear & Greed</p>
+                    {/* Fear & Greed Gauge */}
+                    <div
+                      className="relative px-3 py-2.5 rounded-xl border border-white/[0.06] overflow-hidden flex items-center gap-3"
+                      style={{ background: 'rgba(255,255,255,0.02)' }}
+                    >
+                      <div className="shrink-0">
+                        <svg width={gaugeRadius * 2 + gaugeStroke} height={gaugeRadius + gaugeStroke + 4} viewBox={`0 0 ${gaugeRadius * 2 + gaugeStroke} ${gaugeRadius + gaugeStroke + 4}`}>
+                          <path
+                            d={`M ${gaugeStroke / 2} ${gaugeRadius + gaugeStroke / 2} A ${gaugeRadius} ${gaugeRadius} 0 0 1 ${gaugeRadius * 2 + gaugeStroke / 2} ${gaugeRadius + gaugeStroke / 2}`}
+                            fill="none"
+                            stroke="rgba(255,255,255,0.06)"
+                            strokeWidth={gaugeStroke}
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d={`M ${gaugeStroke / 2} ${gaugeRadius + gaugeStroke / 2} A ${gaugeRadius} ${gaugeRadius} 0 0 1 ${gaugeRadius * 2 + gaugeStroke / 2} ${gaugeRadius + gaugeStroke / 2}`}
+                            fill="none"
+                            stroke={fgStroke}
+                            strokeWidth={gaugeStroke}
+                            strokeLinecap="round"
+                            strokeDasharray={gaugeCirc}
+                            strokeDashoffset={gaugeOffset}
+                            style={{ transition: 'stroke-dashoffset 0.8s ease-out' }}
+                          />
+                          <text
+                            x={gaugeRadius + gaugeStroke / 2}
+                            y={gaugeRadius - 2}
+                            textAnchor="middle"
+                            fill={fgStroke}
+                            fontSize="14"
+                            fontWeight="800"
+                          >
+                            {fgVal}
+                          </text>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">Fear & Greed</p>
+                        <p className={`text-[12px] font-bold mt-0.5 ${fgColor}`}>{fgLabel}</p>
+                      </div>
                     </div>
-                    <p className={`text-[15px] font-bold tabular-nums ${fgColor}`}>{mo.fearGreedValue}</p>
-                    <p className={`text-[10px] font-semibold mt-0.5 ${fgColor} opacity-70`}>{mo.fearGreedLabel}</p>
-                  </div>
 
-                  {/* Altcoin Index */}
-                  <div
-                    className={`relative px-3 py-3 rounded-xl border overflow-hidden ${altBg}`}
-                    style={{ background: `linear-gradient(160deg, ${altGlow} 0%, rgba(0,0,0,0.2) 100%)` }}
-                  >
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="text-[9px] text-orange-500/60">🔸</span>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em]">Altcoin Index</p>
+                    {/* Altcoin Index */}
+                    <div
+                      className={`relative px-3 py-2.5 rounded-xl border overflow-hidden ${altBg}`}
+                      style={{ background: `linear-gradient(160deg, ${altGlow} 0%, rgba(0,0,0,0.2) 100%)` }}
+                    >
+                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.12em] mb-0.5">Altcoin Index</p>
+                      <p className={`text-[15px] font-bold tabular-nums ${altColor}`}>{altVal}/100</p>
+                      <p className="text-[10px] font-semibold mt-0.5 text-gray-600">
+                        BTC dom {mo.btcDominance.toFixed(1)}%
+                      </p>
                     </div>
-                    <p className={`text-[15px] font-bold tabular-nums ${altColor}`}>{mo.altcoinIndex}/100</p>
-                    <p className="text-[10px] font-semibold mt-0.5 text-gray-600">
-                      BTC dom {mo.btcDominance.toFixed(1)}%
-                    </p>
                   </div>
+                )}
+
+                {/* Indicator pills row */}
+                <div className="grid grid-cols-3 gap-2 px-3 py-3">
+                  {indicatorPills.map((pill) => (
+                    <div
+                      key={pill.label}
+                      className="relative px-2 py-2 rounded-lg border border-white/[0.04] text-center"
+                      style={{ background: 'rgba(255,255,255,0.02)' }}
+                    >
+                      <div className="flex items-center justify-center gap-1 mb-0.5">
+                        <span className="text-gray-500">{pill.icon}</span>
+                        <p className="text-[8px] text-gray-500 font-black uppercase tracking-[0.12em]">{pill.label}</p>
+                      </div>
+                      <p className={`text-[11px] font-bold ${pill.color}`}>{pill.value}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>
@@ -615,7 +640,10 @@ const ShibFi: React.FC = () => {
                   'linear-gradient(135deg, rgba(139,92,246,0.06) 0%, rgba(0,0,0,0.2) 100%)',
               }}
             >
-              <div className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06]">
+              <button
+                className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06] w-full"
+                onClick={() => toggleSection('flows')}
+              >
                 <div className="w-7 h-7 rounded-lg bg-purple-500/15 flex items-center justify-center">
                   <ArrowRightLeft size={13} className="text-purple-400" />
                 </div>
@@ -630,8 +658,10 @@ const ShibFi: React.FC = () => {
                 }`}>
                   {store.exchangeFlows.netLabel}
                 </span>
-              </div>
+                {collapsed.flows ? <ChevronDown size={14} className="text-gray-500 ml-2" /> : <ChevronUp size={14} className="text-gray-500 ml-2" />}
+              </button>
 
+              {!collapsed.flows && (
               <div className="px-4 py-4">
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="p-3 rounded-xl bg-red-500/[0.06] border border-red-500/10">
@@ -659,7 +689,7 @@ const ShibFi: React.FC = () => {
                     <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.14em] mb-2">
                       Recent Whale Moves
                     </p>
-                    {store.exchangeFlows.recentMoves.slice(0, 5).map((move, idx) => (
+                    {store.exchangeFlows.recentMoves.slice(0, showAllWhales ? 10 : 3).map((move, idx) => (
                       <div
                         key={move.hash}
                         className="flex items-center gap-2.5 py-2.5 border-b border-white/[0.03] last:border-b-0
@@ -684,9 +714,18 @@ const ShibFi: React.FC = () => {
                         <ExternalLink size={10} className="text-gray-600 shrink-0" />
                       </div>
                     ))}
+                    {store.exchangeFlows.recentMoves.length > 3 && (
+                      <button
+                        onClick={() => setShowAllWhales((p) => !p)}
+                        className="w-full text-center text-[10px] text-purple-400 font-bold py-2 mt-1"
+                      >
+                        {showAllWhales ? 'Show less' : `Show ${store.exchangeFlows.recentMoves.length - 3} more`}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
+              )}
             </div>
           </section>
         )}
@@ -701,7 +740,10 @@ const ShibFi: React.FC = () => {
                   'linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(0,0,0,0.2) 100%)',
               }}
             >
-              <div className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06]">
+              <button
+                className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06] w-full"
+                onClick={() => toggleSection('shibarium')}
+              >
                 <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
                   <Zap size={13} className="text-emerald-400" fill="currentColor" />
                 </div>
@@ -713,8 +755,10 @@ const ShibFi: React.FC = () => {
                   </div>
                   <span className="text-[9px] text-emerald-400 font-bold">LIVE</span>
                 </div>
-              </div>
+                {collapsed.shibarium ? <ChevronDown size={14} className="text-gray-500 ml-2" /> : <ChevronUp size={14} className="text-gray-500 ml-2" />}
+              </button>
 
+              {!collapsed.shibarium && (
               <div className="px-4 py-4 grid grid-cols-2 gap-x-4 gap-y-4">
                 {([
                   { label: 'Transactions', value: fmtNum(store.shibarium.totalTransactions), icon: <ArrowRightLeft size={11} /> },
@@ -735,6 +779,7 @@ const ShibFi: React.FC = () => {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           </section>
         )}
@@ -768,14 +813,19 @@ const ShibFi: React.FC = () => {
                     'linear-gradient(180deg, rgba(245,158,11,0.04) 0%, rgba(0,0,0,0.2) 100%)',
                 }}
               >
-                <div className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06]">
+                <button
+                  className="flex items-center gap-2 px-4 py-3.5 border-b border-white/[0.06] w-full"
+                  onClick={() => toggleSection('holders')}
+                >
                   <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
                     <Users size={13} className="text-amber-400" />
                   </div>
                   <h3 className="text-xs font-bold text-white">Ecosystem Holders</h3>
                   <span className="ml-auto text-[9px] text-gray-600 font-medium">Combined</span>
-                </div>
+                  {collapsed.holders ? <ChevronDown size={14} className="text-gray-500 ml-2" /> : <ChevronUp size={14} className="text-gray-500 ml-2" />}
+                </button>
 
+                {!collapsed.holders && (
                 <div className="px-4 py-3">
                   {rows.map(([symbol, data], idx) => {
                     const logo = TOKEN_LOGOS[symbol];
@@ -816,6 +866,7 @@ const ShibFi: React.FC = () => {
                     );
                   })}
                 </div>
+                )}
               </div>
             </section>
           );
