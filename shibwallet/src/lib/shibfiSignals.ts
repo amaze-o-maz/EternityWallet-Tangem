@@ -183,7 +183,7 @@ export function computeSignals(input: SignalInput): Signal[] {
     }
   }
 
-  // ── Holder growth signals (rotating timeframes) ──
+  // ── Holder growth signals (one per available timeframe) ──
   const growth = input.holderGrowth;
   if (growth) {
     const periods: { key: keyof HolderGrowth; label: string }[] = [
@@ -192,16 +192,16 @@ export function computeSignals(input: SignalInput): Signal[] {
       { key: 'month', label: 'this month' },
       { key: 'year', label: 'this year' },
     ];
-    const available = periods.filter((p) => growth[p.key] && growth[p.key]! > 0);
-    if (available.length > 0) {
-      const pick = available[Math.floor(Math.random() * available.length)];
-      const delta = growth[pick.key]!;
-      signals.push({
-        id: 'holders-growth',
-        emoji: '🫡',
-        message: `ShibArmy grew +${fmtB(delta)} holders ${pick.label}`,
-        priority: delta > 5000 ? 1 : 3,
-      });
+    for (const p of periods) {
+      const delta = growth[p.key];
+      if (delta && delta > 0) {
+        signals.push({
+          id: `holders-${p.key}`,
+          emoji: '🫡',
+          message: `ShibArmy grew +${fmtB(delta)} holders ${p.label}`,
+          priority: delta > 5000 ? 1 : 3,
+        });
+      }
     }
   }
   if (input.shibHolderTotal > 0 && !signals.some((s) => s.id.startsWith('holders'))) {
@@ -284,7 +284,7 @@ export function computeSignals(input: SignalInput): Signal[] {
   });
 
   signals.sort((a, b) => a.priority - b.priority);
-  return signals.slice(0, 6);
+  return signals.slice(0, 10);
 }
 
 function fmtB(n: number): string {
