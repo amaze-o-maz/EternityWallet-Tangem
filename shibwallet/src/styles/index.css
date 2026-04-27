@@ -638,3 +638,19 @@ textarea {
     transform: translateX(-50%) scale(1.15);
   }
 }
+
+@keyframes signal-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes signal-progress {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
