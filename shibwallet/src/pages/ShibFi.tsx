@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -145,6 +145,20 @@ const ShibFi: React.FC = () => {
   const [showAllWhales, setShowAllWhales] = useState(false);
   const toggleSection = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  const SIGNAL_INTERVAL = 4000;
+  const [signalIdx, setSignalIdx] = useState(0);
+  const signalTimer = useRef<ReturnType<typeof setInterval>>();
+  const advanceSignal = useCallback(() => {
+    setSignalIdx((i) => i + 1);
+    clearInterval(signalTimer.current);
+    signalTimer.current = setInterval(() => setSignalIdx((i) => i + 1), SIGNAL_INTERVAL);
+  }, []);
+  useEffect(() => {
+    if (signals.length <= 1) return;
+    signalTimer.current = setInterval(() => setSignalIdx((i) => i + 1), SIGNAL_INTERVAL);
+    return () => clearInterval(signalTimer.current);
+  }, [signals.length]);
+
   const copyText = (text: string, label: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
     setCopied(label);
@@ -277,44 +291,74 @@ const ShibFi: React.FC = () => {
           </button>
         </section>
 
-        {/* ── SIGNALS CAROUSEL ──────────────────────────────────── */}
-        {signals.length > 0 && (
-          <section className="mb-5 -mx-5" style={{ animation: 'slide-up-fade 0.4s ease-out 60ms both' }}>
-            <div
-              className="flex gap-2.5 overflow-x-auto px-5 pb-2 snap-x snap-mandatory scrollbar-hide"
-              style={{ WebkitOverflowScrolling: 'touch' }}
-            >
-              {signals.map((sig, idx) => {
-                const isUrgent = sig.priority <= 1;
-                return (
-                  <div
-                    key={sig.id}
-                    className={`flex items-start gap-2.5 px-3.5 py-3 rounded-2xl border overflow-hidden relative shrink-0 snap-start
-                      ${isUrgent ? 'border-red-500/20' : 'border-white/[0.06]'}`}
-                    style={{
-                      width: '75vw',
-                      maxWidth: '300px',
-                      background: isUrgent
-                        ? 'linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.25) 100%)'
-                        : 'linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(0,0,0,0.2) 100%)',
-                      animation: `slide-up-fade 0.35s ease-out ${idx * 50}ms both`,
-                    }}
-                  >
-                    {isUrgent && (
-                      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
-                    )}
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                      isUrgent ? 'bg-red-500/15' : 'bg-blue-500/10'
-                    }`}>
-                      <span className="text-sm">{sig.emoji}</span>
-                    </div>
-                    <p className="text-[12px] text-gray-200 leading-snug pt-1">{sig.message}</p>
+        {/* ── SIGNALS (auto-rotating single card) ─────────────── */}
+        {signals.length > 0 && (() => {
+          const sig = signals[signalIdx % signals.length];
+          const isUrgent = sig.priority <= 1;
+
+          return (
+            <section className="mb-5" style={{ animation: 'slide-up-fade 0.4s ease-out 60ms both' }}>
+              <div
+                className={`relative rounded-2xl border overflow-hidden cursor-pointer select-none
+                  ${isUrgent ? 'border-red-500/20' : 'border-white/[0.06]'}`}
+                style={{
+                  background: isUrgent
+                    ? 'linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(0,0,0,0.25) 100%)'
+                    : 'linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(0,0,0,0.2) 100%)',
+                }}
+                onClick={advanceSignal}
+              >
+                {isUrgent && (
+                  <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+                )}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    isUrgent ? 'bg-red-500/15' : 'bg-blue-500/10'
+                  }`}>
+                    <span
+                      key={sig.id}
+                      className="text-base"
+                      style={{ animation: 'signal-fade 0.4s ease-out' }}
+                    >
+                      {sig.emoji}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+                  <p
+                    key={sig.id}
+                    className="text-[12px] text-gray-200 leading-snug flex-1"
+                    style={{ animation: 'signal-fade 0.4s ease-out' }}
+                  >
+                    {sig.message}
+                  </p>
+                  {/* Dot indicators */}
+                  <div className="flex gap-1 shrink-0">
+                    {signals.map((_, i) => (
+                      <div
+                        key={i}
+                        className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                          i === signalIdx % signals.length
+                            ? (isUrgent ? 'bg-red-400 scale-125' : 'bg-blue-400 scale-125')
+                            : 'bg-white/15'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {/* Progress bar */}
+                <div className="h-[2px] w-full bg-white/[0.04]">
+                  <div
+                    className={`h-full ${isUrgent ? 'bg-red-500/40' : 'bg-blue-500/30'}`}
+                    style={{
+                      animation: `signal-progress ${SIGNAL_INTERVAL}ms linear`,
+                      animationIterationCount: 1,
+                    }}
+                    key={`prog-${signalIdx}`}
+                  />
+                </div>
+              </div>
+            </section>
+          );
+        })()}
 
         {/* ── MARKET OVERVIEW (with indicator pills) ────────────── */}
         {(() => {
