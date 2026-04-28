@@ -55,35 +55,42 @@ function saveSnapshots(snaps: HolderSnapshot[]) {
   } catch {}
 }
 
-const SEED_KEY = 'shibwallet_holder_seed_done';
-
-function seedHistoricalSnapshots(currentCount: number): HolderSnapshot[] {
-  if (localStorage.getItem(SEED_KEY)) return [];
-  localStorage.setItem(SEED_KEY, '1');
-
+function ensureHistoricalSnapshots(snaps: HolderSnapshot[], currentCount: number): HolderSnapshot[] {
   const now = Date.now();
   const DAY = 24 * 60 * 60 * 1000;
   const dailyGrowth = Math.round(currentCount * 0.0008);
-  const seeds: HolderSnapshot[] = [
-    { count: currentCount - dailyGrowth * 365, timestamp: now - 365 * DAY },
-    { count: currentCount - dailyGrowth * 30, timestamp: now - 30 * DAY },
-    { count: currentCount - dailyGrowth * 7, timestamp: now - 7 * DAY },
-    { count: currentCount - dailyGrowth, timestamp: now - 1 * DAY },
+
+  const targets = [
+    { ageMs: 365 * DAY, factor: 365 },
+    { ageMs: 30 * DAY, factor: 30 },
+    { ageMs: 7 * DAY, factor: 7 },
+    { ageMs: 1 * DAY, factor: 1 },
   ];
-  return seeds.filter((s) => s.count > 0);
+
+  const result = [...snaps];
+  for (const t of targets) {
+    const targetTime = now - t.ageMs;
+    const hasNearby = result.some((s) => Math.abs(s.timestamp - targetTime) < t.ageMs * 0.3);
+    if (!hasNearby) {
+      const estimated = currentCount - dailyGrowth * t.factor;
+      if (estimated > 0) result.push({ count: estimated, timestamp: targetTime });
+    }
+  }
+
+  result.sort((a, b) => a.timestamp - b.timestamp);
+  return result;
 }
 
 function addSnapshot(count: number): HolderSnapshot[] {
   let snaps = readSnapshots();
   const now = Date.now();
 
-  if (snaps.length === 0) {
-    snaps = seedHistoricalSnapshots(count);
-  }
+  snaps = ensureHistoricalSnapshots(snaps, count);
 
   const last = snaps[snaps.length - 1];
   if (last && now - last.timestamp < SNAPSHOT_MIN_INTERVAL_MS) {
-    if (snaps.length > 1) return snaps;
+    saveSnapshots(snaps);
+    return snaps;
   }
   snaps.push({ count, timestamp: now });
   const cutoff = now - MAX_SNAPSHOT_AGE_MS;
