@@ -78,7 +78,21 @@ async function fetchHolders(entry: TokenEntry): Promise<TokenHolderInfo> {
   };
 }
 
+async function fetchShibHoldersEthplorer(): Promise<number | null> {
+  const data = await fetchJson<{ holdersCount?: number }>(
+    'https://api.ethplorer.io/getTokenInfo/0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE?apiKey=freekey',
+  );
+  return data?.holdersCount ?? null;
+}
+
 export async function fetchTokenHolders(): Promise<TokenHolderInfo[]> {
   const results = await Promise.all(ALL_TOKENS.map(fetchHolders));
+
+  const ethShib = results.find((r) => r.symbol === 'SHIB' && r.chain === 'ethereum');
+  if (ethShib && !ethShib.holders) {
+    const fallback = await fetchShibHoldersEthplorer();
+    if (fallback) ethShib.holders = fallback;
+  }
+
   return results;
 }

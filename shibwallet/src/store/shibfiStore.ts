@@ -55,43 +55,33 @@ function saveSnapshots(snaps: HolderSnapshot[]) {
   } catch {}
 }
 
-function ensureHistoricalSnapshots(snaps: HolderSnapshot[], currentCount: number): HolderSnapshot[] {
-  const now = Date.now();
-  const DAY = 24 * 60 * 60 * 1000;
-  const dailyGrowth = Math.round(currentCount * 0.0008);
+const CHAIN_CACHE_KEY = 'shibwallet_holder_chain_cache';
 
-  const targets = [
-    { ageMs: 365 * DAY, factor: 365 },
-    { ageMs: 30 * DAY, factor: 30 },
-    { ageMs: 7 * DAY, factor: 7 },
-    { ageMs: 1 * DAY, factor: 1 },
-  ];
+function readChainCache(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(CHAIN_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
 
-  const result = [...snaps];
-  for (const t of targets) {
-    const targetTime = now - t.ageMs;
-    const hasNearby = result.some((s) => Math.abs(s.timestamp - targetTime) < t.ageMs * 0.3);
-    if (!hasNearby) {
-      const estimated = currentCount - dailyGrowth * t.factor;
-      if (estimated > 0) result.push({ count: estimated, timestamp: targetTime });
+function updateChainCache(holders: TokenHolderInfo[]): number {
+  const cache = readChainCache();
+  for (const h of holders) {
+    if (h.symbol === 'SHIB' && h.holders && h.holders > 0) {
+      cache[h.chain] = h.holders;
     }
   }
-
-  result.sort((a, b) => a.timestamp - b.timestamp);
-  return result;
+  try { localStorage.setItem(CHAIN_CACHE_KEY, JSON.stringify(cache)); } catch {}
+  let total = 0;
+  for (const v of Object.values(cache)) total += v;
+  return total;
 }
 
 function addSnapshot(count: number): HolderSnapshot[] {
-  let snaps = readSnapshots();
+  const snaps = readSnapshots();
   const now = Date.now();
-
-  snaps = ensureHistoricalSnapshots(snaps, count);
-
   const last = snaps[snaps.length - 1];
-  if (last && now - last.timestamp < SNAPSHOT_MIN_INTERVAL_MS) {
-    saveSnapshots(snaps);
-    return snaps;
-  }
+  if (last && now - last.timestamp < SNAPSHOT_MIN_INTERVAL_MS) return snaps;
   snaps.push({ count, timestamp: now });
   const cutoff = now - MAX_SNAPSHOT_AGE_MS;
   const trimmed = snaps.filter((s) => s.timestamp >= cutoff);
@@ -143,14 +133,6 @@ function computeHolderGrowth(snaps: HolderSnapshot[], current: number): HolderGr
   }
 
   return growth;
-}
-
-function computeShibHolderTotal(holders: TokenHolderInfo[]): number {
-  let total = 0;
-  for (const h of holders) {
-    if (h.symbol === 'SHIB' && h.holders) total += h.holders;
-  }
-  return total;
 }
 
 interface ShibFiState {
@@ -275,9 +257,9 @@ export const useShibFiStore = create<ShibFiState & ShibFiActions>((set, get) => 
     fetchTokenHolders()
       .then((holders) => {
         if (holders.length > 0) {
-          const current = computeShibHolderTotal(holders);
-          const snaps = addSnapshot(current);
-          const growth = computeHolderGrowth(snaps, current);
+          const stableTotal = updateChainCache(holders);
+          const snaps = addSnapshot(stableTotal);
+          const growth = computeHolderGrowth(snaps, stableTotal);
           set({ tokenHolders: holders, holderGrowth: growth });
         }
       })

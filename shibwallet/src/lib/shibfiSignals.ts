@@ -183,8 +183,9 @@ export function computeSignals(input: SignalInput): Signal[] {
     }
   }
 
-  // ── Holder growth signals (one per available timeframe) ──
+  // ── Holder signals ──
   const growth = input.holderGrowth;
+  let hasGrowthSignal = false;
   if (growth) {
     const periods: { key: keyof HolderGrowth; label: string }[] = [
       { key: 'day', label: 'today' },
@@ -195,6 +196,7 @@ export function computeSignals(input: SignalInput): Signal[] {
     for (const p of periods) {
       const delta = growth[p.key];
       if (delta && delta > 0) {
+        hasGrowthSignal = true;
         signals.push({
           id: `holders-${p.key}`,
           emoji: '🫡',
@@ -204,13 +206,13 @@ export function computeSignals(input: SignalInput): Signal[] {
       }
     }
   }
-  if (input.shibHolderTotal > 0 && !signals.some((s) => s.id.startsWith('holders'))) {
+  if (input.shibHolderTotal > 0) {
     if (input.shibHolderTotal > 1_000_000) {
       signals.push({
         id: 'holders-army',
         emoji: '🫡',
         message: `ShibArmy ${fmtB(input.shibHolderTotal)} holders strong — Ethereum + Shibarium combined`,
-        priority: 4,
+        priority: hasGrowthSignal ? 5 : 2,
       });
     }
   }
