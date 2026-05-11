@@ -27,7 +27,7 @@ export const DEFAULT_NETWORKS: Record<string, NetworkConfig> = {
     rpcFallbacks: ['https://1rpc.io/eth', 'https://cloudflare-eth.com'],
     explorerUrl: 'https://etherscan.io',
     nativeToken: { symbol: 'ETH', decimals: 18 },
-    logoUrl: 'https://assets.coingecko.com/coins/images/279/thumb/ethereum.png',
+    logoUrl: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
     wrappedNative: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
     swap: {
       v1Router: '0x03f7724180AA6b939894B5Ca4314783B0b36b329',
@@ -44,7 +44,7 @@ export const DEFAULT_NETWORKS: Record<string, NetworkConfig> = {
     rpcFallbacks: ['https://shibrpc.com', 'https://rpc.shibrpc.com'],
     explorerUrl: 'https://shibariumscan.io',
     nativeToken: { symbol: 'BONE', decimals: 18 },
-    logoUrl: 'https://assets.coingecko.com/coins/images/16916/thumb/bone_icon.png',
+    logoUrl: 'https://assets.coingecko.com/coins/images/16916/small/bone_icon.png',
     wrappedNative: '0xC76F4c819D820369Fb2d7C1531aB3Bb18e6fE8d8',
     swap: {
       v1Router: '0xEF83bbB63E8A7442E3a4a5d28d9bBf32D7c813c8',
