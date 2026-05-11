@@ -7,24 +7,24 @@ export interface TokenInfo {
   logoUrl: string;
 }
 
-// CoinGecko CDN for major tokens (small = 64x64, sharp at all display sizes)
+// CoinGecko CDN for major tokens (large = 256x256, crisp on high-DPI screens)
 const cg = 'https://assets.coingecko.com/coins/images';
 
 const LOGOS: Record<string, string> = {
-  ETH: `${cg}/279/small/ethereum.png?1696501628`,
-  SHIB: `${cg}/11939/small/shiba.png`,
-  BONE: `${cg}/16916/small/bone_icon.png?1696516487`,
-  LEASH: `${cg}/15802/small/Leash.png?1696515425`,
-  TREAT: `${cg}/53501/small/Treat_blk_200x200.png?1736524245`,
-  WETH: `${cg}/2518/small/weth.png?1696503332`,
-  USDT: `${cg}/325/small/Tether.png?1696501661`,
-  USDC: `${cg}/6319/small/usdc.png?1696506694`,
-  DAI: `${cg}/9956/small/Badge_Dai.png?1696509996`,
-  WBTC: `${cg}/7598/small/wrapped_bitcoin_wbtc.png?1696507857`,
-  tBONE: `${cg}/16916/small/bone_icon.png?1696516487`,
-  xSHIB: `${cg}/11939/small/shiba.png`,
-  xLEASH: `${cg}/15802/small/Leash.png?1696515425`,
-  WBONE: `${cg}/16916/small/bone_icon.png?1696516487`,
+  ETH: `${cg}/279/large/ethereum.png?1696501628`,
+  SHIB: `${cg}/11939/large/shiba.png`,
+  BONE: `${cg}/16916/large/bone_icon.png?1696516487`,
+  LEASH: `${cg}/15802/large/Leash.png?1696515425`,
+  TREAT: `${cg}/53501/large/Treat_blk_200x200.png?1736524245`,
+  WETH: `${cg}/2518/large/weth.png?1696503332`,
+  USDT: `${cg}/325/large/Tether.png?1696501661`,
+  USDC: `${cg}/6319/large/usdc.png?1696506694`,
+  DAI: `${cg}/9956/large/Badge_Dai.png?1696509996`,
+  WBTC: `${cg}/7598/large/wrapped_bitcoin_wbtc.png?1696507857`,
+  tBONE: `${cg}/16916/large/bone_icon.png?1696516487`,
+  xSHIB: `${cg}/11939/large/shiba.png`,
+  xLEASH: `${cg}/15802/large/Leash.png?1696515425`,
+  WBONE: `${cg}/16916/large/bone_icon.png?1696516487`,
 };
 
 export const ETHEREUM_TOKENS: TokenInfo[] = [
