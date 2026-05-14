@@ -173,17 +173,28 @@ export async function fetchSparklines(
 // ── Chart data for detail page (per-token, variable timeframes) ──
 
 const chartCache = new Map<string, { data: number[]; ts: number }>();
+const ohlcCache = new Map<string, { data: OHLCCandle[]; ts: number }>();
 const CHART_CACHE_TTL_MS = 120_000;
 
 export type ChartTimeframe = '15M' | '1H' | '1D' | '1W' | '1M' | 'ALL';
+export type OHLCCandle = [number, number, number, number]; // open, high, low, close
 
-const TIMEFRAME_DAYS: Record<ChartTimeframe, number | 'max'> = {
+const TIMEFRAME_DAYS: Record<ChartTimeframe, number> = {
   '15M': 1,
   '1H': 1,
   '1D': 1,
   '1W': 7,
   '1M': 30,
-  'ALL': 'max',
+  'ALL': 365,
+};
+
+const OHLC_DAYS: Record<ChartTimeframe, number> = {
+  '15M': 1,
+  '1H': 1,
+  '1D': 1,
+  '1W': 7,
+  '1M': 30,
+  'ALL': 365,
 };
 
 export const LIVE_REFRESH_MS: Record<ChartTimeframe, number> = {
@@ -200,7 +211,7 @@ export async function fetchChartData(
   timeframe: ChartTimeframe,
   forceRefresh = false,
 ): Promise<number[]> {
-  const cacheKey = `${geckoId}:${timeframe}`;
+  const cacheKey = `${geckoId}:line:${timeframe}`;
   if (!forceRefresh) {
     const cached = chartCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
@@ -236,6 +247,51 @@ export async function fetchChartData(
       chartCache.set(cacheKey, { data: prices, ts: Date.now() });
     }
     return prices;
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchOHLCData(
+  geckoId: string,
+  timeframe: ChartTimeframe,
+  forceRefresh = false,
+): Promise<OHLCCandle[]> {
+  const cacheKey = `${geckoId}:ohlc:${timeframe}`;
+  if (!forceRefresh) {
+    const cached = ohlcCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
+      return cached.data;
+    }
+  }
+
+  const days = OHLC_DAYS[timeframe];
+  const url = `${COINGECKO_BASE}/coins/${geckoId}/ohlc?vs_currency=usd&days=${days}`;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+    if (!res.ok) return [];
+    const raw: [number, number, number, number, number][] = await res.json();
+    if (!raw || raw.length < 2) return [];
+
+    let candles: OHLCCandle[] = raw.map(([, o, h, l, c]) => [o, h, l, c]);
+
+    if (timeframe === '15M') {
+      candles = candles.slice(-1);
+    } else if (timeframe === '1H') {
+      candles = candles.slice(-2);
+    }
+
+    const maxCandles = 60;
+    if (candles.length > maxCandles) {
+      const step = Math.max(1, Math.floor(candles.length / maxCandles));
+      candles = candles.filter((_, i) => i % step === 0);
+    }
+
+    if (candles.length >= 1) {
+      ohlcCache.set(cacheKey, { data: candles, ts: Date.now() });
+    }
+    return candles;
   } catch {
     return [];
   }
