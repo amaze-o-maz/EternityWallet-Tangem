@@ -130,8 +130,8 @@ const Wallet: React.FC = () => {
         nativeTokens.length > 0
           ? publicClient.getBalance({ address: address as `0x${string}` }).catch(() => 0n)
           : Promise.resolve(0n),
-        fetchPrices(),
-        fetchSparklines(),
+        fetchPrices(tokens, chainId),
+        fetchSparklines(tokens, chainId),
       ]);
 
       // Set native balances immediately
