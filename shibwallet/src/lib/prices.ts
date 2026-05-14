@@ -176,6 +176,24 @@ const chartCache = new Map<string, { data: number[]; ts: number }>();
 const ohlcCache = new Map<string, { data: OHLCCandle[]; ts: number }>();
 const CHART_CACHE_TTL_MS = 120_000;
 
+// Throttle: minimum gap between CoinGecko chart requests
+let lastChartRequestTs = 0;
+const MIN_REQUEST_GAP_MS = 1_500;
+
+async function throttledFetch(url: string): Promise<Response | null> {
+  const now = Date.now();
+  const wait = MIN_REQUEST_GAP_MS - (now - lastChartRequestTs);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastChartRequestTs = Date.now();
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+    if (!res.ok) return null;
+    return res;
+  } catch {
+    return null;
+  }
+}
+
 export type ChartTimeframe = '15M' | '1H' | '1D' | '1W' | '1M' | 'ALL';
 export type OHLCCandle = [number, number, number, number]; // open, high, low, close
 
@@ -220,22 +238,20 @@ export async function fetchChartData(
   forceRefresh = false,
 ): Promise<number[]> {
   const cacheKey = `${geckoId}:line:${timeframe}`;
-  if (!forceRefresh) {
-    const cached = chartCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
-      return cached.data;
-    }
+  const cached = chartCache.get(cacheKey);
+  if (!forceRefresh && cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
+    return cached.data;
   }
 
   const days = TIMEFRAME_DAYS[timeframe];
   const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
+  const res = await throttledFetch(url);
+  if (!res) return cached?.data ?? [];
 
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
-    if (!res.ok) return [];
     const json: { prices?: [number, number][] } = await res.json();
     const raw = json.prices;
-    if (!raw || raw.length < 2) return [];
+    if (!raw || raw.length < 2) return cached?.data ?? [];
 
     let prices: number[];
     const windowMs = WINDOW_MIN[timeframe];
@@ -258,7 +274,7 @@ export async function fetchChartData(
     }
     return prices;
   } catch {
-    return [];
+    return cached?.data ?? [];
   }
 }
 
@@ -301,11 +317,9 @@ export async function fetchOHLCData(
   forceRefresh = false,
 ): Promise<OHLCCandle[]> {
   const cacheKey = `${geckoId}:ohlc:${timeframe}`;
-  if (!forceRefresh) {
-    const cached = ohlcCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
-      return cached.data;
-    }
+  const cached = ohlcCache.get(cacheKey);
+  if (!forceRefresh && cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
+    return cached.data;
   }
 
   const candleMin = CANDLE_INTERVAL_MIN[timeframe];
@@ -314,18 +328,19 @@ export async function fetchOHLCData(
   if (candleMin > 0) {
     const days = TIMEFRAME_DAYS[timeframe];
     const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
+    const res = await throttledFetch(url);
+    if (!res) return cached?.data ?? [];
+
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
-      if (!res.ok) return [];
       const json: { prices?: [number, number][] } = await res.json();
       let raw = json.prices;
-      if (!raw || raw.length < 2) return [];
+      if (!raw || raw.length < 2) return cached?.data ?? [];
 
       const windowMs = WINDOW_MIN[timeframe];
       if (windowMs) {
         const cutoff = Date.now() - windowMs * 60_000;
         raw = raw.filter(([ts]) => ts >= cutoff);
-        if (raw.length < 2) return [];
+        if (raw.length < 2) return cached?.data ?? [];
       }
 
       const candles = buildCandles(raw, candleMin);
@@ -334,7 +349,7 @@ export async function fetchOHLCData(
       }
       return candles;
     } catch {
-      return [];
+      return cached?.data ?? [];
     }
   }
 
@@ -342,12 +357,12 @@ export async function fetchOHLCData(
   const ohlcDays: Record<string, number> = { '1W': 7, '1M': 30, 'ALL': 365 };
   const days = ohlcDays[timeframe] ?? 30;
   const url = `${COINGECKO_BASE}/coins/${geckoId}/ohlc?vs_currency=usd&days=${days}`;
+  const res = await throttledFetch(url);
+  if (!res) return cached?.data ?? [];
 
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
-    if (!res.ok) return [];
     const raw: [number, number, number, number, number][] = await res.json();
-    if (!raw || raw.length < 2) return [];
+    if (!raw || raw.length < 2) return cached?.data ?? [];
 
     let candles: OHLCCandle[] = raw.map(([, o, h, l, c]) => [o, h, l, c]);
 
@@ -362,6 +377,6 @@ export async function fetchOHLCData(
     }
     return candles;
   } catch {
-    return [];
+    return cached?.data ?? [];
   }
 }

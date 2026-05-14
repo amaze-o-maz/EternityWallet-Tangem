@@ -98,14 +98,15 @@ const TokenDetail: React.FC = () => {
     }
   }, [isUnlocked, navigate]);
 
-  // Fetch line chart data
+  // Fetch chart data (line or candle) with debounce to avoid rate limits
   useEffect(() => {
-    if (chartMode !== 'line') return;
     if (!geckoId) {
-      if (activeTimeframe === '1W' && initialSparkline && initialSparkline.length >= 2) {
+      if (chartMode === 'line' && activeTimeframe === '1W' && initialSparkline && initialSparkline.length >= 2) {
         setLineData(initialSparkline);
-      } else {
+      } else if (chartMode === 'line') {
         setLineData(null);
+      } else {
+        setCandleData(null);
       }
       return;
     }
@@ -113,39 +114,25 @@ const TokenDetail: React.FC = () => {
     let cancelled = false;
     const load = (force: boolean) => {
       if (!force) setChartLoading(true);
-      fetchChartData(geckoId, activeTimeframe, force).then((data) => {
-        if (cancelled) return;
-        setLineData(data.length >= 2 ? data : null);
-        setChartLoading(false);
-      });
+      if (chartMode === 'line') {
+        fetchChartData(geckoId, activeTimeframe, force).then((data) => {
+          if (cancelled) return;
+          if (data.length >= 2) setLineData(data);
+          setChartLoading(false);
+        });
+      } else {
+        fetchOHLCData(geckoId, activeTimeframe, force).then((data) => {
+          if (cancelled) return;
+          if (data.length >= 1) setCandleData(data);
+          setChartLoading(false);
+        });
+      }
     };
 
-    load(false);
+    // Debounce initial load so rapid tab switches don't spam requests
+    const debounce = setTimeout(() => load(false), 300);
     const interval = setInterval(() => load(true), LIVE_REFRESH_MS[activeTimeframe]);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [geckoId, activeTimeframe, initialSparkline, chartMode]);
-
-  // Fetch candlestick data
-  useEffect(() => {
-    if (chartMode !== 'candle') return;
-    if (!geckoId) {
-      setCandleData(null);
-      return;
-    }
-
-    let cancelled = false;
-    const load = (force: boolean) => {
-      if (!force) setChartLoading(true);
-      fetchOHLCData(geckoId, activeTimeframe, force).then((data) => {
-        if (cancelled) return;
-        setCandleData(data.length >= 1 ? data : null);
-        setChartLoading(false);
-      });
-    };
-
-    load(false);
-    const interval = setInterval(() => load(true), LIVE_REFRESH_MS[activeTimeframe]);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => { cancelled = true; clearTimeout(debounce); clearInterval(interval); };
   }, [geckoId, activeTimeframe, chartMode]);
 
   if (!isUnlocked || !walletAddress || !token) {
