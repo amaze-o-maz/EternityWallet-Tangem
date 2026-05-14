@@ -188,13 +188,21 @@ const TIMEFRAME_DAYS: Record<ChartTimeframe, number> = {
   'ALL': 365,
 };
 
-const OHLC_DAYS: Record<ChartTimeframe, number> = {
-  '15M': 1,
-  '1H': 1,
-  '1D': 1,
-  '1W': 7,
-  '1M': 30,
-  'ALL': 365,
+// How many minutes of raw data each candle should cover
+const CANDLE_INTERVAL_MIN: Record<ChartTimeframe, number> = {
+  '15M': 1,    // 1-min candles → ~15 candles in a 15-min window
+  '1H': 5,     // 5-min candles → ~12 candles in a 1-hour window
+  '1D': 30,    // 30-min candles → ~48 candles in a day
+  '1W': 0,     // use native OHLC
+  '1M': 0,     // use native OHLC
+  'ALL': 0,    // use native OHLC
+};
+
+// How many minutes of history to show for short timeframes
+const WINDOW_MIN: Record<string, number> = {
+  '15M': 15,
+  '1H': 60,
+  '1D': 1440,
 };
 
 export const LIVE_REFRESH_MS: Record<ChartTimeframe, number> = {
@@ -229,12 +237,14 @@ export async function fetchChartData(
     const raw = json.prices;
     if (!raw || raw.length < 2) return [];
 
-    let prices = raw.map(([, p]) => p);
-
-    if (timeframe === '15M') {
-      prices = prices.slice(-3);
-    } else if (timeframe === '1H') {
-      prices = prices.slice(-12);
+    let prices: number[];
+    const windowMs = WINDOW_MIN[timeframe];
+    if (windowMs) {
+      const cutoff = Date.now() - windowMs * 60_000;
+      prices = raw.filter(([ts]) => ts >= cutoff).map(([, p]) => p);
+      if (prices.length < 2) prices = raw.slice(-3).map(([, p]) => p);
+    } else {
+      prices = raw.map(([, p]) => p);
     }
 
     const maxPoints = 80;
@@ -252,6 +262,39 @@ export async function fetchChartData(
   }
 }
 
+// Synthesize OHLC candles from fine-grained [timestamp, price] data
+function buildCandles(
+  raw: [number, number][],
+  intervalMin: number,
+): OHLCCandle[] {
+  if (raw.length === 0) return [];
+  const intervalMs = intervalMin * 60_000;
+  const candles: OHLCCandle[] = [];
+
+  let bucketStart = Math.floor(raw[0][0] / intervalMs) * intervalMs;
+  let open = raw[0][1];
+  let high = raw[0][1];
+  let low = raw[0][1];
+  let close = raw[0][1];
+
+  for (const [ts, price] of raw) {
+    if (ts >= bucketStart + intervalMs) {
+      candles.push([open, high, low, close]);
+      bucketStart = Math.floor(ts / intervalMs) * intervalMs;
+      open = price;
+      high = price;
+      low = price;
+      close = price;
+    } else {
+      if (price > high) high = price;
+      if (price < low) low = price;
+      close = price;
+    }
+  }
+  candles.push([open, high, low, close]);
+  return candles;
+}
+
 export async function fetchOHLCData(
   geckoId: string,
   timeframe: ChartTimeframe,
@@ -265,7 +308,39 @@ export async function fetchOHLCData(
     }
   }
 
-  const days = OHLC_DAYS[timeframe];
+  const candleMin = CANDLE_INTERVAL_MIN[timeframe];
+
+  // Short timeframes: build candles from market_chart data
+  if (candleMin > 0) {
+    const days = TIMEFRAME_DAYS[timeframe];
+    const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+      if (!res.ok) return [];
+      const json: { prices?: [number, number][] } = await res.json();
+      let raw = json.prices;
+      if (!raw || raw.length < 2) return [];
+
+      const windowMs = WINDOW_MIN[timeframe];
+      if (windowMs) {
+        const cutoff = Date.now() - windowMs * 60_000;
+        raw = raw.filter(([ts]) => ts >= cutoff);
+        if (raw.length < 2) return [];
+      }
+
+      const candles = buildCandles(raw, candleMin);
+      if (candles.length >= 1) {
+        ohlcCache.set(cacheKey, { data: candles, ts: Date.now() });
+      }
+      return candles;
+    } catch {
+      return [];
+    }
+  }
+
+  // Longer timeframes: use native CoinGecko OHLC endpoint
+  const ohlcDays: Record<string, number> = { '1W': 7, '1M': 30, 'ALL': 365 };
+  const days = ohlcDays[timeframe] ?? 30;
   const url = `${COINGECKO_BASE}/coins/${geckoId}/ohlc?vs_currency=usd&days=${days}`;
 
   try {
@@ -275,12 +350,6 @@ export async function fetchOHLCData(
     if (!raw || raw.length < 2) return [];
 
     let candles: OHLCCandle[] = raw.map(([, o, h, l, c]) => [o, h, l, c]);
-
-    if (timeframe === '15M') {
-      candles = candles.slice(-1);
-    } else if (timeframe === '1H') {
-      candles = candles.slice(-2);
-    }
 
     const maxCandles = 60;
     if (candles.length > maxCandles) {
