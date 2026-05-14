@@ -16,6 +16,7 @@ import Buy from './pages/Buy';
 import Burns from './pages/Burns';
 import ShibFi from './pages/ShibFi';
 import SendNft from './pages/SendNft';
+import TokenDetail from './pages/TokenDetail';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Onboarding /> },
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
   { path: '/wallet/send-nft', element: <SendNft /> },
   { path: '/wallet/receive', element: <Receive /> },
   { path: '/wallet/browser', element: <DAppBrowser /> },
+  { path: '/wallet/token/:address', element: <TokenDetail /> },
 
   /* Persistent layout — Header + BottomNav stay mounted */
   {

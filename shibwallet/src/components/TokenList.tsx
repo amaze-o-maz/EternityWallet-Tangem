@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNetworkStore } from '../store/networkStore';
@@ -52,6 +53,7 @@ const TokenRow: React.FC<{
   chainId: number;
   onRemoved?: () => void;
 }> = ({ token, balance, price, sparklineData, index, chainId, onRemoved }) => {
+  const navigate = useNavigate();
   const [imgErrored, setImgErrored] = useState(false);
 
   const displayBalance = formatBalance(balance, token.decimals);
@@ -59,9 +61,21 @@ const TokenRow: React.FC<{
   const usdValue = numericBalance * price;
   const isZero = balance === 0n;
 
+  const handleTap = () => {
+    navigate(`/wallet/token/${token.address}`, {
+      state: {
+        token,
+        balance: balance.toString(),
+        price,
+        sparkline: sparklineData,
+      },
+    });
+  };
+
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3.5 transition-all duration-200 group
+      onClick={handleTap}
+      className={`flex items-center gap-3 px-4 py-3.5 transition-all duration-200 group cursor-pointer
                    hover:bg-white/[0.03] border-l-2 border-l-transparent hover:border-l-[#FF6900]
                    ${isZero ? 'opacity-50' : ''}
                    border-b border-white/[0.05] last:border-b-0`}
