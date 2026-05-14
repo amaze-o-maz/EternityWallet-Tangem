@@ -181,6 +181,12 @@ export async function fetchSparklines(
       }
     }
 
+    // Apply aliases in both directions so cache works across chain switches
+    for (const [alias, source] of Object.entries(ALIASES)) {
+      if (sparklines[source] && !sparklines[alias]) sparklines[alias] = sparklines[source];
+      if (sparklines[alias] && !sparklines[source]) sparklines[source] = sparklines[alias];
+    }
+
     if (Object.keys(sparklines).length > 0) {
       cachedSparklines = sparklines;
       sparklineCacheTimestamp = now;
