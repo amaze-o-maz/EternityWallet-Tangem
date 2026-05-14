@@ -24,12 +24,10 @@ function formatAxisLabel(ts: number, spanMs: number): string {
   if (spanMs <= 14 * DAY) {
     return d.toLocaleDateString('en-US', { weekday: 'short' });
   }
-  if (spanMs <= 90 * DAY) {
+  if (spanMs <= 60 * DAY) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
-  if (spanMs <= 2 * 365 * DAY) {
-    return d.toLocaleDateString('en-US', { month: 'short' });
-  }
+  // For longer spans, always include the year so user knows what period
   return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 }
 
@@ -45,13 +43,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   data,
   timeframe: _timeframe,
   width = 320,
-  height = 160,
+  height = 140,
 }) => {
   if (!data || data.length < 1) return null;
 
-  const labelHeight = 22;
-  const rightAxis = 56;
-  const padding = { top: 10, right: rightAxis, bottom: labelHeight + 6, left: 6 };
+  const labelHeight = 20;
+  const rightAxis = 54;
+  const padding = { top: 8, right: rightAxis, bottom: labelHeight + 4, left: 4 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
 

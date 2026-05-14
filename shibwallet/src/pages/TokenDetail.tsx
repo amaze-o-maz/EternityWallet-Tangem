@@ -36,7 +36,9 @@ const TIMEFRAMES: { key: ChartTimeframe; label: string }[] = [
   { key: 'ALL', label: 'All' },
 ];
 
-// Description shown under the chart so user knows what they're looking at
+// Description shown under the chart so user knows what they're looking at.
+// For ALL we append the actual start date of available data so the user can
+// see for any token exactly how much history is being shown.
 const TIMEFRAME_DESCRIPTIONS: Record<ChartTimeframe, string> = {
   '15M': 'Last 15 minutes',
   '1H': 'Last hour',
@@ -45,6 +47,18 @@ const TIMEFRAME_DESCRIPTIONS: Record<ChartTimeframe, string> = {
   '1M': 'Last 30 days',
   'ALL': 'All time',
 };
+
+function describeTimeframe(
+  timeframe: ChartTimeframe,
+  firstDataTs: number | null,
+): string {
+  if (timeframe !== 'ALL' || firstDataTs === null) {
+    return TIMEFRAME_DESCRIPTIONS[timeframe];
+  }
+  const d = new Date(firstDataTs);
+  const since = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return `All time · since ${since}`;
+}
 
 function formatBalance(raw: bigint, decimals: number): string {
   const divisor = 10n ** BigInt(decimals);
@@ -189,21 +203,21 @@ const TokenDetail: React.FC = () => {
         }}
       />
 
-      <div className="max-w-md mx-auto w-full px-5 py-8 relative z-10">
-        {/* Header */}
+      <div className="max-w-md mx-auto w-full px-5 py-4 relative z-10">
+        {/* Back */}
         <button
           onClick={() => navigate('/wallet')}
-          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-6 active:scale-95"
+          className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors mb-3 active:scale-95"
         >
           <ArrowLeft size={16} />
           Back
         </button>
 
-        {/* Token identity */}
-        <div className="flex items-center gap-4 mb-8">
-          <div className="relative w-14 h-14 shrink-0">
+        {/* Token identity + price (consolidated) */}
+        <div className="flex items-center gap-3 mb-3">
+          <div className="relative w-12 h-12 shrink-0">
             <div
-              className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold text-white"
+              className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold text-white"
               style={{ backgroundColor: stringToColor(token.symbol) }}
             >
               {token.symbol.slice(0, 2)}
@@ -212,35 +226,30 @@ const TokenDetail: React.FC = () => {
               <img
                 src={token.logoUrl}
                 alt={token.symbol}
-                className="w-14 h-14 rounded-full absolute inset-0 object-cover"
+                className="w-12 h-12 rounded-full absolute inset-0 object-cover"
                 onError={() => setImgErrored(true)}
               />
             )}
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">{token.name}</h1>
-            <p className="text-gray-400 text-sm">{token.symbol}</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-bold text-white truncate leading-tight">{token.name}</h1>
+            <p className="text-gray-400 text-xs">{token.symbol}</p>
           </div>
-        </div>
-
-        {/* Price card */}
-        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mb-4 shadow-2xl">
-          <p className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wider">Price</p>
-          <div className="flex items-end gap-3">
-            <p className="text-3xl font-bold text-white">{formatPrice(price)}</p>
+          <div className="text-right">
+            <p className="text-xl font-bold text-white tabular-nums leading-tight">{formatPrice(price)}</p>
             {chartChange !== null && (
-              <span className={`text-sm font-semibold pb-1 ${chartChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              <span className={`text-xs font-semibold ${chartChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
               </span>
             )}
           </div>
         </div>
 
-        {/* Chart */}
+        {/* Chart card */}
         {geckoId && (
-          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-4 mb-4 shadow-2xl">
+          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-3 mb-3 shadow-2xl">
             {/* Top row: live indicator + chart mode toggle */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                 <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Live</span>
@@ -272,12 +281,12 @@ const TokenDetail: React.FC = () => {
             </div>
 
             {/* Timeframe selector */}
-            <div className="flex gap-1 mb-3 bg-white/[0.03] border border-white/[0.05] rounded-xl p-1">
+            <div className="flex gap-1 mb-2 bg-white/[0.03] border border-white/[0.05] rounded-xl p-1">
               {TIMEFRAMES.map((tf) => (
                 <button
                   key={tf.key}
                   onClick={() => setActiveTimeframe(tf.key)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex-1 py-1 rounded-lg text-xs font-medium transition-all ${
                     activeTimeframe === tf.key
                       ? 'bg-gradient-to-r from-[#FF6900] to-[#FF8C00] text-white'
                       : 'text-gray-500 hover:text-white'
@@ -289,7 +298,7 @@ const TokenDetail: React.FC = () => {
             </div>
 
             {/* Chart area */}
-            <div className="relative min-h-[150px] flex items-center justify-center">
+            <div className="relative min-h-[140px] flex items-center justify-center">
               {chartLoading && !hasChartData ? (
                 <div className="w-5 h-5 border-2 border-[#FF6900] border-t-transparent rounded-full animate-spin" />
               ) : hasChartData ? (
@@ -306,68 +315,73 @@ const TokenDetail: React.FC = () => {
             </div>
 
             {/* Description of what's being shown */}
-            <p className="text-[10px] text-gray-600 text-center mt-2 tracking-wide">
-              {TIMEFRAME_DESCRIPTIONS[activeTimeframe]}
+            <p className="text-[10px] text-gray-600 text-center mt-1.5 tracking-wide">
+              {describeTimeframe(
+                activeTimeframe,
+                chartMode === 'line'
+                  ? (lineData && lineData.length > 0 ? lineData[0][0] : null)
+                  : (candleData && candleData.length > 0 ? candleData[0][0] : null),
+              )}
             </p>
           </div>
         )}
 
-        {/* Balance card */}
-        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mb-4 shadow-2xl">
-          <p className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wider">Your Balance</p>
-          <p className="text-2xl font-bold text-white">
-            {formatBalance(balance, token.decimals)} <span className="text-gray-400 text-base">{token.symbol}</span>
-          </p>
-          <p className="text-gray-400 text-sm mt-1">{formatUsd(usdValue)}</p>
+        {/* Balance row (compact, single line) */}
+        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl px-4 py-3 mb-3 shadow-2xl flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Balance</p>
+            <p className="text-base font-bold text-white truncate">
+              {formatBalance(balance, token.decimals)} <span className="text-gray-500 text-xs">{token.symbol}</span>
+            </p>
+          </div>
+          <p className="text-gray-400 text-sm tabular-nums shrink-0">{formatUsd(usdValue)}</p>
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 mb-6">
+        <div className="flex gap-2 mb-3">
           <button
             onClick={() => navigate('/wallet/send', { state: { preselectedToken: token } })}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl
                        bg-gradient-to-r from-[#FF6900] to-[#FF8C00]
                        text-white text-sm font-semibold transition-all active:scale-[0.97]
                        hover:shadow-[0_0_20px_rgba(255,105,0,0.3)]"
           >
-            <Send size={16} />
+            <Send size={15} />
             Send
           </button>
           <button
             onClick={() => navigate('/wallet/swap')}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl
                        bg-white/[0.06] border border-white/[0.08]
                        text-white text-sm font-semibold transition-all active:scale-[0.97]
                        hover:bg-white/[0.1]"
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={15} />
             Swap
           </button>
         </div>
 
-        {/* Contract info */}
+        {/* Contract — compact single line */}
         {!token.isNative && (
-          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 shadow-2xl">
-            <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Contract</p>
-            <div className="flex items-center gap-2">
-              <p className="text-xs text-white font-mono break-all flex-1 leading-relaxed">
-                {token.address}
-              </p>
-              <button
-                onClick={handleCopyAddress}
-                className="p-2 rounded-lg hover:bg-white/[0.06] text-gray-400 hover:text-white transition-all shrink-0 active:scale-95"
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-              <a
-                href={`${explorerBase}/token/${token.address}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-lg hover:bg-white/[0.06] text-gray-400 hover:text-white transition-all shrink-0"
-              >
-                <ExternalLink size={14} />
-              </a>
-            </div>
+          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-xl px-3 py-2 shadow-2xl flex items-center gap-2">
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider shrink-0">Contract</span>
+            <p className="text-[11px] text-gray-300 font-mono flex-1 truncate">
+              {token.address.slice(0, 8)}…{token.address.slice(-6)}
+            </p>
+            <button
+              onClick={handleCopyAddress}
+              className="p-1.5 rounded-md hover:bg-white/[0.06] text-gray-400 hover:text-white transition-all shrink-0 active:scale-95"
+            >
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+            </button>
+            <a
+              href={`${explorerBase}/token/${token.address}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded-md hover:bg-white/[0.06] text-gray-400 hover:text-white transition-all shrink-0"
+            >
+              <ExternalLink size={13} />
+            </a>
           </div>
         )}
       </div>
