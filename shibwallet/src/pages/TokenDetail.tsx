@@ -38,12 +38,12 @@ const TIMEFRAMES: { key: ChartTimeframe; label: string }[] = [
 
 // Description shown under the chart so user knows what they're looking at
 const TIMEFRAME_DESCRIPTIONS: Record<ChartTimeframe, string> = {
-  '15M': '15-min candles · last 6 hours',
-  '1H': '1-hour candles · last 24 hours',
-  '1D': 'Daily candles · last 30 days',
-  '1W': 'Weekly candles · last 6 months',
-  '1M': 'Monthly candles · last year',
-  'ALL': 'Monthly candles · all time',
+  '15M': 'Last 15 minutes',
+  '1H': 'Last hour',
+  '1D': 'Last 24 hours',
+  '1W': 'Last 7 days',
+  '1M': 'Last 30 days',
+  'ALL': 'All time',
 };
 
 function formatBalance(raw: bigint, decimals: number): string {
