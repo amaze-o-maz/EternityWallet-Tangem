@@ -197,13 +197,15 @@ export type ChartTimeframe = '15M' | '1H' | '1D' | '1W' | '1M' | 'ALL';
 export type TimedPrice = [number, number]; // [timestamp_ms, price]
 export type TimedOHLC = [number, number, number, number, number]; // [ts, open, high, low, close]
 
-// Trading-view paradigm: each timeframe defines candle interval AND time span.
-// The label refers to the candle granularity, span is chosen to fit ~20-30 candles.
+// User-facing paradigm: label = time window.
+// 15m shows last 15 minutes, 1D shows last 24 hours, ALL shows full history.
+// Candle interval is chosen to give the best density given CoinGecko's
+// data resolution (5-min for days=1, hourly for days=2-90, daily for days>90).
 interface TimeframeConfig {
-  candleMs: number;       // candle bucket size
+  spanMs: number;          // 0 = show all data returned
+  candleMs: number;        // 0 = adaptive based on actual history length
   apiDays: number | 'max'; // CoinGecko days param
-  fallbackDays?: number;  // fallback if primary returns empty
-  spanMs: number;          // 0 = use all data returned
+  fallbackDays?: number;   // try this if primary returns empty
 }
 
 const MIN = 60_000;
@@ -211,18 +213,12 @@ const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 
 const TF_CONFIG: Record<ChartTimeframe, TimeframeConfig> = {
-  // 15-min candles over 6h. days=1 gives 5-min granularity → 3 points/candle.
-  '15M': { candleMs: 15 * MIN, apiDays: 1, spanMs: 6 * HOUR },
-  // 1-hour candles over 24h. days=1 gives 5-min data → 12 points/candle.
-  '1H':  { candleMs: 1 * HOUR, apiDays: 1, spanMs: 24 * HOUR },
-  // 1-day candles over 30d. days=30 gives hourly data → 24 points/candle.
-  '1D':  { candleMs: 1 * DAY, apiDays: 30, spanMs: 30 * DAY },
-  // 1-week candles over 6mo. days=180 gives daily data → 7 points/candle.
-  '1W':  { candleMs: 7 * DAY, apiDays: 180, spanMs: 180 * DAY },
-  // 1-month candles over 1yr. days=365 gives daily data → 30 points/candle.
-  '1M':  { candleMs: 30 * DAY, apiDays: 365, spanMs: 365 * DAY },
-  // 1-month candles over all available history.
-  'ALL': { candleMs: 30 * DAY, apiDays: 'max', fallbackDays: 365, spanMs: 0 },
+  '15M': { spanMs: 15 * MIN,  candleMs: 5 * MIN,  apiDays: 1 },
+  '1H':  { spanMs: 1 * HOUR,  candleMs: 10 * MIN, apiDays: 1 },
+  '1D':  { spanMs: 24 * HOUR, candleMs: 1 * HOUR, apiDays: 1 },
+  '1W':  { spanMs: 7 * DAY,   candleMs: 4 * HOUR, apiDays: 7 },
+  '1M':  { spanMs: 30 * DAY,  candleMs: 1 * DAY,  apiDays: 30 },
+  'ALL': { spanMs: 0,         candleMs: 0,         apiDays: 'max', fallbackDays: 365 },
 };
 
 export const LIVE_REFRESH_MS: Record<ChartTimeframe, number> = {
@@ -236,6 +232,27 @@ export const LIVE_REFRESH_MS: Record<ChartTimeframe, number> = {
 
 export function getChartConfig(timeframe: ChartTimeframe) {
   return TF_CONFIG[timeframe];
+}
+
+// Pick a candle interval that yields ~60 candles for the given history length
+function adaptiveCandleMs(data: TimedPrice[]): number {
+  if (data.length < 2) return DAY;
+  const span = data[data.length - 1][0] - data[0][0];
+  const TARGET = 60;
+  const intervals = [
+    1 * DAY,
+    2 * DAY,
+    3 * DAY,
+    7 * DAY,
+    14 * DAY,
+    30 * DAY,
+    60 * DAY,
+    90 * DAY,
+  ];
+  for (const i of intervals) {
+    if (span / i <= TARGET) return i;
+  }
+  return 90 * DAY;
 }
 
 // Shared market_chart fetcher used by both line and candle modes
@@ -292,11 +309,10 @@ export async function fetchLineChart(
   if (data.length < 2) return data;
 
   // Subsample for smooth rendering performance
-  const maxPoints = 120;
+  const maxPoints = 150;
   if (data.length > maxPoints) {
     const step = Math.max(1, Math.floor(data.length / maxPoints));
     const sampled = data.filter((_, i) => i % step === 0);
-    // Always include the last point
     if (sampled[sampled.length - 1] !== data[data.length - 1]) {
       sampled.push(data[data.length - 1]);
     }
@@ -313,7 +329,8 @@ export async function fetchCandles(
   const data = await fetchMarketChart(geckoId, timeframe, forceRefresh);
   if (data.length < 2) return [];
   const cfg = TF_CONFIG[timeframe];
-  return buildCandles(data, cfg.candleMs);
+  const candleMs = cfg.candleMs > 0 ? cfg.candleMs : adaptiveCandleMs(data);
+  return buildCandles(data, candleMs);
 }
 
 function buildCandles(raw: TimedPrice[], intervalMs: number): TimedOHLC[] {
