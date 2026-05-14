@@ -172,8 +172,7 @@ export async function fetchSparklines(
 
 // ── Chart data for detail page (per-token, variable timeframes) ──
 
-const chartCache = new Map<string, { data: number[]; ts: number }>();
-const ohlcCache = new Map<string, { data: OHLCCandle[]; ts: number }>();
+const marketChartCache = new Map<string, { data: TimedPrice[]; ts: number }>();
 const CHART_CACHE_TTL_MS = 120_000;
 
 // Throttle: minimum gap between CoinGecko chart requests
@@ -195,97 +194,131 @@ async function throttledFetch(url: string): Promise<Response | null> {
 }
 
 export type ChartTimeframe = '15M' | '1H' | '1D' | '1W' | '1M' | 'ALL';
-export type OHLCCandle = [number, number, number, number]; // open, high, low, close
+export type TimedPrice = [number, number]; // [timestamp_ms, price]
+export type TimedOHLC = [number, number, number, number, number]; // [ts, open, high, low, close]
 
-const TIMEFRAME_DAYS: Record<ChartTimeframe, number> = {
-  '15M': 1,
-  '1H': 1,
-  '1D': 1,
-  '1W': 7,
-  '1M': 30,
-  'ALL': 365,
-};
+// Trading-view paradigm: each timeframe defines candle interval AND time span.
+// The label refers to the candle granularity, span is chosen to fit ~20-30 candles.
+interface TimeframeConfig {
+  candleMs: number;       // candle bucket size
+  apiDays: number | 'max'; // CoinGecko days param
+  fallbackDays?: number;  // fallback if primary returns empty
+  spanMs: number;          // 0 = use all data returned
+}
 
-// How many minutes per candle (0 = use CoinGecko native OHLC endpoint)
-const CANDLE_INTERVAL_MIN: Record<ChartTimeframe, number> = {
-  '15M': 5,     // 5-min candles → ~3 candles
-  '1H': 5,      // 5-min candles → ~12 candles
-  '1D': 30,     // 30-min candles → ~48 candles
-  '1W': 0,      // native OHLC → 4-hour candles (~42)
-  '1M': 240,    // 4-hour candles synthesized from market_chart
-  'ALL': 0,     // native OHLC → 4-day candles (~90)
-};
+const MIN = 60_000;
+const HOUR = 60 * MIN;
+const DAY = 24 * HOUR;
 
-// How many minutes of history to show for short timeframes
-const WINDOW_MIN: Record<string, number> = {
-  '15M': 15,
-  '1H': 60,
-  '1D': 1440,
+const TF_CONFIG: Record<ChartTimeframe, TimeframeConfig> = {
+  // 15-min candles over 6h. days=1 gives 5-min granularity → 3 points/candle.
+  '15M': { candleMs: 15 * MIN, apiDays: 1, spanMs: 6 * HOUR },
+  // 1-hour candles over 24h. days=1 gives 5-min data → 12 points/candle.
+  '1H':  { candleMs: 1 * HOUR, apiDays: 1, spanMs: 24 * HOUR },
+  // 1-day candles over 30d. days=30 gives hourly data → 24 points/candle.
+  '1D':  { candleMs: 1 * DAY, apiDays: 30, spanMs: 30 * DAY },
+  // 1-week candles over 6mo. days=180 gives daily data → 7 points/candle.
+  '1W':  { candleMs: 7 * DAY, apiDays: 180, spanMs: 180 * DAY },
+  // 1-month candles over 1yr. days=365 gives daily data → 30 points/candle.
+  '1M':  { candleMs: 30 * DAY, apiDays: 365, spanMs: 365 * DAY },
+  // 1-month candles over all available history.
+  'ALL': { candleMs: 30 * DAY, apiDays: 'max', fallbackDays: 365, spanMs: 0 },
 };
 
 export const LIVE_REFRESH_MS: Record<ChartTimeframe, number> = {
   '15M': 30_000,
-  '1H': 30_000,
-  '1D': 60_000,
-  '1W': 120_000,
-  '1M': 300_000,
+  '1H':  30_000,
+  '1D':  60_000,
+  '1W':  120_000,
+  '1M':  300_000,
   'ALL': 300_000,
 };
 
-export async function fetchChartData(
+export function getChartConfig(timeframe: ChartTimeframe) {
+  return TF_CONFIG[timeframe];
+}
+
+// Shared market_chart fetcher used by both line and candle modes
+async function fetchMarketChart(
   geckoId: string,
   timeframe: ChartTimeframe,
-  forceRefresh = false,
-): Promise<number[]> {
-  const cacheKey = `${geckoId}:line:${timeframe}`;
-  const cached = chartCache.get(cacheKey);
+  forceRefresh: boolean,
+): Promise<TimedPrice[]> {
+  const cacheKey = `${geckoId}:${timeframe}`;
+  const cached = marketChartCache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
     return cached.data;
   }
 
-  const days = TIMEFRAME_DAYS[timeframe];
-  const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
-  const res = await throttledFetch(url);
-  if (!res) return cached?.data ?? [];
+  const cfg = TF_CONFIG[timeframe];
 
-  try {
-    const json: { prices?: [number, number][] } = await res.json();
-    const raw = json.prices;
-    if (!raw || raw.length < 2) return cached?.data ?? [];
-
-    let prices: number[];
-    const windowMs = WINDOW_MIN[timeframe];
-    if (windowMs) {
-      const cutoff = Date.now() - windowMs * 60_000;
-      prices = raw.filter(([ts]) => ts >= cutoff).map(([, p]) => p);
-      if (prices.length < 2) prices = raw.slice(-3).map(([, p]) => p);
-    } else {
-      prices = raw.map(([, p]) => p);
+  const tryFetch = async (days: number | 'max'): Promise<TimedPrice[] | null> => {
+    const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
+    const res = await throttledFetch(url);
+    if (!res) return null;
+    try {
+      const json: { prices?: TimedPrice[] } = await res.json();
+      return json.prices && json.prices.length >= 2 ? json.prices : null;
+    } catch {
+      return null;
     }
+  };
 
-    const maxPoints = 80;
-    if (prices.length > maxPoints) {
-      const step = Math.max(1, Math.floor(prices.length / maxPoints));
-      prices = prices.filter((_, i) => i % step === 0);
-    }
-
-    if (prices.length >= 2) {
-      chartCache.set(cacheKey, { data: prices, ts: Date.now() });
-    }
-    return prices;
-  } catch {
-    return cached?.data ?? [];
+  let raw = await tryFetch(cfg.apiDays);
+  if (!raw && cfg.fallbackDays !== undefined) {
+    raw = await tryFetch(cfg.fallbackDays);
   }
+  if (!raw) return cached?.data ?? [];
+
+  let data = raw;
+  if (cfg.spanMs > 0) {
+    const cutoff = Date.now() - cfg.spanMs;
+    const filtered = data.filter(([ts]) => ts >= cutoff);
+    if (filtered.length >= 2) data = filtered;
+  }
+
+  if (data.length >= 2) {
+    marketChartCache.set(cacheKey, { data, ts: Date.now() });
+  }
+  return data;
 }
 
-// Synthesize OHLC candles from fine-grained [timestamp, price] data
-function buildCandles(
-  raw: [number, number][],
-  intervalMin: number,
-): OHLCCandle[] {
-  if (raw.length === 0) return [];
-  const intervalMs = intervalMin * 60_000;
-  const candles: OHLCCandle[] = [];
+export async function fetchLineChart(
+  geckoId: string,
+  timeframe: ChartTimeframe,
+  forceRefresh = false,
+): Promise<TimedPrice[]> {
+  const data = await fetchMarketChart(geckoId, timeframe, forceRefresh);
+  if (data.length < 2) return data;
+
+  // Subsample for smooth rendering performance
+  const maxPoints = 120;
+  if (data.length > maxPoints) {
+    const step = Math.max(1, Math.floor(data.length / maxPoints));
+    const sampled = data.filter((_, i) => i % step === 0);
+    // Always include the last point
+    if (sampled[sampled.length - 1] !== data[data.length - 1]) {
+      sampled.push(data[data.length - 1]);
+    }
+    return sampled;
+  }
+  return data;
+}
+
+export async function fetchCandles(
+  geckoId: string,
+  timeframe: ChartTimeframe,
+  forceRefresh = false,
+): Promise<TimedOHLC[]> {
+  const data = await fetchMarketChart(geckoId, timeframe, forceRefresh);
+  if (data.length < 2) return [];
+  const cfg = TF_CONFIG[timeframe];
+  return buildCandles(data, cfg.candleMs);
+}
+
+function buildCandles(raw: TimedPrice[], intervalMs: number): TimedOHLC[] {
+  if (raw.length === 0 || intervalMs <= 0) return [];
+  const candles: TimedOHLC[] = [];
 
   let bucketStart = Math.floor(raw[0][0] / intervalMs) * intervalMs;
   let open = raw[0][1];
@@ -295,7 +328,7 @@ function buildCandles(
 
   for (const [ts, price] of raw) {
     if (ts >= bucketStart + intervalMs) {
-      candles.push([open, high, low, close]);
+      candles.push([bucketStart, open, high, low, close]);
       bucketStart = Math.floor(ts / intervalMs) * intervalMs;
       open = price;
       high = price;
@@ -307,78 +340,6 @@ function buildCandles(
       close = price;
     }
   }
-  candles.push([open, high, low, close]);
+  candles.push([bucketStart, open, high, low, close]);
   return candles;
-}
-
-export async function fetchOHLCData(
-  geckoId: string,
-  timeframe: ChartTimeframe,
-  forceRefresh = false,
-): Promise<OHLCCandle[]> {
-  const cacheKey = `${geckoId}:ohlc:${timeframe}`;
-  const cached = ohlcCache.get(cacheKey);
-  if (!forceRefresh && cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
-    return cached.data;
-  }
-
-  const candleMin = CANDLE_INTERVAL_MIN[timeframe];
-
-  // Synthetic candles from market_chart data
-  if (candleMin > 0) {
-    const days = TIMEFRAME_DAYS[timeframe];
-    const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
-    const res = await throttledFetch(url);
-    if (!res) return cached?.data ?? [];
-
-    try {
-      const json: { prices?: [number, number][] } = await res.json();
-      let raw = json.prices;
-      if (!raw || raw.length < 2) return cached?.data ?? [];
-
-      const windowMs = WINDOW_MIN[timeframe];
-      if (windowMs) {
-        const cutoff = Date.now() - windowMs * 60_000;
-        raw = raw.filter(([ts]) => ts >= cutoff);
-        if (raw.length < 2) return cached?.data ?? [];
-      }
-
-      let candles = buildCandles(raw, candleMin);
-      const maxCandles = 60;
-      if (candles.length > maxCandles) {
-        const step = Math.max(1, Math.floor(candles.length / maxCandles));
-        candles = candles.filter((_, i) => i % step === 0);
-      }
-      if (candles.length >= 1) {
-        ohlcCache.set(cacheKey, { data: candles, ts: Date.now() });
-      }
-      return candles;
-    } catch {
-      return cached?.data ?? [];
-    }
-  }
-
-  // Native CoinGecko OHLC for 1W and ALL
-  const days = TIMEFRAME_DAYS[timeframe];
-  const url = `${COINGECKO_BASE}/coins/${geckoId}/ohlc?vs_currency=usd&days=${days}`;
-  const res = await throttledFetch(url);
-  if (!res) return cached?.data ?? [];
-
-  try {
-    const raw: [number, number, number, number, number][] = await res.json();
-    if (!raw || raw.length < 2) return cached?.data ?? [];
-
-    let candles: OHLCCandle[] = raw.map(([, o, h, l, c]) => [o, h, l, c]);
-    const maxCandles = 60;
-    if (candles.length > maxCandles) {
-      const step = Math.max(1, Math.floor(candles.length / maxCandles));
-      candles = candles.filter((_, i) => i % step === 0);
-    }
-    if (candles.length >= 1) {
-      ohlcCache.set(cacheKey, { data: candles, ts: Date.now() });
-    }
-    return candles;
-  } catch {
-    return cached?.data ?? [];
-  }
 }
