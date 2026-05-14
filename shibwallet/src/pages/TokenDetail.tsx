@@ -36,7 +36,9 @@ const TIMEFRAMES: { key: ChartTimeframe; label: string }[] = [
   { key: 'ALL', label: 'All' },
 ];
 
-// Description shown under the chart so user knows what they're looking at
+// Description shown under the chart so user knows what they're looking at.
+// For ALL we append the actual start date of available data so the user can
+// see for any token exactly how much history is being shown.
 const TIMEFRAME_DESCRIPTIONS: Record<ChartTimeframe, string> = {
   '15M': 'Last 15 minutes',
   '1H': 'Last hour',
@@ -45,6 +47,18 @@ const TIMEFRAME_DESCRIPTIONS: Record<ChartTimeframe, string> = {
   '1M': 'Last 30 days',
   'ALL': 'All time',
 };
+
+function describeTimeframe(
+  timeframe: ChartTimeframe,
+  firstDataTs: number | null,
+): string {
+  if (timeframe !== 'ALL' || firstDataTs === null) {
+    return TIMEFRAME_DESCRIPTIONS[timeframe];
+  }
+  const d = new Date(firstDataTs);
+  const since = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return `All time · since ${since}`;
+}
 
 function formatBalance(raw: bigint, decimals: number): string {
   const divisor = 10n ** BigInt(decimals);
@@ -302,7 +316,12 @@ const TokenDetail: React.FC = () => {
 
             {/* Description of what's being shown */}
             <p className="text-[10px] text-gray-600 text-center mt-1.5 tracking-wide">
-              {TIMEFRAME_DESCRIPTIONS[activeTimeframe]}
+              {describeTimeframe(
+                activeTimeframe,
+                chartMode === 'line'
+                  ? (lineData && lineData.length > 0 ? lineData[0][0] : null)
+                  : (candleData && candleData.length > 0 ? candleData[0][0] : null),
+              )}
             </p>
           </div>
         )}
