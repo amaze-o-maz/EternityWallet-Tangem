@@ -7,7 +7,7 @@ import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 import { type TokenInfo } from '../lib/tokens';
-import { resolveGeckoId, fetchChartData, type ChartTimeframe } from '../lib/prices';
+import { resolveGeckoId, fetchChartData, LIVE_REFRESH_MS, type ChartTimeframe } from '../lib/prices';
 
 interface LocationState {
   token: TokenInfo;
@@ -87,23 +87,28 @@ const TokenDetail: React.FC = () => {
   }, [isUnlocked, navigate]);
 
   useEffect(() => {
-    if (activeTimeframe === '1W' && initialSparkline && initialSparkline.length >= 2) {
-      setChartData(initialSparkline);
-      return;
-    }
     if (!geckoId) {
-      setChartData(null);
+      if (activeTimeframe === '1W' && initialSparkline && initialSparkline.length >= 2) {
+        setChartData(initialSparkline);
+      } else {
+        setChartData(null);
+      }
       return;
     }
 
     let cancelled = false;
-    setChartLoading(true);
-    fetchChartData(geckoId, activeTimeframe).then((data) => {
-      if (cancelled) return;
-      setChartData(data.length >= 2 ? data : null);
-      setChartLoading(false);
-    });
-    return () => { cancelled = true; };
+    const load = (force: boolean) => {
+      if (!force) setChartLoading(true);
+      fetchChartData(geckoId, activeTimeframe, force).then((data) => {
+        if (cancelled) return;
+        setChartData(data.length >= 2 ? data : null);
+        setChartLoading(false);
+      });
+    };
+
+    load(false);
+    const interval = setInterval(() => load(true), LIVE_REFRESH_MS[activeTimeframe]);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [geckoId, activeTimeframe, initialSparkline]);
 
   if (!isUnlocked || !walletAddress || !token) {
@@ -192,7 +197,13 @@ const TokenDetail: React.FC = () => {
         {/* Chart */}
         {geckoId && (
           <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mb-4 shadow-2xl">
-            {/* Timeframe selector */}
+            {/* Live indicator + timeframe selector */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Live</span>
+              </div>
+            </div>
             <div className="flex gap-1 mb-4 bg-white/[0.03] border border-white/[0.05] rounded-xl p-1">
               {TIMEFRAMES.map((tf) => (
                 <button

@@ -186,14 +186,26 @@ const TIMEFRAME_DAYS: Record<ChartTimeframe, number | 'max'> = {
   'ALL': 'max',
 };
 
+export const LIVE_REFRESH_MS: Record<ChartTimeframe, number> = {
+  '15M': 30_000,
+  '1H': 30_000,
+  '1D': 60_000,
+  '1W': 120_000,
+  '1M': 300_000,
+  'ALL': 300_000,
+};
+
 export async function fetchChartData(
   geckoId: string,
   timeframe: ChartTimeframe,
+  forceRefresh = false,
 ): Promise<number[]> {
   const cacheKey = `${geckoId}:${timeframe}`;
-  const cached = chartCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
-    return cached.data;
+  if (!forceRefresh) {
+    const cached = chartCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
+      return cached.data;
+    }
   }
 
   const days = TIMEFRAME_DAYS[timeframe];
