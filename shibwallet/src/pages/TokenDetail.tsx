@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Copy, Check, Send, RefreshCw, BarChart3, TrendingUp } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Sparkline from '../components/Sparkline';
+import DetailLineChart from '../components/DetailLineChart';
 import CandlestickChart from '../components/CandlestickChart';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
@@ -10,11 +10,12 @@ import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 import { type TokenInfo } from '../lib/tokens';
 import {
   resolveGeckoId,
-  fetchChartData,
-  fetchOHLCData,
+  fetchLineChart,
+  fetchCandles,
   LIVE_REFRESH_MS,
   type ChartTimeframe,
-  type OHLCCandle,
+  type TimedPrice,
+  type TimedOHLC,
 } from '../lib/prices';
 
 interface LocationState {
@@ -34,6 +35,16 @@ const TIMEFRAMES: { key: ChartTimeframe; label: string }[] = [
   { key: '1M', label: '1M' },
   { key: 'ALL', label: 'All' },
 ];
+
+// Description shown under the chart so user knows what they're looking at
+const TIMEFRAME_DESCRIPTIONS: Record<ChartTimeframe, string> = {
+  '15M': '15-min candles · last 6 hours',
+  '1H': '1-hour candles · last 24 hours',
+  '1D': 'Daily candles · last 30 days',
+  '1W': 'Weekly candles · last 6 months',
+  '1M': 'Monthly candles · last year',
+  'ALL': 'Monthly candles · all time',
+};
 
 function formatBalance(raw: bigint, decimals: number): string {
   const divisor = 10n ** BigInt(decimals);
@@ -70,7 +81,7 @@ function stringToColor(str: string): string {
 const TokenDetail: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { address: tokenAddress } = useParams<{ address: string }>();
+  const { address: _tokenAddress } = useParams<{ address: string }>();
   useAutoLockOnResume();
 
   const { address: walletAddress, isUnlocked } = useWalletStore();
@@ -80,14 +91,13 @@ const TokenDetail: React.FC = () => {
   const token = state?.token;
   const balance = state?.balance ? BigInt(state.balance) : 0n;
   const price = state?.price ?? 0;
-  const initialSparkline = state?.sparkline;
 
   const [imgErrored, setImgErrored] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTimeframe, setActiveTimeframe] = useState<ChartTimeframe>('1W');
   const [chartMode, setChartMode] = useState<ChartMode>('line');
-  const [lineData, setLineData] = useState<number[] | null>(initialSparkline ?? null);
-  const [candleData, setCandleData] = useState<OHLCCandle[] | null>(null);
+  const [lineData, setLineData] = useState<TimedPrice[] | null>(null);
+  const [candleData, setCandleData] = useState<TimedOHLC[] | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
 
   const geckoId = token ? resolveGeckoId(token) : null;
@@ -98,16 +108,11 @@ const TokenDetail: React.FC = () => {
     }
   }, [isUnlocked, navigate]);
 
-  // Fetch chart data (line or candle) with debounce to avoid rate limits
+  // Fetch chart data with debounce + live refresh interval
   useEffect(() => {
     if (!geckoId) {
-      if (chartMode === 'line' && activeTimeframe === '1W' && initialSparkline && initialSparkline.length >= 2) {
-        setLineData(initialSparkline);
-      } else if (chartMode === 'line') {
-        setLineData(null);
-      } else {
-        setCandleData(null);
-      }
+      setLineData(null);
+      setCandleData(null);
       return;
     }
 
@@ -115,13 +120,13 @@ const TokenDetail: React.FC = () => {
     const load = (force: boolean) => {
       if (!force) setChartLoading(true);
       if (chartMode === 'line') {
-        fetchChartData(geckoId, activeTimeframe, force).then((data) => {
+        fetchLineChart(geckoId, activeTimeframe, force).then((data) => {
           if (cancelled) return;
           if (data.length >= 2) setLineData(data);
           setChartLoading(false);
         });
       } else {
-        fetchOHLCData(geckoId, activeTimeframe, force).then((data) => {
+        fetchCandles(geckoId, activeTimeframe, force).then((data) => {
           if (cancelled) return;
           if (data.length >= 1) setCandleData(data);
           setChartLoading(false);
@@ -129,7 +134,6 @@ const TokenDetail: React.FC = () => {
       }
     };
 
-    // Debounce initial load so rapid tab switches don't spam requests
     const debounce = setTimeout(() => load(false), 300);
     const interval = setInterval(() => load(true), LIVE_REFRESH_MS[activeTimeframe]);
     return () => { cancelled = true; clearTimeout(debounce); clearInterval(interval); };
@@ -145,11 +149,13 @@ const TokenDetail: React.FC = () => {
 
   const chartChange = (() => {
     if (chartMode === 'line' && lineData && lineData.length >= 2) {
-      return ((lineData[lineData.length - 1] - lineData[0]) / lineData[0]) * 100;
+      const first = lineData[0][1];
+      const last = lineData[lineData.length - 1][1];
+      return ((last - first) / first) * 100;
     }
     if (chartMode === 'candle' && candleData && candleData.length >= 1) {
-      const first = candleData[0][0]; // first open
-      const last = candleData[candleData.length - 1][3]; // last close
+      const first = candleData[0][1]; // first open
+      const last = candleData[candleData.length - 1][4]; // last close
       return ((last - first) / first) * 100;
     }
     return null;
@@ -232,7 +238,7 @@ const TokenDetail: React.FC = () => {
 
         {/* Chart */}
         {geckoId && (
-          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mb-4 shadow-2xl">
+          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-4 mb-4 shadow-2xl">
             {/* Top row: live indicator + chart mode toggle */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-1.5">
@@ -266,7 +272,7 @@ const TokenDetail: React.FC = () => {
             </div>
 
             {/* Timeframe selector */}
-            <div className="flex gap-1 mb-4 bg-white/[0.03] border border-white/[0.05] rounded-xl p-1">
+            <div className="flex gap-1 mb-3 bg-white/[0.03] border border-white/[0.05] rounded-xl p-1">
               {TIMEFRAMES.map((tf) => (
                 <button
                   key={tf.key}
@@ -283,19 +289,26 @@ const TokenDetail: React.FC = () => {
             </div>
 
             {/* Chart area */}
-            <div className="flex justify-center items-center min-h-[120px]">
-              {chartLoading ? (
+            <div className="relative min-h-[150px] flex items-center justify-center">
+              {chartLoading && !hasChartData ? (
                 <div className="w-5 h-5 border-2 border-[#FF6900] border-t-transparent rounded-full animate-spin" />
               ) : hasChartData ? (
-                chartMode === 'line' ? (
-                  <Sparkline data={lineData!} width={300} height={120} />
-                ) : (
-                  <CandlestickChart data={candleData!} width={300} height={120} />
-                )
+                <div className="w-full">
+                  {chartMode === 'line' ? (
+                    <DetailLineChart data={lineData!} timeframe={activeTimeframe} />
+                  ) : (
+                    <CandlestickChart data={candleData!} timeframe={activeTimeframe} />
+                  )}
+                </div>
               ) : (
                 <p className="text-xs text-gray-600">No chart data available</p>
               )}
             </div>
+
+            {/* Description of what's being shown */}
+            <p className="text-[10px] text-gray-600 text-center mt-2 tracking-wide">
+              {TIMEFRAME_DESCRIPTIONS[activeTimeframe]}
+            </p>
           </div>
         )}
 
