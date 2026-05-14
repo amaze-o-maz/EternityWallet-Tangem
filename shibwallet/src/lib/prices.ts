@@ -1,19 +1,8 @@
 import { type TokenInfo } from './tokens';
 
-// ── Symbol → CoinPaprika ID (prices) ──
-const PAPRIKA_IDS: Record<string, string> = {
-  ETH: 'eth-ethereum',
-  SHIB: 'shib-shiba-inu',
-  BONE: 'bone-bone-shibaswap',
-  LEASH: 'leash-doge-killer',
-  TREAT: 'treat-shiba-inu-treat',
-  USDT: 'usdt-tether',
-  USDC: 'usdc-usd-coin',
-  DAI: 'dai-dai',
-  WBTC: 'wbtc-wrapped-bitcoin',
-};
+const COINGECKO_BASE = 'https://api.coingecko.com/api/v3';
 
-// ── Symbol → CoinGecko ID (sparklines) ──
+// ── Symbol → CoinGecko coin ID ──
 const GECKO_IDS: Record<string, string> = {
   ETH: 'ethereum',
   SHIB: 'shiba-inu',
@@ -26,7 +15,7 @@ const GECKO_IDS: Record<string, string> = {
   WBTC: 'wrapped-bitcoin',
 };
 
-// Tokens that share the price of another
+// Tokens that share the price/sparkline of another
 const ALIASES: Record<string, string> = {
   WETH: 'ETH',
   WBONE: 'BONE',
@@ -61,36 +50,66 @@ export async function fetchPrices(
     return cachedPrices;
   }
 
-  const prices: Record<string, number> = {};
-
-  // Collect unique base symbols we need prices for
-  const symbols = new Set<string>();
+  // Collect base symbols we need
+  const needed = new Set<string>();
   if (tokens) {
-    for (const t of tokens) {
-      const base = ALIASES[t.symbol] ?? t.symbol;
-      symbols.add(base);
-    }
+    for (const t of tokens) needed.add(ALIASES[t.symbol] ?? t.symbol);
   } else {
-    Object.keys(PAPRIKA_IDS).forEach((s) => symbols.add(s));
+    Object.keys(GECKO_IDS).forEach((s) => needed.add(s));
   }
 
-  // Batch fetch from CoinPaprika (known symbols)
-  const knownSymbols = [...symbols].filter((s) => PAPRIKA_IDS[s]);
+  // Build CoinGecko coin ID list for known symbols
+  const geckoIds = new Set<string>();
+  for (const sym of needed) {
+    const id = GECKO_IDS[sym];
+    if (id) geckoIds.add(id);
+  }
+
+  // Custom tokens not in our known list
   const unknownTokens = tokens?.filter((t) => {
     const base = ALIASES[t.symbol] ?? t.symbol;
-    return !PAPRIKA_IDS[base];
+    return !GECKO_IDS[base];
   }) ?? [];
 
-  const paprikaPrices = await fetchFromPaprika(knownSymbols);
-  if (paprikaPrices) Object.assign(prices, paprikaPrices);
+  const prices: Record<string, number> = {};
 
-  // For unknown tokens (custom), try CoinGecko contract address (one at a time)
-  if (unknownTokens.length > 0 && chainId) {
-    const customPrices = await fetchCustomTokenPrices(unknownTokens, chainId);
-    if (customPrices) Object.assign(prices, customPrices);
+  // Primary: CoinGecko batch by coin IDs (single call, CORS-friendly)
+  if (geckoIds.size > 0) {
+    try {
+      const ids = [...geckoIds].join(',');
+      const url = `${COINGECKO_BASE}/simple/price?ids=${ids}&vs_currencies=usd`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+      if (res.ok) {
+        const data: Record<string, { usd?: number }> = await res.json();
+        // Reverse-map coin ID → symbol(s)
+        for (const sym of needed) {
+          const id = GECKO_IDS[sym];
+          if (id && data[id]?.usd && data[id].usd! > 0) {
+            prices[sym] = data[id].usd!;
+          }
+        }
+      }
+    } catch {}
   }
 
-  // Apply aliases (WETH = ETH price, etc.)
+  // Custom tokens: CoinGecko contract address (one per call, max 5)
+  if (unknownTokens.length > 0 && chainId) {
+    const platform = PLATFORM_IDS[chainId];
+    if (platform) {
+      for (const token of unknownTokens.slice(0, 5)) {
+        try {
+          const url = `${COINGECKO_BASE}/simple/token_price/${platform}?contract_addresses=${token.address.toLowerCase()}&vs_currencies=usd`;
+          const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+          if (!res.ok) continue;
+          const data = await res.json();
+          const price = data[token.address.toLowerCase()]?.usd;
+          if (price && price > 0) prices[token.symbol] = price;
+        } catch {}
+      }
+    }
+  }
+
+  // Apply aliases
   for (const [alias, source] of Object.entries(ALIASES)) {
     if (prices[source] && !prices[alias]) {
       prices[alias] = prices[source];
@@ -103,66 +122,6 @@ export async function fetchPrices(
   }
 
   return Object.keys(prices).length > 0 ? prices : cachedPrices;
-}
-
-async function fetchFromPaprika(symbols: string[]): Promise<Record<string, number> | null> {
-  if (symbols.length === 0) return null;
-
-  try {
-    const results = await Promise.all(
-      symbols.map(async (sym) => {
-        const id = PAPRIKA_IDS[sym];
-        if (!id) return null;
-        try {
-          const res = await fetch(`https://api.coinpaprika.com/v1/tickers/${id}`, {
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-          });
-          if (!res.ok) return null;
-          const data = await res.json();
-          const price = data?.quotes?.USD?.price;
-          return price && price > 0 ? { sym, price } : null;
-        } catch {
-          return null;
-        }
-      }),
-    );
-
-    const prices: Record<string, number> = {};
-    for (const r of results) {
-      if (r) prices[r.sym] = r.price;
-    }
-    return Object.keys(prices).length > 0 ? prices : null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchCustomTokenPrices(
-  tokens: TokenInfo[],
-  chainId: number,
-): Promise<Record<string, number> | null> {
-  const platform = PLATFORM_IDS[chainId];
-  if (!platform) return null;
-
-  const prices: Record<string, number> = {};
-
-  // Fetch one at a time (CoinGecko free tier: 1 address per call)
-  for (const token of tokens.slice(0, 5)) {
-    try {
-      const url = `https://api.coingecko.com/api/v3/simple/token_price/${platform}?contract_addresses=${token.address.toLowerCase()}&vs_currencies=usd`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const price = data[token.address.toLowerCase()]?.usd;
-      if (price && price > 0) {
-        prices[token.symbol] = price;
-      }
-    } catch {
-      // Skip failed lookups
-    }
-  }
-
-  return Object.keys(prices).length > 0 ? prices : null;
 }
 
 // ── Sparklines ──
@@ -179,13 +138,10 @@ export async function fetchSparklines(
     return cachedSparklines;
   }
 
-  // Collect unique gecko IDs (including aliased tokens)
+  // Collect symbols and their gecko IDs (including aliases)
+  const symbolList = tokens ? tokens.map((t) => t.symbol) : Object.keys(GECKO_IDS);
   const idSet = new Set<string>();
   const idToSymbols = new Map<string, string[]>();
-
-  const symbolList = tokens
-    ? tokens.map((t) => t.symbol)
-    : Object.keys(GECKO_IDS);
 
   for (const sym of symbolList) {
     const base = ALIASES[sym] ?? sym;
@@ -201,7 +157,7 @@ export async function fetchSparklines(
 
   try {
     const ids = [...idSet].join(',');
-    const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&sparkline=true`;
+    const url = `${COINGECKO_BASE}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=true`;
     const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
     if (!res.ok) return cachedSparklines;
 
