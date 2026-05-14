@@ -34,7 +34,7 @@ let cacheTimestamp = 0;
 let cachedSparklines: Record<string, number[]> = {};
 let sparklineCacheTimestamp = 0;
 
-function resolveGeckoId(token: TokenInfo): string | null {
+export function resolveGeckoId(token: TokenInfo): string | null {
   const base = ALIASES[token.symbol] ?? token.symbol;
   return GECKO_IDS[base] ?? token.coingeckoId ?? null;
 }
@@ -168,4 +168,63 @@ export async function fetchSparklines(
   }
 
   return Object.keys(sparklines).length > 0 ? sparklines : cachedSparklines;
+}
+
+// ── Chart data for detail page (per-token, variable timeframes) ──
+
+const chartCache = new Map<string, { data: number[]; ts: number }>();
+const CHART_CACHE_TTL_MS = 120_000;
+
+export type ChartTimeframe = '15M' | '1H' | '1D' | '1W' | '1M' | 'ALL';
+
+const TIMEFRAME_DAYS: Record<ChartTimeframe, number | 'max'> = {
+  '15M': 1,
+  '1H': 1,
+  '1D': 1,
+  '1W': 7,
+  '1M': 30,
+  'ALL': 'max',
+};
+
+export async function fetchChartData(
+  geckoId: string,
+  timeframe: ChartTimeframe,
+): Promise<number[]> {
+  const cacheKey = `${geckoId}:${timeframe}`;
+  const cached = chartCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CHART_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const days = TIMEFRAME_DAYS[timeframe];
+  const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+    if (!res.ok) return [];
+    const json: { prices?: [number, number][] } = await res.json();
+    const raw = json.prices;
+    if (!raw || raw.length < 2) return [];
+
+    let prices = raw.map(([, p]) => p);
+
+    if (timeframe === '15M') {
+      prices = prices.slice(-3);
+    } else if (timeframe === '1H') {
+      prices = prices.slice(-12);
+    }
+
+    const maxPoints = 80;
+    if (prices.length > maxPoints) {
+      const step = Math.max(1, Math.floor(prices.length / maxPoints));
+      prices = prices.filter((_, i) => i % step === 0);
+    }
+
+    if (prices.length >= 2) {
+      chartCache.set(cacheKey, { data: prices, ts: Date.now() });
+    }
+    return prices;
+  } catch {
+    return [];
+  }
 }

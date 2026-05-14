@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   createPublicClient,
   createWalletClient,
@@ -36,6 +36,7 @@ function stringToColor(str: string): string {
 
 const Send: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   useAutoLockOnResume();
   const { address, privateKey, isUnlocked } = useWalletStore();
   const chainId = useNetworkStore((s) => s.chainId);
@@ -102,13 +103,18 @@ const Send: React.FC = () => {
     }
   }, [isUnlocked, navigate]);
 
-  // Set default token
+  // Set default token (preselect from navigation state if available)
   useEffect(() => {
+    const preselected = (location.state as { preselectedToken?: TokenInfo })?.preselectedToken;
+    if (preselected && !selectedToken) {
+      setSelectedToken(preselected);
+      return;
+    }
     const tokens = getTokensForChain(chainId);
     if (tokens.length > 0 && !selectedToken) {
       setSelectedToken(tokens[0]);
     }
-  }, [chainId, selectedToken]);
+  }, [chainId, selectedToken, location.state]);
 
   // Reset image error state when token changes so the new logo gets a chance
   useEffect(() => {
