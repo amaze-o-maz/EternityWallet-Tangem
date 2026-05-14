@@ -128,7 +128,7 @@ export async function fetchPrices(
 
 export async function fetchSparklines(
   tokens?: TokenInfo[],
-  _chainId?: number,
+  chainId?: number,
 ): Promise<Record<string, number[]>> {
   const now = Date.now();
   if (
@@ -142,58 +142,81 @@ export async function fetchSparklines(
   const symbolList = tokens ? tokens.map((t) => t.symbol) : Object.keys(GECKO_IDS);
   const idSet = new Set<string>();
   const idToSymbols = new Map<string, string[]>();
+  const unknownTokens: TokenInfo[] = [];
 
   for (const sym of symbolList) {
     const base = ALIASES[sym] ?? sym;
     const geckoId = GECKO_IDS[base];
-    if (!geckoId) continue;
-    idSet.add(geckoId);
-    const syms = idToSymbols.get(geckoId) ?? [];
-    syms.push(sym);
-    idToSymbols.set(geckoId, syms);
+    if (geckoId) {
+      idSet.add(geckoId);
+      const syms = idToSymbols.get(geckoId) ?? [];
+      syms.push(sym);
+      idToSymbols.set(geckoId, syms);
+    } else if (tokens) {
+      const token = tokens.find((t) => t.symbol === sym);
+      if (token) unknownTokens.push(token);
+    }
   }
 
-  if (idSet.size === 0) return cachedSparklines;
+  const sparklines: Record<string, number[]> = {};
 
-  try {
-    const ids = [...idSet].join(',');
-    const url = `${COINGECKO_BASE}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=true`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
-    if (!res.ok) return cachedSparklines;
+  // Batch fetch known tokens (single call)
+  if (idSet.size > 0) {
+    try {
+      const ids = [...idSet].join(',');
+      const url = `${COINGECKO_BASE}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=true`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+      if (res.ok) {
+        const data: Array<{
+          id: string;
+          sparkline_in_7d?: { price?: number[] };
+        }> = await res.json();
 
-    const data: Array<{
-      id: string;
-      sparkline_in_7d?: { price?: number[] };
-    }> = await res.json();
+        for (const coin of data) {
+          const rawPrices = coin.sparkline_in_7d?.price;
+          if (!rawPrices || rawPrices.length < 2) continue;
+          const step = Math.max(1, Math.floor(rawPrices.length / 50));
+          const sampled = rawPrices.filter((_: number, i: number) => i % step === 0);
+          const symbols = idToSymbols.get(coin.id) ?? [];
+          for (const sym of symbols) sparklines[sym] = sampled;
+        }
+      }
+    } catch {}
+  }
 
-    const sparklines: Record<string, number[]> = {};
-
-    for (const coin of data) {
-      const rawPrices = coin.sparkline_in_7d?.price;
-      if (!rawPrices || rawPrices.length < 2) continue;
-
-      const step = Math.max(1, Math.floor(rawPrices.length / 50));
-      const sampled = rawPrices.filter((_: number, i: number) => i % step === 0);
-
-      const symbols = idToSymbols.get(coin.id) ?? [];
-      for (const sym of symbols) {
-        sparklines[sym] = sampled;
+  // Custom tokens: fetch sequentially by contract address (max 3, 1.5s gap)
+  if (unknownTokens.length > 0 && chainId) {
+    const platform = PLATFORM_IDS[chainId];
+    if (platform) {
+      for (const token of unknownTokens.slice(0, 3)) {
+        try {
+          if (Object.keys(sparklines).length > 0) {
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+          const url = `${COINGECKO_BASE}/coins/${platform}/contract/${token.address.toLowerCase()}/market_chart/?vs_currency=usd&days=7`;
+          const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (data.prices && Array.isArray(data.prices) && data.prices.length > 0) {
+            const allPrices: number[] = data.prices.map((p: [number, number]) => p[1]);
+            const step = Math.max(1, Math.floor(allPrices.length / 50));
+            sparklines[token.symbol] = allPrices.filter((_: number, i: number) => i % step === 0);
+          }
+        } catch {}
       }
     }
-
-    // Apply aliases in both directions so cache works across chain switches
-    for (const [alias, source] of Object.entries(ALIASES)) {
-      if (sparklines[source] && !sparklines[alias]) sparklines[alias] = sparklines[source];
-      if (sparklines[alias] && !sparklines[source]) sparklines[source] = sparklines[alias];
-    }
-
-    if (Object.keys(sparklines).length > 0) {
-      cachedSparklines = sparklines;
-      sparklineCacheTimestamp = now;
-    }
-
-    return Object.keys(sparklines).length > 0 ? sparklines : cachedSparklines;
-  } catch {
-    return cachedSparklines;
   }
+
+  // Apply aliases in both directions so cache works across chain switches
+  for (const [alias, source] of Object.entries(ALIASES)) {
+    if (sparklines[source] && !sparklines[alias]) sparklines[alias] = sparklines[source];
+    if (sparklines[alias] && !sparklines[source]) sparklines[source] = sparklines[alias];
+  }
+
+  if (Object.keys(sparklines).length > 0) {
+    cachedSparklines = sparklines;
+    sparklineCacheTimestamp = now;
+  }
+
+  return Object.keys(sparklines).length > 0 ? sparklines : cachedSparklines;
 }
