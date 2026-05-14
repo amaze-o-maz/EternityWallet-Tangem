@@ -18,7 +18,7 @@ import { useTransactionStore } from '../store/transactionStore';
 import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
 import { getTokensForChain, isNativeToken, type TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
-import { getV1Quote, getTokenAllowance, approveToken, executeSwap } from '../lib/swap';
+import { getBestQuote, getTokenAllowance, approveToken, executeSwap, getRouterAddress, type SwapVersion, type QuoteResult, type BestQuoteResult } from '../lib/swap';
 import { fetchPrices } from '../lib/prices';
 
 function stringToColor(str: string): string {
@@ -160,11 +160,9 @@ const Swap: React.FC = () => {
   const [slippageDropdownOpen, setSlippageDropdownOpen] = useState(false);
 
   const [quoting, setQuoting] = useState(false);
-  const [quoteResult, setQuoteResult] = useState<{
-    amountOut: bigint;
-    priceImpact: number;
-    path: `0x${string}`[];
-  } | null>(null);
+  const [swapVersion, setSwapVersion] = useState<'auto' | SwapVersion>('auto');
+  const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
+  const [altQuote, setAltQuote] = useState<{ v1: QuoteResult | null; v2: QuoteResult | null } | null>(null);
 
   const [approving, setApproving] = useState(false);
   const [swapping, setSwapping] = useState(false);
@@ -268,11 +266,12 @@ const Swap: React.FC = () => {
 
     const checkAllowance = async () => {
       try {
+        const router = getRouterAddress(chainId, quoteResult.version);
         const allowance = await getTokenAllowance(
           chainId,
           fromToken.address,
           address as `0x${string}`,
-          network.swap.v1Router,
+          router,
         );
         const parsedAmount = parseUnits(fromAmount, fromToken.decimals);
         setNeedsApproval(allowance < parsedAmount);
@@ -347,18 +346,21 @@ const Swap: React.FC = () => {
 
     setQuoting(true);
     setQuoteResult(null);
+    setAltQuote(null);
     setToAmount('');
 
     try {
-      const result = await getV1Quote(chainId, fromToken, toToken, parsedAmount);
-      setQuoteResult(result);
-      setToAmount(formatUnits(result.amountOut, toToken.decimals));
+      const preferred = swapVersion === 'auto' ? undefined : swapVersion;
+      const result = await getBestQuote(chainId, fromToken, toToken, parsedAmount, preferred);
+      setQuoteResult(result.best);
+      setAltQuote({ v1: result.v1, v2: result.v2 });
+      setToAmount(formatUnits(result.best.amountOut, toToken.decimals));
     } catch (err) {
       if (!silent) toast.error(err instanceof Error ? err.message : 'Failed to get quote');
     } finally {
       setQuoting(false);
     }
-  }, [fromToken, toToken, fromAmount, network, chainId, fromBalance]);
+  }, [fromToken, toToken, fromAmount, network, chainId, fromBalance, swapVersion]);
 
   // Auto-quote with 600ms debounce when amount or tokens change
   useEffect(() => {
@@ -414,9 +416,10 @@ const Swap: React.FC = () => {
       const account = privateKeyToAccount(privateKey as `0x${string}`);
       const parsedAmount = parseUnits(fromAmount, fromToken.decimals);
 
+      const router = getRouterAddress(chainId, quoteResult?.version ?? 'v1');
       toast.loading('Approving token...', { id: 'approve' });
       await withTimeout(
-        approveToken(chainId, fromToken.address, network.swap.v1Router, parsedAmount, account),
+        approveToken(chainId, fromToken.address, router, parsedAmount, account),
         60_000,
         'Approval',
       );
@@ -437,9 +440,10 @@ const Swap: React.FC = () => {
       const account = privateKeyToAccount(privateKey as `0x${string}`);
       const parsedAmount = parseUnits(fromAmount, fromToken.decimals);
 
+      const version = quoteResult?.version ?? 'v1';
       toast.loading('Swapping tokens...', { id: 'swap' });
       const hash = await withTimeout(
-        executeSwap(chainId, fromToken, toToken, parsedAmount, minimumReceived, account),
+        executeSwap(chainId, fromToken, toToken, parsedAmount, minimumReceived, account, version, quoteResult?.fee),
         60_000,
         'Swap',
       );
@@ -455,7 +459,7 @@ const Swap: React.FC = () => {
         addTransaction({
           hash,
           from: address!,
-          to: network.swap.v1Router,
+          to: getRouterAddress(chainId, version),
           value: parsedAmount.toString(),
           timeStamp: Math.floor(Date.now() / 1000).toString(),
           type: 'swap',
@@ -694,9 +698,71 @@ const Swap: React.FC = () => {
               )}
             </div>
 
-            {/* Quote details */}
+            {/* Version selector + Quote details */}
             {quoteResult && toToken && fromToken && (
               <div className="mb-4 animate-slide-up-fade">
+                {/* V1/V2 toggle */}
+                {altQuote && (altQuote.v1 && altQuote.v2) && (
+                  <div className="flex items-center gap-2 mb-3">
+                    {(['auto', 'v1', 'v2'] as const).map((v) => {
+                      const isActive = swapVersion === v;
+                      let label = v === 'auto' ? 'Best' : v.toUpperCase();
+                      if (v !== 'auto' && altQuote[v]) {
+                        const isBest = altQuote[v]!.amountOut >= (v === 'v1' ? altQuote.v2! : altQuote.v1!).amountOut;
+                        if (isBest) label += ' ★';
+                      }
+                      return (
+                        <button
+                          key={v}
+                          onClick={() => {
+                            setSwapVersion(v);
+                            if (v !== 'auto' && altQuote[v]) {
+                              setQuoteResult(altQuote[v]!);
+                              setToAmount(formatUnits(altQuote[v]!.amountOut, toToken.decimals));
+                            } else if (v === 'auto') {
+                              const best = altQuote.v1!.amountOut >= altQuote.v2!.amountOut ? altQuote.v1! : altQuote.v2!;
+                              setQuoteResult(best);
+                              setToAmount(formatUnits(best.amountOut, toToken.decimals));
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            isActive
+                              ? 'bg-[#FF6900]/20 text-[#FF6900] border border-[#FF6900]/30'
+                              : 'bg-white/[0.03] text-gray-500 border border-white/[0.06] hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Version comparison banner */}
+                {altQuote && altQuote.v1 && altQuote.v2 && (() => {
+                  const diff = Number(altQuote.v1.amountOut - altQuote.v2.amountOut);
+                  const betterVersion = diff >= 0 ? 'V1' : 'V2';
+                  const worseVersion = diff >= 0 ? 'V2' : 'V1';
+                  const pctDiff = Math.abs(diff) / Number(diff >= 0 ? altQuote.v2.amountOut : altQuote.v1.amountOut) * 100;
+                  if (pctDiff < 0.1) return null;
+                  const usingBetter = quoteResult.version === betterVersion.toLowerCase();
+                  return (
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl mb-3 text-[11px] font-medium ${
+                      usingBetter
+                        ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                        : 'bg-yellow-500/10 border border-yellow-500/20 text-yellow-400'
+                    }`}>
+                      <span>{usingBetter ? '✓' : '⚠'}</span>
+                      <span>
+                        {usingBetter
+                          ? `Using ${betterVersion} — ${pctDiff.toFixed(1)}% better than ${worseVersion}`
+                          : `${betterVersion} offers ${pctDiff.toFixed(1)}% better price`
+                        }
+                      </span>
+                    </div>
+                  );
+                })()}
+
                 <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 space-y-3 mb-5 shadow-2xl">
                   {exchangeRate !== null && (
                     <div className="flex justify-between text-sm">
@@ -722,7 +788,11 @@ const Swap: React.FC = () => {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Fee</span>
-                    <span className="text-white">0.3%</span>
+                    <span className="text-white">{quoteResult.version === 'v2' && quoteResult.fee ? `${quoteResult.fee / 10000}%` : '0.3%'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Router</span>
+                    <span className="text-white font-medium">ShibaSwap {quoteResult.version.toUpperCase()}</span>
                   </div>
                 </div>
               </div>
@@ -857,7 +927,11 @@ const Swap: React.FC = () => {
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-400">Fee</span>
-                  <span className="text-white">0.3%</span>
+                  <span className="text-white">{quoteResult.version === 'v2' && quoteResult.fee ? `${quoteResult.fee / 10000}%` : '0.3%'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">Router</span>
+                  <span className="text-[#FF6900] font-medium">ShibaSwap {quoteResult.version.toUpperCase()}</span>
                 </div>
                 {estimatedGasCost && (
                   <div className="flex justify-between text-xs">
