@@ -12,7 +12,7 @@ import {
 import { mainnet } from 'viem/chains';
 import { type NetworkConfig, getNetworkByChainId } from './chains';
 import { type TokenInfo, isNativeToken } from './tokens';
-import { ERC20_ABI, ROUTER_V1_ABI, FACTORY_V1_ABI, QUOTER_V2_ABI, SWAP_ROUTER_V2_ABI } from './abis';
+import { ERC20_ABI, ROUTER_V1_ABI, FACTORY_V1_ABI, QUOTER_V3_ABI, SWAP_ROUTER_V3_ABI } from './abis';
 
 const ZERO_ADDRESS: `0x${string}` = '0x0000000000000000000000000000000000000000';
 const DEFAULT_DEADLINE_SECONDS = 1200; // 20 minutes
@@ -183,60 +183,44 @@ export async function getV2Quote(
   const { publicClient } = getClients(network);
   const tokenInAddress = resolveTokenAddress(tokenIn, network);
   const tokenOutAddress = resolveTokenAddress(tokenOut, network);
+  const quoterAddress = network.swap.v2Quoter;
 
   let bestOut = 0n;
   let bestFee = 3000;
 
-  for (const fee of V2_FEE_TIERS) {
+  async function tryQuote(amt: bigint, fee: number): Promise<bigint> {
     try {
       const result = await publicClient.simulateContract({
-        address: network.swap.v2Quoter,
-        abi: QUOTER_V2_ABI,
+        address: quoterAddress,
+        abi: QUOTER_V3_ABI,
         functionName: 'quoteExactInputSingle',
-        args: [{
-          tokenIn: tokenInAddress,
-          tokenOut: tokenOutAddress,
-          amountIn,
-          fee,
-          sqrtPriceLimitX96: 0n,
-        }],
+        args: [tokenInAddress, tokenOutAddress, fee, amt, 0n],
       });
-      const out = result.result[0];
-      if (out > bestOut) {
-        bestOut = out;
-        bestFee = fee;
-      }
-    } catch {
-      // This fee tier has no pool — skip
-    }
+      return result.result;
+    } catch {}
+    return 0n;
+  }
+
+  const feeResults = await Promise.all(
+    V2_FEE_TIERS.map(async (fee) => ({ fee, out: await tryQuote(amountIn, fee) })),
+  );
+  for (const { fee, out } of feeResults) {
+    if (out > bestOut) { bestOut = out; bestFee = fee; }
   }
 
   if (bestOut === 0n) throw new Error('No V2 liquidity for this pair');
 
-  // Approximate price impact for V2
   let priceImpact = 0;
   const oneUnit = parseUnits('1', tokenIn.decimals);
   if (oneUnit < amountIn) {
-    try {
-      const smallResult = await publicClient.simulateContract({
-        address: network.swap.v2Quoter,
-        abi: QUOTER_V2_ABI,
-        functionName: 'quoteExactInputSingle',
-        args: [{
-          tokenIn: tokenInAddress,
-          tokenOut: tokenOutAddress,
-          amountIn: oneUnit,
-          fee: bestFee,
-          sqrtPriceLimitX96: 0n,
-        }],
-      });
-      const smallOut = smallResult.result[0];
+    const smallOut = await tryQuote(oneUnit, bestFee);
+    if (smallOut > 0n) {
       const idealRate = Number(amountIn) / Number(bestOut);
       const smallRate = Number(oneUnit) / Number(smallOut);
       if (smallRate > 0) {
         priceImpact = Math.round(Math.abs((idealRate - smallRate) / smallRate) * 10000) / 100;
       }
-    } catch {}
+    }
   }
 
   return {
@@ -459,13 +443,14 @@ async function executeV2Swap(
   const recipient = outputIsNative ? routerAddress : account.address;
 
   const swapCalldata = encodeFunctionData({
-    abi: SWAP_ROUTER_V2_ABI,
+    abi: SWAP_ROUTER_V3_ABI,
     functionName: 'exactInputSingle',
     args: [{
       tokenIn: tokenInAddress,
       tokenOut: tokenOutAddress,
       fee,
       recipient,
+      deadline: swapDeadline,
       amountIn,
       amountOutMinimum: amountOutMin,
       sqrtPriceLimitX96: 0n,
@@ -477,7 +462,7 @@ async function executeV2Swap(
   if (outputIsNative) {
     calls.push(
       encodeFunctionData({
-        abi: SWAP_ROUTER_V2_ABI,
+        abi: SWAP_ROUTER_V3_ABI,
         functionName: 'unwrapWETH9',
         args: [amountOutMin, account.address],
       }),
@@ -486,9 +471,9 @@ async function executeV2Swap(
 
   return walletClient.writeContract({
     address: routerAddress,
-    abi: SWAP_ROUTER_V2_ABI,
+    abi: SWAP_ROUTER_V3_ABI,
     functionName: 'multicall',
-    args: [swapDeadline, calls],
+    args: [calls],
     value: inputIsNative ? amountIn : 0n,
     gasPrice,
     nonce,
