@@ -115,21 +115,22 @@ async function computePriceImpact(
   path: `0x${string}`[],
   amountIn: bigint,
   amountOut: bigint,
-  tokenInDecimals: number,
 ): Promise<number> {
-  const oneUnit = parseUnits('1', tokenInDecimals);
+  const refIn = amountIn / 1000n;
+  if (refIn === 0n) return 0;
   try {
-    const smallAmounts = await publicClient.readContract({
+    const refAmounts = await publicClient.readContract({
       address: routerAddress,
       abi: ROUTER_V1_ABI,
       functionName: 'getAmountsOut',
-      args: [oneUnit, path],
+      args: [refIn, path],
     });
-    const smallOut = smallAmounts[smallAmounts.length - 1];
-    const idealRate = Number(amountIn) / Number(amountOut);
-    const smallRate = Number(oneUnit) / Number(smallOut);
-    if (smallRate > 0) {
-      return Math.round(Math.abs((idealRate - smallRate) / smallRate) * 10000) / 100;
+    const refOut = refAmounts[refAmounts.length - 1];
+    if (refOut === 0n) return 0;
+    const tradeRate = Number(amountIn) / Number(amountOut);
+    const spotRate = Number(refIn) / Number(refOut);
+    if (spotRate > 0) {
+      return Math.round(Math.abs((tradeRate - spotRate) / spotRate) * 10000) / 100;
     }
   } catch {}
   return 0;
@@ -162,7 +163,7 @@ export async function getV1Quote(
 
   const amountOut = amounts[amounts.length - 1];
   const priceImpact = await computePriceImpact(
-    publicClient, network.swap.v1Router, path, amountIn, amountOut, tokenIn.decimals,
+    publicClient, network.swap.v1Router, path, amountIn, amountOut,
   );
 
   return { amountOut, path, priceImpact, version: 'v1' };
@@ -211,14 +212,14 @@ export async function getV2Quote(
   if (bestOut === 0n) throw new Error('No V2 liquidity for this pair');
 
   let priceImpact = 0;
-  const oneUnit = parseUnits('1', tokenIn.decimals);
-  if (oneUnit < amountIn) {
-    const smallOut = await tryQuote(oneUnit, bestFee);
-    if (smallOut > 0n) {
-      const idealRate = Number(amountIn) / Number(bestOut);
-      const smallRate = Number(oneUnit) / Number(smallOut);
-      if (smallRate > 0) {
-        priceImpact = Math.round(Math.abs((idealRate - smallRate) / smallRate) * 10000) / 100;
+  const refIn = amountIn / 1000n;
+  if (refIn > 0n) {
+    const refOut = await tryQuote(refIn, bestFee);
+    if (refOut > 0n) {
+      const tradeRate = Number(amountIn) / Number(bestOut);
+      const spotRate = Number(refIn) / Number(refOut);
+      if (spotRate > 0) {
+        priceImpact = Math.round(Math.abs((tradeRate - spotRate) / spotRate) * 10000) / 100;
       }
     }
   }
