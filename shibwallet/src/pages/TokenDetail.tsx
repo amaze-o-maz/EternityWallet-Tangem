@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Copy, Check, Send, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -7,6 +7,7 @@ import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 import { type TokenInfo } from '../lib/tokens';
+import { resolveGeckoId, fetchChartData, type ChartTimeframe } from '../lib/prices';
 
 interface LocationState {
   token: TokenInfo;
@@ -14,6 +15,15 @@ interface LocationState {
   price: number;
   sparkline?: number[];
 }
+
+const TIMEFRAMES: { key: ChartTimeframe; label: string }[] = [
+  { key: '15M', label: '15m' },
+  { key: '1H', label: '1H' },
+  { key: '1D', label: '1D' },
+  { key: '1W', label: '1W' },
+  { key: '1M', label: '1M' },
+  { key: 'ALL', label: 'All' },
+];
 
 function formatBalance(raw: bigint, decimals: number): string {
   const divisor = 10n ** BigInt(decimals);
@@ -60,16 +70,41 @@ const TokenDetail: React.FC = () => {
   const token = state?.token;
   const balance = state?.balance ? BigInt(state.balance) : 0n;
   const price = state?.price ?? 0;
-  const sparkline = state?.sparkline;
+  const initialSparkline = state?.sparkline;
 
   const [imgErrored, setImgErrored] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [activeTimeframe, setActiveTimeframe] = useState<ChartTimeframe>('1W');
+  const [chartData, setChartData] = useState<number[] | null>(initialSparkline ?? null);
+  const [chartLoading, setChartLoading] = useState(false);
+
+  const geckoId = token ? resolveGeckoId(token) : null;
 
   useEffect(() => {
     if (!isUnlocked) {
       navigate('/lock', { replace: true });
     }
   }, [isUnlocked, navigate]);
+
+  useEffect(() => {
+    if (activeTimeframe === '1W' && initialSparkline && initialSparkline.length >= 2) {
+      setChartData(initialSparkline);
+      return;
+    }
+    if (!geckoId) {
+      setChartData(null);
+      return;
+    }
+
+    let cancelled = false;
+    setChartLoading(true);
+    fetchChartData(geckoId, activeTimeframe).then((data) => {
+      if (cancelled) return;
+      setChartData(data.length >= 2 ? data : null);
+      setChartLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [geckoId, activeTimeframe, initialSparkline]);
 
   if (!isUnlocked || !walletAddress || !token) {
     if (!token) navigate('/wallet', { replace: true });
@@ -79,15 +114,8 @@ const TokenDetail: React.FC = () => {
   const numericBalance = parseFloat(formatBalance(balance, token.decimals)) || 0;
   const usdValue = numericBalance * price;
 
-  const priceChange7d = sparkline && sparkline.length >= 2
-    ? ((sparkline[sparkline.length - 1] - sparkline[0]) / sparkline[0]) * 100
-    : null;
-
-  const priceChange24h = sparkline && sparkline.length >= 7
-    ? (() => {
-        const oneDayAgoIdx = Math.max(0, sparkline.length - Math.floor(sparkline.length / 7));
-        return ((sparkline[sparkline.length - 1] - sparkline[oneDayAgoIdx]) / sparkline[oneDayAgoIdx]) * 100;
-      })()
+  const chartChange = chartData && chartData.length >= 2
+    ? ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100
     : null;
 
   const handleCopyAddress = async () => {
@@ -153,26 +181,43 @@ const TokenDetail: React.FC = () => {
           <p className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wider">Price</p>
           <div className="flex items-end gap-3">
             <p className="text-3xl font-bold text-white">{formatPrice(price)}</p>
-            {priceChange24h !== null && (
-              <span className={`text-sm font-semibold pb-1 ${priceChange24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {priceChange24h >= 0 ? '+' : ''}{priceChange24h.toFixed(2)}%
-                <span className="text-gray-500 font-normal ml-1">24h</span>
+            {chartChange !== null && (
+              <span className={`text-sm font-semibold pb-1 ${chartChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {chartChange >= 0 ? '+' : ''}{chartChange.toFixed(2)}%
               </span>
             )}
           </div>
-          {priceChange7d !== null && (
-            <p className={`text-xs mt-1 ${priceChange7d >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-              {priceChange7d >= 0 ? '+' : ''}{priceChange7d.toFixed(2)}% past 7 days
-            </p>
-          )}
         </div>
 
         {/* Chart */}
-        {sparkline && sparkline.length >= 2 && (
+        {geckoId && (
           <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mb-4 shadow-2xl">
-            <p className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wider">7 Day Chart</p>
-            <div className="flex justify-center">
-              <Sparkline data={sparkline} width={300} height={120} />
+            {/* Timeframe selector */}
+            <div className="flex gap-1 mb-4 bg-white/[0.03] border border-white/[0.05] rounded-xl p-1">
+              {TIMEFRAMES.map((tf) => (
+                <button
+                  key={tf.key}
+                  onClick={() => setActiveTimeframe(tf.key)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    activeTimeframe === tf.key
+                      ? 'bg-gradient-to-r from-[#FF6900] to-[#FF8C00] text-white'
+                      : 'text-gray-500 hover:text-white'
+                  }`}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Chart area */}
+            <div className="flex justify-center items-center min-h-[120px]">
+              {chartLoading ? (
+                <div className="w-5 h-5 border-2 border-[#FF6900] border-t-transparent rounded-full animate-spin" />
+              ) : chartData && chartData.length >= 2 ? (
+                <Sparkline data={chartData} width={300} height={120} />
+              ) : (
+                <p className="text-xs text-gray-600">No chart data available</p>
+              )}
             </div>
           </div>
         )}
