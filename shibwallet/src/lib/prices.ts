@@ -234,11 +234,12 @@ export function getChartConfig(timeframe: ChartTimeframe) {
   return TF_CONFIG[timeframe];
 }
 
-// Pick a candle interval that yields ~60 candles for the given history length
-function adaptiveCandleMs(data: TimedPrice[]): number {
-  if (data.length < 2) return DAY;
+// Pick a candle interval that yields ~50 candles for the given history length.
+// minMs forces a floor so ALL always uses coarser candles than 1M (which is daily).
+function adaptiveCandleMs(data: TimedPrice[], minMs = DAY): number {
+  if (data.length < 2) return minMs;
   const span = data[data.length - 1][0] - data[0][0];
-  const TARGET = 60;
+  const TARGET = 50;
   const intervals = [
     1 * DAY,
     2 * DAY,
@@ -248,11 +249,11 @@ function adaptiveCandleMs(data: TimedPrice[]): number {
     30 * DAY,
     60 * DAY,
     90 * DAY,
-  ];
+  ].filter((i) => i >= minMs);
   for (const i of intervals) {
     if (span / i <= TARGET) return i;
   }
-  return 90 * DAY;
+  return intervals[intervals.length - 1] ?? minMs;
 }
 
 // Shared market_chart fetcher used by both line and candle modes
@@ -329,7 +330,9 @@ export async function fetchCandles(
   const data = await fetchMarketChart(geckoId, timeframe, forceRefresh);
   if (data.length < 2) return [];
   const cfg = TF_CONFIG[timeframe];
-  const candleMs = cfg.candleMs > 0 ? cfg.candleMs : adaptiveCandleMs(data);
+  // ALL gets minimum 7-day candles so it never looks the same as 1M (daily).
+  const minMs = timeframe === 'ALL' ? 7 * DAY : DAY;
+  const candleMs = cfg.candleMs > 0 ? cfg.candleMs : adaptiveCandleMs(data, minMs);
   return buildCandles(data, candleMs);
 }
 
