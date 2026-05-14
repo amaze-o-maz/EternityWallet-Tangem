@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Copy, Check, Send, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Copy, Check, Send, RefreshCw, BarChart3, TrendingUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Sparkline from '../components/Sparkline';
+import CandlestickChart from '../components/CandlestickChart';
 import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 import { type TokenInfo } from '../lib/tokens';
-import { resolveGeckoId, fetchChartData, LIVE_REFRESH_MS, type ChartTimeframe } from '../lib/prices';
+import {
+  resolveGeckoId,
+  fetchChartData,
+  fetchOHLCData,
+  LIVE_REFRESH_MS,
+  type ChartTimeframe,
+  type OHLCCandle,
+} from '../lib/prices';
 
 interface LocationState {
   token: TokenInfo;
@@ -15,6 +23,8 @@ interface LocationState {
   price: number;
   sparkline?: number[];
 }
+
+type ChartMode = 'line' | 'candle';
 
 const TIMEFRAMES: { key: ChartTimeframe; label: string }[] = [
   { key: '15M', label: '15m' },
@@ -75,7 +85,9 @@ const TokenDetail: React.FC = () => {
   const [imgErrored, setImgErrored] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTimeframe, setActiveTimeframe] = useState<ChartTimeframe>('1W');
-  const [chartData, setChartData] = useState<number[] | null>(initialSparkline ?? null);
+  const [chartMode, setChartMode] = useState<ChartMode>('line');
+  const [lineData, setLineData] = useState<number[] | null>(initialSparkline ?? null);
+  const [candleData, setCandleData] = useState<OHLCCandle[] | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
 
   const geckoId = token ? resolveGeckoId(token) : null;
@@ -86,12 +98,14 @@ const TokenDetail: React.FC = () => {
     }
   }, [isUnlocked, navigate]);
 
+  // Fetch line chart data
   useEffect(() => {
+    if (chartMode !== 'line') return;
     if (!geckoId) {
       if (activeTimeframe === '1W' && initialSparkline && initialSparkline.length >= 2) {
-        setChartData(initialSparkline);
+        setLineData(initialSparkline);
       } else {
-        setChartData(null);
+        setLineData(null);
       }
       return;
     }
@@ -101,7 +115,7 @@ const TokenDetail: React.FC = () => {
       if (!force) setChartLoading(true);
       fetchChartData(geckoId, activeTimeframe, force).then((data) => {
         if (cancelled) return;
-        setChartData(data.length >= 2 ? data : null);
+        setLineData(data.length >= 2 ? data : null);
         setChartLoading(false);
       });
     };
@@ -109,7 +123,30 @@ const TokenDetail: React.FC = () => {
     load(false);
     const interval = setInterval(() => load(true), LIVE_REFRESH_MS[activeTimeframe]);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [geckoId, activeTimeframe, initialSparkline]);
+  }, [geckoId, activeTimeframe, initialSparkline, chartMode]);
+
+  // Fetch candlestick data
+  useEffect(() => {
+    if (chartMode !== 'candle') return;
+    if (!geckoId) {
+      setCandleData(null);
+      return;
+    }
+
+    let cancelled = false;
+    const load = (force: boolean) => {
+      if (!force) setChartLoading(true);
+      fetchOHLCData(geckoId, activeTimeframe, force).then((data) => {
+        if (cancelled) return;
+        setCandleData(data.length >= 1 ? data : null);
+        setChartLoading(false);
+      });
+    };
+
+    load(false);
+    const interval = setInterval(() => load(true), LIVE_REFRESH_MS[activeTimeframe]);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [geckoId, activeTimeframe, chartMode]);
 
   if (!isUnlocked || !walletAddress || !token) {
     if (!token) navigate('/wallet', { replace: true });
@@ -119,9 +156,17 @@ const TokenDetail: React.FC = () => {
   const numericBalance = parseFloat(formatBalance(balance, token.decimals)) || 0;
   const usdValue = numericBalance * price;
 
-  const chartChange = chartData && chartData.length >= 2
-    ? ((chartData[chartData.length - 1] - chartData[0]) / chartData[0]) * 100
-    : null;
+  const chartChange = (() => {
+    if (chartMode === 'line' && lineData && lineData.length >= 2) {
+      return ((lineData[lineData.length - 1] - lineData[0]) / lineData[0]) * 100;
+    }
+    if (chartMode === 'candle' && candleData && candleData.length >= 1) {
+      const first = candleData[0][0]; // first open
+      const last = candleData[candleData.length - 1][3]; // last close
+      return ((last - first) / first) * 100;
+    }
+    return null;
+  })();
 
   const handleCopyAddress = async () => {
     try {
@@ -137,6 +182,10 @@ const TokenDetail: React.FC = () => {
   const explorerBase = chainId === 109
     ? 'https://www.shibariumscan.io'
     : 'https://etherscan.io';
+
+  const hasChartData = chartMode === 'line'
+    ? (lineData && lineData.length >= 2)
+    : (candleData && candleData.length >= 1);
 
   return (
     <div className="safe-top flex flex-col min-h-screen bg-shib-bg animate-fade-in relative overflow-hidden">
@@ -197,13 +246,39 @@ const TokenDetail: React.FC = () => {
         {/* Chart */}
         {geckoId && (
           <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 mb-4 shadow-2xl">
-            {/* Live indicator + timeframe selector */}
+            {/* Top row: live indicator + chart mode toggle */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                 <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Live</span>
               </div>
+              <div className="flex gap-1 bg-white/[0.03] border border-white/[0.05] rounded-lg p-0.5">
+                <button
+                  onClick={() => setChartMode('line')}
+                  className={`p-1.5 rounded-md transition-all ${
+                    chartMode === 'line'
+                      ? 'bg-[#FF6900] text-white'
+                      : 'text-gray-500 hover:text-white'
+                  }`}
+                  title="Line chart"
+                >
+                  <TrendingUp size={14} />
+                </button>
+                <button
+                  onClick={() => setChartMode('candle')}
+                  className={`p-1.5 rounded-md transition-all ${
+                    chartMode === 'candle'
+                      ? 'bg-[#FF6900] text-white'
+                      : 'text-gray-500 hover:text-white'
+                  }`}
+                  title="Candlestick chart"
+                >
+                  <BarChart3 size={14} />
+                </button>
+              </div>
             </div>
+
+            {/* Timeframe selector */}
             <div className="flex gap-1 mb-4 bg-white/[0.03] border border-white/[0.05] rounded-xl p-1">
               {TIMEFRAMES.map((tf) => (
                 <button
@@ -224,8 +299,12 @@ const TokenDetail: React.FC = () => {
             <div className="flex justify-center items-center min-h-[120px]">
               {chartLoading ? (
                 <div className="w-5 h-5 border-2 border-[#FF6900] border-t-transparent rounded-full animate-spin" />
-              ) : chartData && chartData.length >= 2 ? (
-                <Sparkline data={chartData} width={300} height={120} />
+              ) : hasChartData ? (
+                chartMode === 'line' ? (
+                  <Sparkline data={lineData!} width={300} height={120} />
+                ) : (
+                  <CandlestickChart data={candleData!} width={300} height={120} />
+                )
               ) : (
                 <p className="text-xs text-gray-600">No chart data available</p>
               )}
