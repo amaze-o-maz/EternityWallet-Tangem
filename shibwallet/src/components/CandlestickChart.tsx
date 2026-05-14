@@ -14,7 +14,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 }) => {
   if (!data || data.length < 1) return null;
 
-  const padding = { top: 4, bottom: 4, left: 2, right: 2 };
+  const padding = { top: 6, bottom: 6, left: 4, right: 4 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
 
@@ -26,8 +26,9 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   }
   const range = allMax - allMin || 1;
 
-  const candleWidth = Math.max(2, Math.min(8, (chartW / data.length) * 0.7));
   const gap = chartW / data.length;
+  const candleWidth = Math.max(3, Math.min(12, gap * 0.65));
+  const wickWidth = Math.max(1, Math.min(1.5, candleWidth * 0.2));
 
   const yScale = (price: number) =>
     padding.top + chartH - ((price - allMin) / range) * chartH;
@@ -40,32 +41,30 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         const color = bullish ? '#22c55e' : '#ef4444';
 
         const x = padding.left + i * gap + gap / 2;
-        const wickX = x;
+
         const wickTop = yScale(high);
         const wickBottom = yScale(low);
 
         const bodyTop = yScale(Math.max(open, close));
         const bodyBottom = yScale(Math.min(open, close));
-        const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+        const bodyHeight = Math.max(1.5, bodyBottom - bodyTop);
 
         return (
           <g key={i}>
             <line
-              x1={wickX}
+              x1={x}
               y1={wickTop}
-              x2={wickX}
+              x2={x}
               y2={wickBottom}
               stroke={color}
-              strokeWidth="1"
+              strokeWidth={wickWidth}
             />
             <rect
               x={x - candleWidth / 2}
               y={bodyTop}
               width={candleWidth}
               height={bodyHeight}
-              fill={bullish ? color : color}
-              stroke={color}
-              strokeWidth="0.5"
+              fill={color}
               rx="0.5"
             />
           </g>

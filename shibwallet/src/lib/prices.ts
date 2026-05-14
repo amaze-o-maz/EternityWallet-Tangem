@@ -206,16 +206,14 @@ const TIMEFRAME_DAYS: Record<ChartTimeframe, number> = {
   'ALL': 365,
 };
 
-// How many minutes of raw data each candle should cover (0 = use native OHLC)
-// CoinGecko market_chart days=1 gives ~5-min granularity, so candle intervals
-// must be >= 5 to get real OHLC bodies instead of flat dashes.
+// How many minutes per candle (0 = use CoinGecko native OHLC endpoint)
 const CANDLE_INTERVAL_MIN: Record<ChartTimeframe, number> = {
-  '15M': 5,     // 5-min candles → 3 candles in a 15-min window
-  '1H': 15,     // 15-min candles → 4 candles in a 1-hour window
-  '1D': 60,     // 1-hour candles → 24 candles in a day
-  '1W': 0,      // use native OHLC
-  '1M': 240,    // 4-hour candles synthesized from market_chart days=30
-  'ALL': 1440,  // daily candles synthesized from market_chart days=365
+  '15M': 5,     // 5-min candles → ~3 candles
+  '1H': 5,      // 5-min candles → ~12 candles
+  '1D': 30,     // 30-min candles → ~48 candles
+  '1W': 0,      // native OHLC → 4-hour candles (~42)
+  '1M': 240,    // 4-hour candles synthesized from market_chart
+  'ALL': 0,     // native OHLC → 4-day candles (~90)
 };
 
 // How many minutes of history to show for short timeframes
@@ -325,31 +323,57 @@ export async function fetchOHLCData(
   }
 
   const candleMin = CANDLE_INTERVAL_MIN[timeframe];
+
+  // Synthetic candles from market_chart data
+  if (candleMin > 0) {
+    const days = TIMEFRAME_DAYS[timeframe];
+    const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
+    const res = await throttledFetch(url);
+    if (!res) return cached?.data ?? [];
+
+    try {
+      const json: { prices?: [number, number][] } = await res.json();
+      let raw = json.prices;
+      if (!raw || raw.length < 2) return cached?.data ?? [];
+
+      const windowMs = WINDOW_MIN[timeframe];
+      if (windowMs) {
+        const cutoff = Date.now() - windowMs * 60_000;
+        raw = raw.filter(([ts]) => ts >= cutoff);
+        if (raw.length < 2) return cached?.data ?? [];
+      }
+
+      let candles = buildCandles(raw, candleMin);
+      const maxCandles = 60;
+      if (candles.length > maxCandles) {
+        const step = Math.max(1, Math.floor(candles.length / maxCandles));
+        candles = candles.filter((_, i) => i % step === 0);
+      }
+      if (candles.length >= 1) {
+        ohlcCache.set(cacheKey, { data: candles, ts: Date.now() });
+      }
+      return candles;
+    } catch {
+      return cached?.data ?? [];
+    }
+  }
+
+  // Native CoinGecko OHLC for 1W and ALL
   const days = TIMEFRAME_DAYS[timeframe];
-  const url = `${COINGECKO_BASE}/coins/${geckoId}/market_chart?vs_currency=usd&days=${days}`;
+  const url = `${COINGECKO_BASE}/coins/${geckoId}/ohlc?vs_currency=usd&days=${days}`;
   const res = await throttledFetch(url);
   if (!res) return cached?.data ?? [];
 
   try {
-    const json: { prices?: [number, number][] } = await res.json();
-    let raw = json.prices;
+    const raw: [number, number, number, number, number][] = await res.json();
     if (!raw || raw.length < 2) return cached?.data ?? [];
 
-    const windowMs = WINDOW_MIN[timeframe];
-    if (windowMs) {
-      const cutoff = Date.now() - windowMs * 60_000;
-      raw = raw.filter(([ts]) => ts >= cutoff);
-      if (raw.length < 2) return cached?.data ?? [];
-    }
-
-    let candles = buildCandles(raw, candleMin);
-
+    let candles: OHLCCandle[] = raw.map(([, o, h, l, c]) => [o, h, l, c]);
     const maxCandles = 60;
     if (candles.length > maxCandles) {
       const step = Math.max(1, Math.floor(candles.length / maxCandles));
       candles = candles.filter((_, i) => i % step === 0);
     }
-
     if (candles.length >= 1) {
       ohlcCache.set(cacheKey, { data: candles, ts: Date.now() });
     }
