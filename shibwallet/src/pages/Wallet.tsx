@@ -10,7 +10,7 @@ import { useWalletStore } from '../store/walletStore';
 import { useNetworkStore } from '../store/networkStore';
 import { useTransactionStore } from '../store/transactionStore';
 import { getNetworkByChainId } from '../lib/chains';
-import { getTokensForChain, isNativeToken, addCustomToken, TokenInfo } from '../lib/tokens';
+import { getTokensForChain, isNativeToken, addCustomToken, lookupCoinGeckoId, updateCustomTokenField, TokenInfo } from '../lib/tokens';
 import { ERC20_ABI } from '../lib/abis';
 import { fetchPrices, fetchSparklines } from '../lib/prices';
 
@@ -307,6 +307,10 @@ const Wallet: React.FC = () => {
     setTokenSymbol('');
     setTokenName('');
     setTokenDecimals('18');
+    // Look up CoinGecko ID in background so future price/chart fetches use batch
+    lookupCoinGeckoId(chainId, addr).then((id) => {
+      if (id) updateCustomTokenField(chainId, addr, { coingeckoId: id });
+    });
     // Refresh balances
     setLoading(true);
     fetchData();

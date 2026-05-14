@@ -5,6 +5,7 @@ export interface TokenInfo {
   decimals: number;
   isNative?: boolean;
   logoUrl: string;
+  coingeckoId?: string;
 }
 
 // CoinGecko CDN for major tokens (large = 256x256, crisp on high-DPI screens)
@@ -229,4 +230,37 @@ export function isCustomToken(chainId: number, address: string): boolean {
 
 export function isNativeToken(token: TokenInfo): boolean {
   return !!token.isNative;
+}
+
+const PLATFORM_IDS: Record<number, string> = { 1: 'ethereum', 109: 'shibarium' };
+
+export async function lookupCoinGeckoId(
+  chainId: number,
+  address: string,
+): Promise<string | null> {
+  const platform = PLATFORM_IDS[chainId];
+  if (!platform) return null;
+  try {
+    const url = `https://api.coingecko.com/api/v3/coins/${platform}/contract/${address.toLowerCase()}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function updateCustomTokenField(
+  chainId: number,
+  address: string,
+  field: Partial<TokenInfo>,
+): void {
+  const all = loadCustomTokens();
+  const key = String(chainId);
+  const existing = all[key] ?? [];
+  all[key] = existing.map((t) =>
+    t.address.toLowerCase() === address.toLowerCase() ? { ...t, ...field } : t,
+  );
+  saveCustomTokens(all);
 }
