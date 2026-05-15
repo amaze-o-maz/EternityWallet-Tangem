@@ -9,7 +9,6 @@ import { useNetworkStore } from '../store/networkStore';
 import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 import { type TokenInfo } from '../lib/tokens';
 import {
-  resolveGeckoId,
   fetchLineChart,
   fetchCandles,
   LIVE_REFRESH_MS,
@@ -48,6 +47,14 @@ const TIMEFRAME_DESCRIPTIONS: Record<ChartTimeframe, string> = {
   'ALL': 'All time',
 };
 
+function formatAge(ms: number): string {
+  const days = ms / 86_400_000;
+  if (days < 1.5) return 'today';
+  if (days < 60) return `${Math.round(days)} days`;
+  if (days < 730) return `${Math.round(days / 30)} months`;
+  return `${(days / 365).toFixed(1)} years`;
+}
+
 function describeTimeframe(
   timeframe: ChartTimeframe,
   firstDataTs: number | null,
@@ -55,9 +62,10 @@ function describeTimeframe(
   if (timeframe !== 'ALL' || firstDataTs === null) {
     return TIMEFRAME_DESCRIPTIONS[timeframe];
   }
+  const age = formatAge(Date.now() - firstDataTs);
   const d = new Date(firstDataTs);
-  const since = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  return `All time · since ${since}`;
+  const since = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `All time · ${age} (since ${since})`;
 }
 
 function formatBalance(raw: bigint, decimals: number): string {
@@ -113,8 +121,7 @@ const TokenDetail: React.FC = () => {
   const [lineData, setLineData] = useState<TimedPrice[] | null>(null);
   const [candleData, setCandleData] = useState<TimedOHLC[] | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
-
-  const geckoId = token ? resolveGeckoId(token) : null;
+  const [chartLoadAttempt, setChartLoadAttempt] = useState(0);
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -122,25 +129,28 @@ const TokenDetail: React.FC = () => {
     }
   }, [isUnlocked, navigate]);
 
+  // Reset chart data when timeframe or mode changes so we don't show stale
+  // data from a previous selection while the new data loads.
+  useEffect(() => {
+    setLineData(null);
+    setCandleData(null);
+  }, [activeTimeframe, chartMode]);
+
   // Fetch chart data with debounce + live refresh interval
   useEffect(() => {
-    if (!geckoId) {
-      setLineData(null);
-      setCandleData(null);
-      return;
-    }
+    if (!token) return;
 
     let cancelled = false;
     const load = (force: boolean) => {
       if (!force) setChartLoading(true);
       if (chartMode === 'line') {
-        fetchLineChart(geckoId, activeTimeframe, force).then((data) => {
+        fetchLineChart(token, chainId, activeTimeframe, force).then((data) => {
           if (cancelled) return;
           if (data.length >= 2) setLineData(data);
           setChartLoading(false);
         });
       } else {
-        fetchCandles(geckoId, activeTimeframe, force).then((data) => {
+        fetchCandles(token, chainId, activeTimeframe, force).then((data) => {
           if (cancelled) return;
           if (data.length >= 1) setCandleData(data);
           setChartLoading(false);
@@ -151,7 +161,9 @@ const TokenDetail: React.FC = () => {
     const debounce = setTimeout(() => load(false), 300);
     const interval = setInterval(() => load(true), LIVE_REFRESH_MS[activeTimeframe]);
     return () => { cancelled = true; clearTimeout(debounce); clearInterval(interval); };
-  }, [geckoId, activeTimeframe, chartMode]);
+  }, [token, chainId, activeTimeframe, chartMode, chartLoadAttempt]);
+
+  const retryChart = () => setChartLoadAttempt((n) => n + 1);
 
   if (!isUnlocked || !walletAddress || !token) {
     if (!token) navigate('/wallet', { replace: true });
@@ -245,8 +257,8 @@ const TokenDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Chart card */}
-        {geckoId && (
+        {/* Chart card — show whenever the token is on a chain a chart provider supports */}
+        {(chainId === 1 || chainId === 109) && (
           <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-3 mb-3 shadow-2xl">
             {/* Top row: live indicator + chart mode toggle */}
             <div className="flex items-center justify-between mb-2">
@@ -310,7 +322,17 @@ const TokenDetail: React.FC = () => {
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-gray-600">No chart data available</p>
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <p className="text-xs text-gray-600">No chart data available</p>
+                  <button
+                    onClick={retryChart}
+                    className="text-[11px] text-[#FF6900] font-semibold px-3 py-1.5 rounded-lg
+                               bg-[#FF6900]/10 border border-[#FF6900]/20
+                               hover:bg-[#FF6900]/20 transition-all active:scale-95"
+                  >
+                    Tap to retry
+                  </button>
+                </div>
               )}
             </div>
 
