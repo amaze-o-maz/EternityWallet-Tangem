@@ -24,7 +24,22 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        // JitPack hosts the Tangem SDK (com.github.tangem.tangem-sdk-android).
+        // Tangem SDK is hosted on GitHub Packages (NOT JitPack — the JitPack badge is misleading,
+        // builds are "ok" there but artifacts get published to GitHub Packages instead).
+        //
+        // To resolve com.tangem.tangem-sdk-kotlin:{android,core}, supply read:packages credentials
+        // via either ~/.gradle/gradle.properties:
+        //   gpr.user=<github-username>
+        //   gpr.key=<github-PAT-with-read:packages-scope>
+        // …or the GITHUB_ACTOR / GITHUB_TOKEN environment variables (works in CI by default).
+        maven {
+            name = 'TangemGitHubPackages'
+            url = uri('https://maven.pkg.github.com/tangem/tangem-sdk-android')
+            credentials {
+                username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+                password = project.findProperty('gpr.key') ?: System.getenv('GITHUB_TOKEN')
+            }
+        }
         maven { url 'https://jitpack.io' }
     }
 }

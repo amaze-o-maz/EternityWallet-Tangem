@@ -6,6 +6,7 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 
 ### Wallet
 - **Non-custodial** — your keys, your crypto. Private keys never leave your device
+- **Tangem hardware wallet** — onboard by tapping a Tangem NFC card; secp256k1 key generated and stored on the card, never extracted
 - **Multi-account** — create via mnemonic or import private keys, switch between accounts
 - **Multi-network** — Ethereum & Shibarium built-in, plus add custom EVM networks
 - **Token management** — default Shiba ecosystem tokens + add any ERC-20 by contract address
@@ -14,6 +15,18 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 - **Live prices** — real-time USD prices via CoinGecko with 7-day sparkline charts
 - **QR receive** — generate QR codes for easy address sharing
 - **Instant cache hydration** — NFTs, transaction history, and news load instantly from localStorage on re-open, with silent background revalidation
+
+### Tangem Hardware Wallet (Cold Storage)
+- **Tap to connect** — hold a Tangem card to the back of your phone, address derived in ~1 second
+- **Tap to sign** — every send, swap, and approve requires an NFC tap; the private key never leaves the secure element
+- **Blank-card setup** — empty Tangem cards auto-generate their secp256k1 wallet on first tap
+- **Same address everywhere** — one secp256k1 key works across Ethereum, Shibarium, and any EVM chain
+- **Read-only paths still work** — balances, NFTs, transaction history, receive QR, and the dApp browser's read-only pages function with no card present
+- **Two-tap clarity** — approve+swap flows show explicit "Tap card to approve (1 of 2)" / "swap (2 of 2)" framing
+- **No password vault** — tangem-only installs skip the password setup and lock screen entirely; nothing sensitive is held in memory
+- **Built on the official `tangem-sdk-android`** — the native SDK is a thin transport, all Ethereum-specific logic (tx serialization, hashing, recovery-byte calculation, address derivation) lives in TypeScript
+- **Wrong-card protection** — every sign verifies the tapped card matches the linked `cardId`; tapping a different card fails with a clear message
+- Onboarding entry is hidden when NFC isn't available; gracefully reports NFC-off, user-cancelled, tag-lost, and timeout errors
 
 ### Send & Receive
 - Send native tokens (ETH, BONE) and any ERC-20 token
@@ -74,6 +87,7 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 - **Encrypted accounts storage** — all private keys encrypted at rest, decrypted only while unlocked
 - **Unlock rate limiting** — exponential backoff after 5 failed attempts (up to 5-minute lockout)
 - **Auto-lock** — wallet locks after 5 minutes of inactivity
+- **Hardware-backed signing (Tangem)** — secp256k1 key generated and stored on the card's secure element; the app only ever sees the public key. Every sign sends a 32-byte hash to the card and receives `r||s` back; the recovery byte for `v` is computed locally by recovering the pubkey from each candidate and matching the card's known `walletPublicKey`
 - **Backward-compatible** — seamlessly handles legacy vault formats
 
 ## Tech Stack
@@ -92,8 +106,9 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 | Burns | Etherscan API + custom burn tracking |
 | Market Intelligence | Binance, OKX, Bybit (funding/OI/ticker), Whale Alert (exchange flows), DexScreener (DeFi dominance) |
 | Shibarium Stats | Shibariumscan API (network stats + token holders) |
-| Crypto | @scure/bip39, @scure/bip32, crypto-js |
+| Crypto | @scure/bip39, @scure/bip32, @noble/curves (secp256k1 recovery), crypto-js |
 | Mobile | Capacitor (Android) |
+| Hardware Wallet | Tangem SDK (`com.tangem.tangem-sdk-kotlin`) via custom Kotlin Capacitor plugin |
 | dApp Browser | Android WebView + JavaScript injection (EIP-1193) |
 | Icons | Lucide React |
 | Toasts | react-hot-toast |
@@ -113,6 +128,7 @@ Download `ShibWallet.apk` from the repository root and install on your device.
 #### Prerequisites
 - Node.js 18+
 - Android SDK (for mobile builds)
+- For the Tangem build path: a GitHub personal access token with `read:packages` scope (Tangem publishes their SDK to GitHub Packages, not Maven Central or JitPack)
 
 #### Install & Run (Web)
 
@@ -129,6 +145,15 @@ npm run build
 ```
 
 #### Android APK
+
+First, configure GitHub Packages credentials so Gradle can pull the Tangem SDK. In `~/.gradle/gradle.properties` (or set as env vars `GITHUB_ACTOR` / `GITHUB_TOKEN`):
+
+```properties
+gpr.user=<your-github-username>
+gpr.key=<your-PAT-with-read:packages-scope>
+```
+
+Then:
 
 ```bash
 npx cap sync android
@@ -159,6 +184,8 @@ shibwallet/
 │   │   └── ...
 │   ├── lib/               # Core logic
 │   │   ├── wallet.ts      #   Key generation, encryption, PBKDF2 vault
+│   │   ├── tangem.ts      #   Tangem native plugin wrapper (scan / sign / pubkey-to-address / recovery)
+│   │   ├── signers.ts     #   Signer abstraction (hot privateKey OR Tangem NFC) returning a viem Account
 │   │   ├── chains.ts      #   Network configs (Ethereum, Shibarium, custom)
 │   │   ├── tokens.ts      #   Token registry, custom token import
 │   │   ├── swap.ts        #   ShibaSwap router integration (quotes, approvals, swaps)
@@ -191,7 +218,8 @@ shibwallet/
 │   │   ├── Import.tsx     #   Import via mnemonic or private key
 │   │   └── Onboarding.tsx #   Splash + welcome screen
 │   └── store/             # Zustand stores
-│       ├── walletStore.ts        # Accounts, vault, lock/unlock
+│       ├── walletStore.ts        # Accounts (hot|tangem discriminated union), vault, lock/unlock, setupTangemOnly
+│       ├── tangemUiStore.ts      # Sign-overlay state (idle / waiting / success / error) for the Tangem modal
 │       ├── networkStore.ts       # Active chain, custom networks
 │       ├── transactionStore.ts   # Local transaction persistence (sends, swaps, NFT sends)
 │       ├── burnStore.ts          # SHIB burn data cache
@@ -200,17 +228,21 @@ shibwallet/
 │       ├── shibfiStore.ts         # ShibFi market data cache + parallel fetching
 │       ├── snsStore.ts           # SNS name cache
 │       └── themeStore.ts         # Theme preferences
-├── android/               # Capacitor Android project with native WebView dApp browser
+├── android/               # Capacitor Android project
+│   └── app/src/main/java/com/shibwallet/app/
+│       ├── TangemPlugin.kt       # Native bridge over tangem-sdk-android (scan / createWallet / sign / nfcAvailable)
+│       └── DAppBrowserPlugin.java # Web3-injecting WebView for in-app dApp browsing
 └── dist/                  # Production build output
 ```
 
 ## Security Model
 
-- **Vault** — mnemonic/private key encrypted with PBKDF2-derived key, stored as `salt:iv:ciphertext`
-- **Accounts** — full account array (addresses, keys, labels) encrypted with the same password
-- **Memory** — password held in Zustand state only while unlocked, cleared on lock
+- **Vault (hot wallet)** — mnemonic/private key encrypted with PBKDF2-derived key, stored as `salt:iv:ciphertext`
+- **Accounts (hot wallet)** — full account array (addresses, keys, labels) encrypted with the same password
+- **Tangem (cold wallet)** — secp256k1 keypair generated and stored exclusively in the card's secure element. The app only ever holds the address, `cardId`, and uncompressed public key — all of which are non-secret and persisted as plain JSON. Every transaction sends a 32-byte hash to the card and receives a 64-byte `r||s` signature back; the recovery byte for `v` is computed locally by testing both candidates against the card's known `walletPublicKey`
+- **Memory** — hot-wallet password held in Zustand state only while unlocked, cleared on lock. Tangem installs hold no secret material in memory at any point
 - **Rate limiting** — exponential backoff on failed unlock attempts prevents brute force
-- **No external key servers** — all cryptographic operations happen locally on-device
+- **No external key servers** — all cryptographic operations happen locally on-device or on the card
 
 ## Supported Networks
 
