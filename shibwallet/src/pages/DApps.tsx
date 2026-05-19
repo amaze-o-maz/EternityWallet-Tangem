@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, Search, TrendingUp, Gamepad2, Image, Rocket, Coins, LayoutGrid, Fingerprint } from 'lucide-react';
+import { ExternalLink, Search, TrendingUp, Gamepad2, Image, Rocket, Coins, LayoutGrid, Fingerprint, CreditCard } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useWalletStore } from '../store/walletStore';
 interface DApp {
   name: string;
   description: string;
@@ -219,10 +221,18 @@ const DAppCard: React.FC<{ dapp: DApp; index: number; onOpen: (url: string) => v
 
 const DApps: React.FC = () => {
   const nav = useNavigate();
+  const activeAccount = useWalletStore((s) => s.activeAccount());
+  const isTangem = activeAccount?.kind === 'tangem';
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
 
   const openDApp = (url: string) => {
+    if (isTangem) {
+      // TODO(v2): the native dApp browser injects a raw privateKey; to support
+      // Tangem we'd need to forward signing requests back through JS for NFC.
+      toast.error('dApp browser needs a hot wallet for now. Tangem support coming soon.');
+      return;
+    }
     nav(`/wallet/browser?url=${encodeURIComponent(url)}`);
   };
 
@@ -242,6 +252,18 @@ const DApps: React.FC = () => {
           <h1 className="text-xl font-bold gradient-text">Shibarium dApps</h1>
           <p className="text-gray-500 text-xs mt-1">Explore the Shiba Inu ecosystem</p>
         </div>
+
+        {isTangem && (
+          <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl bg-[#FFB800]/[0.06] border border-[#FFB800]/15">
+            <CreditCard size={16} className="text-[#FFB800] shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-[#FFB800] mb-0.5">dApp browser coming soon for Tangem</p>
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                External dApps need a hot wallet for now. Send, receive, and swap work normally with your card.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Search */}
         <div className="relative mb-4">

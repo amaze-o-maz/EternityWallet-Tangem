@@ -44,4 +44,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- NFC for Tangem hardware-wallet card interaction. Marked required="false"
+         so the app still installs on emulators and devices without NFC; the
+         Tangem entry point in the UI hides itself at runtime when NFC isn't
+         available (see src/lib/tangem.ts tangemAvailable() / nfcStatus()). -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
 </manifest>

@@ -15,6 +15,7 @@ import { ERC20_ABI } from '../lib/abis';
 import { fetchPrices, fetchSparklines } from '../lib/prices';
 
 const VAULT_KEY = 'shibwallet_vault';
+const TANGEM_KEY = 'shibwallet_tangem_accounts';
 const AUTO_LOCK_MS = 5 * 60 * 1000; // 5 minutes
 
 const SkeletonRow: React.FC<{ index: number }> = ({ index }) => (
@@ -49,17 +50,26 @@ const Wallet: React.FC = () => {
 
   // Redirect guards
   useEffect(() => {
-    if (!localStorage.getItem(VAULT_KEY)) {
+    const hasHot = localStorage.getItem(VAULT_KEY) !== null;
+    const hasTangem = localStorage.getItem(TANGEM_KEY) !== null;
+    if (!hasHot && !hasTangem) {
       navigate('/', { replace: true });
       return;
     }
     if (!isUnlocked) {
-      navigate('/lock', { replace: true });
+      if (hasHot) {
+        navigate('/lock', { replace: true });
+      } else {
+        // Tangem-only — go back to onboarding which will auto-unlock and forward here.
+        navigate('/', { replace: true });
+      }
     }
   }, [isUnlocked, navigate]);
 
-  // Auto-lock check
+  // Auto-lock check — only meaningful when a password-protected hot vault is loaded.
+  // Tangem-only installs have nothing secret in memory, so auto-lock is skipped.
   useEffect(() => {
+    if (!localStorage.getItem(VAULT_KEY)) return;
     lockCheckRef.current = setInterval(() => {
       const elapsed = Date.now() - useWalletStore.getState().lastActivity;
       if (elapsed > AUTO_LOCK_MS) {

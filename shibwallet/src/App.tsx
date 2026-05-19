@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { router } from './router';
 import { useThemeStore, applyTheme } from './store/themeStore';
+import { TangemSignOverlay } from './components/TangemScanModal';
 
 export default function App() {
   const theme = useThemeStore((s) => s.theme);
@@ -38,6 +39,8 @@ export default function App() {
         }}
       />
       <RouterProvider router={router} />
+      {/* Global Tangem NFC signing overlay — visible whenever a signing flow is in-flight on any route. */}
+      <TangemSignOverlay />
     </>
   );
 }

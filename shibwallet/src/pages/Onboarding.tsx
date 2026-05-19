@@ -1,17 +1,36 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CreditCard } from 'lucide-react';
 import ShibLogo from '../components/ShibLogo';
-
-const VAULT_KEY = 'shibwallet_vault';
+import TangemScanModal from '../components/TangemScanModal';
+import { useWalletStore } from '../store/walletStore';
+import { tangemAvailable } from '../lib/tangem';
 
 const Onboarding: React.FC = () => {
   const navigate = useNavigate();
+  const hasHotVault = useWalletStore((s) => s.hasHotVault);
+  const hasTangemAccounts = useWalletStore((s) => s.hasTangemAccounts);
+  const setupTangemOnly = useWalletStore((s) => s.setupTangemOnly);
+  const unlockTangemOnly = useWalletStore((s) => s.unlockTangemOnly);
+
+  const [showTangemModal, setShowTangemModal] = useState(false);
+  const showTangemEntry = tangemAvailable();
 
   useEffect(() => {
-    if (localStorage.getItem(VAULT_KEY)) {
+    // Three onboarding states:
+    //   1) Hot vault exists → /lock (password required)
+    //   2) Tangem-only install exists → unlock automatically + /wallet
+    //   3) Neither → stay on this page
+    if (hasHotVault()) {
       navigate('/lock', { replace: true });
+      return;
     }
-  }, [navigate]);
+    if (hasTangemAccounts()) {
+      if (unlockTangemOnly()) {
+        navigate('/wallet', { replace: true });
+      }
+    }
+  }, [navigate, hasHotVault, hasTangemAccounts, unlockTangemOnly]);
 
   return (
     <div
@@ -112,8 +131,48 @@ const Onboarding: React.FC = () => {
           >
             Import Wallet
           </button>
+
+          {showTangemEntry && (
+            <button
+              onClick={() => setShowTangemModal(true)}
+              className="w-full py-4 rounded-2xl font-semibold text-[0.95rem] tracking-wide
+                         transition-all duration-300 active:scale-[0.97]
+                         flex items-center justify-center gap-2 group
+                         hover:shadow-[0_0_25px_rgba(255,184,0,0.18)]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255, 184, 0, 0.08) 0%, rgba(255, 105, 0, 0.05) 100%)',
+                border: '1px solid rgba(255, 184, 0, 0.25)',
+                color: '#FFB800',
+              }}
+            >
+              <CreditCard size={18} className="transition-transform duration-300 group-hover:scale-110" />
+              Connect Tangem
+            </button>
+          )}
         </div>
+
+        {showTangemEntry && (
+          <p className="mt-4 text-center text-[10px] text-gray-600 leading-relaxed max-w-[240px]">
+            Hardware wallet support — your key never leaves the card.
+          </p>
+        )}
       </div>
+
+      <TangemScanModal
+        open={showTangemModal}
+        mode="connect"
+        onClose={() => setShowTangemModal(false)}
+        onSuccess={(result) => {
+          setupTangemOnly({
+            address: result.address,
+            cardId: result.cardId,
+            walletPublicKey: result.walletPublicKey,
+            label: `Tangem ••••${result.cardId.slice(-4)}`,
+          });
+          setShowTangemModal(false);
+          navigate('/wallet', { replace: true });
+        }}
+      />
     </div>
   );
 };

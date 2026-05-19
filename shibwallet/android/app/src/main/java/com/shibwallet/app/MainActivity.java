@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DAppBrowserPlugin.class);
+        registerPlugin(TangemPlugin.class);
         super.onCreate(savedInstanceState);
 
         Window window = getWindow();

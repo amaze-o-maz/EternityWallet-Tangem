@@ -21,6 +21,8 @@ const Lock: React.FC = () => {
 
   useEffect(() => {
     if (!localStorage.getItem(VAULT_KEY)) {
+      // No hot vault — fall back to onboarding which will detect any tangem-only
+      // install and auto-unlock it, or otherwise show the entry buttons.
       navigate('/', { replace: true });
       return;
     }
