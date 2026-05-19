@@ -8,11 +8,14 @@ import { useWalletStore } from '../store/walletStore';
 import { useThemeStore, THEMES, type ThemeKey } from '../store/themeStore';
 
 const VAULT_KEY = 'shibwallet_vault';
+const TANGEM_ACCOUNTS_KEY = 'shibwallet_tangem_accounts';
 
 const THEME_ORDER: ThemeKey[] = ['shib', 'midnight', 'emerald', 'sakura', 'royal', 'amoled'];
 
 const Header: React.FC = () => {
   const { isUnlocked, privateKey, lock } = useWalletStore();
+  const activeAccount = useWalletStore((s) => s.activeAccount());
+  const isTangem = activeAccount?.kind === 'tangem';
   const { theme, setTheme } = useThemeStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
@@ -58,11 +61,15 @@ const Header: React.FC = () => {
 
   const handleDisconnect = () => {
     localStorage.removeItem(VAULT_KEY);
+    localStorage.removeItem(TANGEM_ACCOUNTS_KEY);
     useWalletStore.setState({
       address: null,
       privateKey: null,
       mnemonic: null,
       isUnlocked: false,
+      accounts: [],
+      activeIndex: 0,
+      _password: null,
     });
     setConfirmDisconnect(false);
     setSettingsOpen(false);
@@ -179,32 +186,47 @@ const Header: React.FC = () => {
               </button>
             </div>
             <div className="p-2">
-              <button
-                onClick={handleExportKey}
-                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm
-                           text-white hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98] group"
-              >
-                <div className="p-2 rounded-lg bg-shib-orange/10 group-hover:bg-shib-orange/20 transition-colors">
-                  <Key size={15} className="text-shib-orange" />
+              {isTangem && (
+                <div className="px-4 py-3 mb-1 rounded-xl bg-[#FFB800]/[0.05] border border-[#FFB800]/15">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#FFB800]" />
+                    <p className="text-xs text-[#FFB800] font-semibold">Tangem Hardware Wallet</p>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    Your private key never leaves the card. Tap to sign each transaction.
+                  </p>
                 </div>
-                <div>
-                  <div className="font-medium">Export Private Key</div>
-                  <div className="text-xs text-gray-500 mt-0.5">Copy key to clipboard</div>
-                </div>
-              </button>
-              <button
-                onClick={handleLock}
-                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm
-                           text-white hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98] group"
-              >
-                <div className="p-2 rounded-lg bg-shib-orange/10 group-hover:bg-shib-orange/20 transition-colors">
-                  <Lock size={15} className="text-shib-orange" />
-                </div>
-                <div>
-                  <div className="font-medium">Lock Wallet</div>
-                  <div className="text-xs text-gray-500 mt-0.5">Require password to access</div>
-                </div>
-              </button>
+              )}
+              {!isTangem && (
+                <>
+                  <button
+                    onClick={handleExportKey}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm
+                               text-white hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98] group"
+                  >
+                    <div className="p-2 rounded-lg bg-shib-orange/10 group-hover:bg-shib-orange/20 transition-colors">
+                      <Key size={15} className="text-shib-orange" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Export Private Key</div>
+                      <div className="text-xs text-gray-500 mt-0.5">Copy key to clipboard</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={handleLock}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm
+                               text-white hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.98] group"
+                  >
+                    <div className="p-2 rounded-lg bg-shib-orange/10 group-hover:bg-shib-orange/20 transition-colors">
+                      <Lock size={15} className="text-shib-orange" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Lock Wallet</div>
+                      <div className="text-xs text-gray-500 mt-0.5">Require password to access</div>
+                    </div>
+                  </button>
+                </>
+              )}
 
               <div className="my-1 mx-4 border-t border-white/[0.04]" />
               <button

@@ -9,11 +9,11 @@ import {
   encodeFunctionData,
   type Chain,
 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 import { ArrowLeft, ExternalLink, X, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ReviewModal from '../components/ReviewModal';
 import { useWalletStore } from '../store/walletStore';
+import { getViemAccount } from '../lib/signers';
 import { useNetworkStore } from '../store/networkStore';
 import { useTransactionStore } from '../store/transactionStore';
 import { useNftSelectionStore } from '../store/nftSelectionStore';
@@ -27,7 +27,8 @@ import { useAutoLockOnResume } from '../hooks/useAutoLockOnResume';
 const SendNft: React.FC = () => {
   const navigate = useNavigate();
   useAutoLockOnResume();
-  const { address, privateKey, isUnlocked } = useWalletStore();
+  const { address, isUnlocked } = useWalletStore();
+  const activeAccount = useWalletStore((s) => s.activeAccount());
   const chainId = useNetworkStore((s) => s.chainId);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
   const { selected, clearSelection } = useNftSelectionStore();
@@ -215,11 +216,11 @@ const SendNft: React.FC = () => {
   };
 
   const handleConfirmSend = useCallback(async () => {
-    if (!privateKey || !network || !viemChain || !publicClient || selected.length === 0) return;
+    if (!activeAccount || !network || !viemChain || !publicClient || selected.length === 0) return;
 
     setSending(true);
     try {
-      const account = privateKeyToAccount(privateKey as `0x${string}`);
+      const account = getViemAccount(activeAccount);
       const rpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
       const walletClient = createWalletClient({
         chain: viemChain,
@@ -340,7 +341,7 @@ const SendNft: React.FC = () => {
       setSending(false);
     }
   }, [
-    privateKey, network, viemChain, publicClient, selected,
+    activeAccount, network, viemChain, publicClient, selected,
     address, effectiveAddress, contractAddr, isErc1155, gasEstimate, gasPrice, txNonce,
     addTransaction, chainId, collectionName, previewImage,
   ]);
@@ -533,7 +534,15 @@ const SendNft: React.FC = () => {
         onClose={() => setReviewOpen(false)}
         onConfirm={handleConfirmSend}
         title="Review NFT Transfer"
-        confirmText={sending ? 'Sending...' : 'Confirm Send'}
+        confirmText={
+          sending
+            ? activeAccount?.kind === 'tangem'
+              ? 'Tap card...'
+              : 'Sending...'
+            : activeAccount?.kind === 'tangem'
+              ? 'Tap Card to Send'
+              : 'Confirm Send'
+        }
         isLoading={sending}
       >
         <div className="space-y-3">

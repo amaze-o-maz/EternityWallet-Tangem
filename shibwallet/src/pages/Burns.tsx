@@ -8,7 +8,7 @@ import {
   formatUnits,
   parseUnits,
 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { getViemAccount } from '../lib/signers';
 import {
   Flame,
   TrendingDown,
@@ -190,7 +190,8 @@ const BurnModal: React.FC<{
   onClose: () => void;
   onSuccess: (hash: string, amount: string) => void;
 }> = ({ open, onClose, onSuccess }) => {
-  const { address, privateKey } = useWalletStore();
+  const { address } = useWalletStore();
+  const activeAccount = useWalletStore((s) => s.activeAccount());
   const addTx = useTransactionStore((s) => s.addTransaction);
 
   const [amount, setAmount] = useState('');
@@ -268,12 +269,12 @@ const BurnModal: React.FC<{
   }, [amount, client, address]);
 
   const handleBurn = async () => {
-    if (!client || !address || !privateKey || !amount) return;
+    if (!client || !address || !activeAccount || !amount) return;
     setSending(true);
 
     try {
       const parsed = parseUnits(amount, 18);
-      const account = privateKeyToAccount(privateKey as `0x${string}`);
+      const account = getViemAccount(activeAccount);
       const rpcs = ethNetwork
         ? [ethNetwork.rpcUrl, ...(ethNetwork.rpcFallbacks ?? [])]
         : ['https://eth.llamarpc.com'];

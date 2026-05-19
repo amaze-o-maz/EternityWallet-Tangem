@@ -9,13 +9,13 @@ import {
   formatUnits,
   type Chain,
 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 import { ArrowLeft, ExternalLink, X, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TokenSelector from '../components/TokenSelector';
 import ReviewModal from '../components/ReviewModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
+import { getViemAccount } from '../lib/signers';
 import { useNetworkStore } from '../store/networkStore';
 import { useTransactionStore } from '../store/transactionStore';
 import { isShibName, resolveShibName, formatShibName } from '../lib/sns';
@@ -38,7 +38,8 @@ const Send: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   useAutoLockOnResume();
-  const { address, privateKey, isUnlocked } = useWalletStore();
+  const { address, isUnlocked } = useWalletStore();
+  const activeAccount = useWalletStore((s) => s.activeAccount());
   const chainId = useNetworkStore((s) => s.chainId);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
 
@@ -293,11 +294,14 @@ const Send: React.FC = () => {
   };
 
   const handleConfirmSend = useCallback(async () => {
-    if (!selectedToken || !privateKey || !network || !viemChain || !publicClient) return;
+    if (!selectedToken || !activeAccount || !network || !viemChain || !publicClient) return;
 
     setSending(true);
     try {
-      const account = privateKeyToAccount(privateKey as `0x${string}`);
+      // Resolve the active account into a viem-compatible signer. Hot accounts
+      // get a privateKeyToAccount under the hood; Tangem accounts get a custom
+      // Account whose sign* methods route through NFC.
+      const account = getViemAccount(activeAccount);
       const sendRpcs = [network.rpcUrl, ...(network.rpcFallbacks ?? [])];
       const walletClient = createWalletClient({
         chain: viemChain,
@@ -361,7 +365,7 @@ const Send: React.FC = () => {
     } finally {
       setSending(false);
     }
-  }, [selectedToken, privateKey, network, viemChain, publicClient, amount, toAddress, address, addTransaction, chainId, gasEstimate, gasPrice, txNonce]);
+  }, [selectedToken, activeAccount, network, viemChain, publicClient, amount, toAddress, address, addTransaction, chainId, gasEstimate, gasPrice, txNonce, effectiveAddress]);
 
   const handleCopyHash = useCallback(() => {
     if (!txHash) return;
@@ -583,7 +587,15 @@ const Send: React.FC = () => {
         onClose={() => setReviewOpen(false)}
         onConfirm={handleConfirmSend}
         title="Review Transaction"
-        confirmText={sending ? 'Sending...' : 'Confirm Send'}
+        confirmText={
+          sending
+            ? activeAccount?.kind === 'tangem'
+              ? 'Tap card...'
+              : 'Sending...'
+            : activeAccount?.kind === 'tangem'
+              ? 'Tap Card to Send'
+              : 'Confirm Send'
+        }
         isLoading={sending}
       >
         <div className="space-y-3">

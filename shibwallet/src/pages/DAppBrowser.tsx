@@ -27,6 +27,8 @@ const DAppBrowser: React.FC = () => {
   const initialUrl = searchParams.get('url') || 'https://shibaswap.com';
 
   const { address, privateKey } = useWalletStore();
+  const activeAccount = useWalletStore((s) => s.activeAccount());
+  const isTangem = activeAccount?.kind === 'tangem';
   const chainId = useNetworkStore((s) => s.chainId);
   const network = getNetworkByChainId(chainId);
 
@@ -43,8 +45,16 @@ const DAppBrowser: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [isSecure, setIsSecure] = useState(true);
 
-  // On native, launch the native WebView browser with Web3 injection
+  // On native, launch the native WebView browser with Web3 injection.
+  // TODO(v2): the native browser plugin currently takes a raw privateKey;
+  // wiring it to forward signing back through JS for NFC requires a bigger
+  // refactor. For v1, Tangem users get the iframe browser instead — works
+  // for read-only pages (explorers, news) but dApps can't sign in there.
   useEffect(() => {
+    if (isTangem) {
+      // Stay on the iframe browser. No native WebView, no signing context.
+      return;
+    }
     if (isNativePlatform() && address && privateKey) {
       markBrowserOpen();
       openNativeDAppBrowser({
@@ -107,8 +117,9 @@ const DAppBrowser: React.FC = () => {
     }
   })();
 
-  // If native platform, don't render anything (native browser handles it)
-  if (isNativePlatform()) return null;
+  // If native platform AND we're not a Tangem user, the native WebView is taking over
+  // and we don't render anything. Tangem users keep the iframe browser.
+  if (isNativePlatform() && !isTangem) return null;
 
   return (
     <div className="safe-top flex flex-col h-screen bg-shib-bg animate-fade-in">

@@ -8,11 +8,29 @@ import {
   hashPassword,
 } from '../lib/wallet';
 
-export interface Account {
+/**
+ * Wallet accounts are now a discriminated union — either a hot wallet
+ * (private key in memory, encrypted-at-rest vault) or a Tangem hardware
+ * wallet (private key never leaves the card, metadata stored in plain
+ * localStorage since none of it is secret).
+ */
+export type Account = HotAccount | TangemAccount;
+
+export interface HotAccount {
+  kind: 'hot';
   address: string;
   privateKey: string;
   label: string;
   mnemonic: string | null;
+}
+
+export interface TangemAccount {
+  kind: 'tangem';
+  address: string;
+  cardId: string;
+  /** Uncompressed secp256k1 pubkey, 65 bytes with 0x04 prefix, hex-encoded. */
+  walletPublicKey: string;
+  label: string;
 }
 
 interface WalletState {
@@ -23,7 +41,8 @@ interface WalletState {
   lastActivity: number;
   accounts: Account[];
   activeIndex: number;
-  _password: string | null; // held in memory while unlocked for account encryption
+  /** Held in memory while unlocked for hot-account encryption. Null for tangem-only installs. */
+  _password: string | null;
 }
 
 interface WalletActions {
@@ -32,30 +51,58 @@ interface WalletActions {
   setWallet: (address: string, privateKey: string, mnemonic: string, password: string) => void;
   resetLastActivity: () => void;
   hasVault: () => boolean;
+  hasHotVault: () => boolean;
+  hasTangemAccounts: () => boolean;
   addAccount: (account: Account) => void;
   switchAccount: (index: number) => void;
   importPrivateKey: (pkHex: string, label?: string) => void;
   removeAccount: (index: number) => void;
   getAccounts: () => Account[];
+  /** First-time Tangem onboarding with no prior hot vault. */
+  setupTangemOnly: (account: Omit<TangemAccount, 'kind'>) => void;
+  /** Boot path for a tangem-only install — load accounts from localStorage. */
+  unlockTangemOnly: () => boolean;
+  /** Add a Tangem account to an already-unlocked tangem-only install. */
+  addTangemAccount: (account: Omit<TangemAccount, 'kind'>) => void;
+  activeAccount: () => Account | null;
 }
 
 const VAULT_KEY = 'shibwallet_vault';
 const ACCOUNTS_KEY = 'shibwallet_accounts';
+const TANGEM_ACCOUNTS_KEY = 'shibwallet_tangem_accounts';
 
-function loadAccounts(password: string): Account[] {
+function loadAccounts(password: string): HotAccount[] {
   try {
     const raw = localStorage.getItem(ACCOUNTS_KEY);
     if (!raw) return [];
     const decrypted = decryptData(raw, password);
-    return JSON.parse(decrypted);
+    const parsed = JSON.parse(decrypted);
+    // Migrate accounts saved before the discriminated union — default to 'hot'.
+    return (parsed as Account[]).map((a) => ({ ...a, kind: 'hot' as const })) as HotAccount[];
   } catch {
     return [];
   }
 }
 
-function saveAccounts(accounts: Account[], password: string) {
+function saveAccounts(accounts: HotAccount[], password: string) {
   const encrypted = encryptData(JSON.stringify(accounts), password);
   localStorage.setItem(ACCOUNTS_KEY, encrypted);
+}
+
+function loadTangemAccounts(): TangemAccount[] {
+  try {
+    const raw = localStorage.getItem(TANGEM_ACCOUNTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as TangemAccount[];
+    return parsed.map((a) => ({ ...a, kind: 'tangem' as const }));
+  } catch {
+    return [];
+  }
+}
+
+function saveTangemAccounts(accounts: TangemAccount[]) {
+  // No encryption — addresses, cardIds and pubkeys are not secret.
+  localStorage.setItem(TANGEM_ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
 export const useWalletStore = create<WalletState & WalletActions>((set, get) => ({
@@ -94,14 +141,15 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
 
     // Load saved accounts (encrypted), ensure primary account is first
     const saved = loadAccounts(password);
-    const primary: Account = {
+    const primary: HotAccount = {
+      kind: 'hot',
       address: wallet.address,
       privateKey: wallet.privateKey,
       label: 'Main Wallet',
       mnemonic: wallet.mnemonic || null,
     };
 
-    let accounts: Account[];
+    let accounts: HotAccount[];
     if (saved.length > 0) {
       const existing = saved.findIndex((a) => a.address.toLowerCase() === primary.address.toLowerCase());
       if (existing >= 0) {
@@ -140,7 +188,8 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
   },
 
   setWallet: (address: string, privateKey: string, mnemonic: string, password: string) => {
-    const primary: Account = {
+    const primary: HotAccount = {
+      kind: 'hot',
       address,
       privateKey,
       label: 'Main Wallet',
@@ -167,15 +216,28 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
   },
 
   hasVault: () => {
+    // Back-compat alias — old callers used this to mean "any onboarding done"
+    return localStorage.getItem(VAULT_KEY) !== null || loadTangemAccounts().length > 0;
+  },
+
+  hasHotVault: () => {
     return localStorage.getItem(VAULT_KEY) !== null;
+  },
+
+  hasTangemAccounts: () => {
+    return loadTangemAccounts().length > 0;
   },
 
   addAccount: (account: Account) => {
     const { accounts, _password } = get();
-    if (!_password) return;
     if (accounts.some((a) => a.address.toLowerCase() === account.address.toLowerCase())) return;
     const updated = [...accounts, account];
-    saveAccounts(updated, _password);
+    if (account.kind === 'hot') {
+      if (!_password) return;
+      saveAccounts(updated.filter((a): a is HotAccount => a.kind === 'hot'), _password);
+    } else {
+      saveTangemAccounts(updated.filter((a): a is TangemAccount => a.kind === 'tangem'));
+    }
     set({ accounts: updated });
   },
 
@@ -185,8 +247,8 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
     const account = accounts[index];
     set({
       address: account.address,
-      privateKey: account.privateKey,
-      mnemonic: account.mnemonic,
+      privateKey: account.kind === 'hot' ? account.privateKey : null,
+      mnemonic: account.kind === 'hot' ? account.mnemonic : null,
       activeIndex: index,
       lastActivity: Date.now(),
     });
@@ -194,13 +256,16 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
 
   importPrivateKey: (pkHex: string, label?: string) => {
     const derived = deriveFromPrivateKey(pkHex);
-    const account: Account = {
+    const account: HotAccount = {
+      kind: 'hot',
       address: derived.address,
       privateKey: derived.privateKey,
       label: label || `Account ${get().accounts.length + 1}`,
       mnemonic: null,
     };
     const { accounts, _password } = get();
+    // Importing a private key only works inside a hot-wallet install — the
+    // shared password is required to encrypt the new account at rest.
     if (!_password) return;
     const existing = accounts.findIndex((a) => a.address.toLowerCase() === account.address.toLowerCase());
     if (existing >= 0) {
@@ -208,7 +273,8 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
       return;
     }
     const updated = [...accounts, account];
-    saveAccounts(updated, _password);
+    const hotOnly = updated.filter((a): a is HotAccount => a.kind === 'hot');
+    saveAccounts(hotOnly, _password);
     const newIndex = updated.length - 1;
     set({
       accounts: updated,
@@ -222,23 +288,74 @@ export const useWalletStore = create<WalletState & WalletActions>((set, get) => 
 
   removeAccount: (index: number) => {
     const { accounts, activeIndex, _password } = get();
-    if (!_password) return;
     if (accounts.length <= 1) return;
     if (index === 0) return;
+    const removed = accounts[index];
     const updated = accounts.filter((_, i) => i !== index);
-    saveAccounts(updated, _password);
+    if (removed.kind === 'hot') {
+      if (!_password) return;
+      saveAccounts(updated.filter((a): a is HotAccount => a.kind === 'hot'), _password);
+    } else {
+      saveTangemAccounts(updated.filter((a): a is TangemAccount => a.kind === 'tangem'));
+    }
     const newIndex = activeIndex >= updated.length ? updated.length - 1 : activeIndex;
     const active = updated[newIndex];
     set({
       accounts: updated,
       activeIndex: newIndex,
       address: active.address,
-      privateKey: active.privateKey,
-      mnemonic: active.mnemonic,
+      privateKey: active.kind === 'hot' ? active.privateKey : null,
+      mnemonic: active.kind === 'hot' ? active.mnemonic : null,
     });
   },
 
   getAccounts: () => {
     return get().accounts;
+  },
+
+  setupTangemOnly: (account: Omit<TangemAccount, 'kind'>) => {
+    const tangemAccount: TangemAccount = { ...account, kind: 'tangem' };
+    saveTangemAccounts([tangemAccount]);
+    set({
+      address: tangemAccount.address,
+      privateKey: null,
+      mnemonic: null,
+      isUnlocked: true,
+      lastActivity: Date.now(),
+      accounts: [tangemAccount],
+      activeIndex: 0,
+      _password: null,
+    });
+  },
+
+  unlockTangemOnly: () => {
+    const saved = loadTangemAccounts();
+    if (saved.length === 0) return false;
+    const active = saved[0];
+    set({
+      address: active.address,
+      privateKey: null,
+      mnemonic: null,
+      isUnlocked: true,
+      lastActivity: Date.now(),
+      accounts: saved,
+      activeIndex: 0,
+      _password: null,
+    });
+    return true;
+  },
+
+  addTangemAccount: (account: Omit<TangemAccount, 'kind'>) => {
+    const tangemAccount: TangemAccount = { ...account, kind: 'tangem' };
+    const { accounts } = get();
+    if (accounts.some((a) => a.address.toLowerCase() === tangemAccount.address.toLowerCase())) return;
+    const updated = [...accounts, tangemAccount];
+    saveTangemAccounts(updated.filter((a): a is TangemAccount => a.kind === 'tangem'));
+    set({ accounts: updated });
+  },
+
+  activeAccount: () => {
+    const { accounts, activeIndex } = get();
+    return accounts[activeIndex] ?? null;
   },
 }));

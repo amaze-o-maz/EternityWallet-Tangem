@@ -7,12 +7,12 @@ import {
   parseUnits,
   formatUnits,
 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 import { ArrowDownUp, ExternalLink, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TokenSelector from '../components/TokenSelector';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useWalletStore } from '../store/walletStore';
+import { getViemAccount } from '../lib/signers';
 import { useNetworkStore } from '../store/networkStore';
 import { useTransactionStore } from '../store/transactionStore';
 import { getNetworkByChainId, getExplorerTxUrl } from '../lib/chains';
@@ -140,7 +140,9 @@ const TokenLogo: React.FC<{ token: TokenInfo }> = ({ token }) => {
 
 const Swap: React.FC = () => {
   const navigate = useNavigate();
-  const { address, privateKey, isUnlocked } = useWalletStore();
+  const { address, isUnlocked } = useWalletStore();
+  const activeAccount = useWalletStore((s) => s.activeAccount());
+  const isTangem = activeAccount?.kind === 'tangem';
   const chainId = useNetworkStore((s) => s.chainId);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
 
@@ -409,18 +411,22 @@ const Swap: React.FC = () => {
   };
 
   const handleApprove = useCallback(async () => {
-    if (!fromToken || !privateKey || !network) return;
+    if (!fromToken || !activeAccount || !network) return;
 
     setApproving(true);
     try {
-      const account = privateKeyToAccount(privateKey as `0x${string}`);
+      const account = getViemAccount(activeAccount);
       const parsedAmount = parseUnits(fromAmount, fromToken.decimals);
 
       const router = getRouterAddress(chainId, quoteResult?.version ?? 'v1');
-      toast.loading('Approving token...', { id: 'approve' });
+      // Approve+swap is a two-tap flow on Tangem — make the framing explicit.
+      toast.loading(
+        isTangem ? 'Tap card to approve (1 of 2)' : 'Approving token...',
+        { id: 'approve' },
+      );
       await withTimeout(
         approveToken(chainId, fromToken.address, router, parsedAmount, account),
-        60_000,
+        isTangem ? 120_000 : 60_000,
         'Approval',
       );
       toast.success('Token approved!', { id: 'approve' });
@@ -430,21 +436,29 @@ const Swap: React.FC = () => {
     } finally {
       setApproving(false);
     }
-  }, [fromToken, privateKey, network, fromAmount, chainId]);
+  }, [fromToken, activeAccount, network, fromAmount, chainId, quoteResult, isTangem]);
 
   const handleSwap = useCallback(async () => {
-    if (!fromToken || !toToken || !privateKey || !network || !minimumReceived) return;
+    if (!fromToken || !toToken || !activeAccount || !network || !minimumReceived) return;
 
     setSwapping(true);
     try {
-      const account = privateKeyToAccount(privateKey as `0x${string}`);
+      const account = getViemAccount(activeAccount);
       const parsedAmount = parseUnits(fromAmount, fromToken.decimals);
 
       const version = quoteResult?.version ?? 'v1';
-      toast.loading('Swapping tokens...', { id: 'swap' });
+      const isApprovePlusSwap = !needsApproval && !isNativeToken(fromToken);
+      toast.loading(
+        isTangem
+          ? isApprovePlusSwap
+            ? 'Tap card to swap (2 of 2)'
+            : 'Tap card to swap'
+          : 'Swapping tokens...',
+        { id: 'swap' },
+      );
       const hash = await withTimeout(
         executeSwap(chainId, fromToken, toToken, parsedAmount, minimumReceived, account, version, quoteResult?.fee),
-        60_000,
+        isTangem ? 120_000 : 60_000,
         'Swap',
       );
 
@@ -479,7 +493,7 @@ const Swap: React.FC = () => {
     } finally {
       setSwapping(false);
     }
-  }, [fromToken, toToken, privateKey, network, minimumReceived, fromAmount, chainId, address, addTransaction, quoteResult]);
+  }, [fromToken, toToken, activeAccount, network, minimumReceived, fromAmount, chainId, address, addTransaction, quoteResult, needsApproval, isTangem]);
 
   if (!isUnlocked || !address) return null;
 
@@ -966,7 +980,13 @@ const Swap: React.FC = () => {
                              flex items-center justify-center gap-2"
                 >
                   {approving && <LoadingSpinner size={18} />}
-                  {approving ? 'Approving...' : `Approve ${fromToken.symbol}`}
+                  {approving
+                    ? isTangem
+                      ? 'Tap card to approve...'
+                      : 'Approving...'
+                    : isTangem
+                      ? `Tap to Approve ${fromToken.symbol} (1 of 2)`
+                      : `Approve ${fromToken.symbol}`}
                 </button>
               ) : (
                 <button
@@ -982,7 +1002,13 @@ const Swap: React.FC = () => {
                              flex items-center justify-center gap-2"
                 >
                   {swapping && <LoadingSpinner size={18} />}
-                  {swapping ? 'Swapping...' : 'Confirm Swap'}
+                  {swapping
+                    ? isTangem
+                      ? 'Tap card to swap...'
+                      : 'Swapping...'
+                    : isTangem
+                      ? 'Tap Card to Swap'
+                      : 'Confirm Swap'}
                 </button>
               )}
             </div>

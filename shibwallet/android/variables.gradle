@@ -13,4 +13,10 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // Kotlin support added for the Tangem hardware-wallet plugin.
+    kotlinVersion = '2.0.21'
+    // Tangem SDK via JitPack. release-app_5.16-390 is the latest known
+    // JitPack-built tag at integration time. See:
+    // https://jitpack.io/#tangem/tangem-sdk-android
+    tangemSdkVersion = 'release-app_5.16-390'
 }

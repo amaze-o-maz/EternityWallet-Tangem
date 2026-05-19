@@ -1,11 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Copy, Check, ChevronDown, Plus, Key, Trash2, X, User } from 'lucide-react';
+import { Copy, Check, ChevronDown, Plus, Key, Trash2, X, User, CreditCard } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useWalletStore, Account } from '../store/walletStore';
+import { useWalletStore } from '../store/walletStore';
 import { useShibName } from '../store/snsStore';
 
 const AddressPill: React.FC = () => {
   const { address, accounts, activeIndex, switchAccount, importPrivateKey, removeAccount } = useWalletStore();
+  const activeAccount = accounts[activeIndex];
+  const activeIsTangem = activeAccount?.kind === 'tangem';
+  // The "Import Private Key" inline form only makes sense inside a hot-wallet install.
+  // In tangem-only mode we hide it entirely. TODO(v2): add a "Connect another Tangem card" entry here.
+  const allowImport = activeAccount?.kind === 'hot';
   const [copied, setCopied] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -73,8 +78,11 @@ const AddressPill: React.FC = () => {
                    hover:shadow-[0_0_20px_rgba(255,105,0,0.1)]
                    transition-all duration-200 text-[11px] font-mono text-white
                    active:scale-95"
-        title="Manage accounts"
+        title={activeIsTangem ? 'Tangem hardware wallet' : 'Manage accounts'}
       >
+        {activeIsTangem && (
+          <CreditCard size={11} className="text-[#FFB800] shrink-0" />
+        )}
         <span className="tracking-wide truncate">{truncated}</span>
         {accounts.length > 1 && (
           <ChevronDown size={12} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
@@ -105,11 +113,15 @@ const AddressPill: React.FC = () => {
                       }`}
                   >
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0
-                      ${i === activeIndex
-                        ? 'bg-gradient-to-br from-[#FF6900] to-[#FF8C00] text-white'
-                        : 'bg-white/[0.06] text-gray-400'
+                      ${account.kind === 'tangem'
+                        ? i === activeIndex
+                          ? 'bg-gradient-to-br from-[#FFB800] to-[#FF8C00] text-white'
+                          : 'bg-[#FFB800]/[0.12] text-[#FFB800]'
+                        : i === activeIndex
+                          ? 'bg-gradient-to-br from-[#FF6900] to-[#FF8C00] text-white'
+                          : 'bg-white/[0.06] text-gray-400'
                       }`}>
-                      {account.label.charAt(0).toUpperCase()}
+                      {account.kind === 'tangem' ? <CreditCard size={12} /> : account.label.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-medium truncate ${i === activeIndex ? 'text-white' : 'text-gray-300'}`}>
@@ -144,16 +156,19 @@ const AddressPill: React.FC = () => {
                 ))}
               </div>
 
-              <div className="border-t border-white/[0.06] px-1.5 py-1.5">
-                <button
-                  onClick={() => setShowImport(true)}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-[#FF6900]
-                             rounded-xl hover:bg-[#FF6900]/[0.08] transition-all active:scale-[0.98]"
-                >
-                  <Key size={14} />
-                  <span className="font-medium">Import Private Key</span>
-                </button>
-              </div>
+              {/* Import private key is hot-wallet-only — TODO(v2): add "Connect another Tangem card" entry point here. */}
+              {allowImport && (
+                <div className="border-t border-white/[0.06] px-1.5 py-1.5">
+                  <button
+                    onClick={() => setShowImport(true)}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-[#FF6900]
+                               rounded-xl hover:bg-[#FF6900]/[0.08] transition-all active:scale-[0.98]"
+                  >
+                    <Key size={14} />
+                    <span className="font-medium">Import Private Key</span>
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <>

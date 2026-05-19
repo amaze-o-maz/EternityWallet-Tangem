@@ -4,6 +4,7 @@ import { useWalletStore } from '../store/walletStore';
 import { consumeBrowserOpen } from '../lib/dappBrowser';
 
 const LOCK_GRACE_MS = 800;
+const VAULT_KEY = 'shibwallet_vault';
 
 export function useAutoLockOnResume() {
   const navigate = useNavigate();
@@ -21,6 +22,11 @@ export function useAutoLockOnResume() {
       if (elapsed < LOCK_GRACE_MS) return;
       // Returning from the native dApp browser — don't lock
       if (consumeBrowserOpen()) {
+        useWalletStore.getState().resetLastActivity();
+        return;
+      }
+      // Tangem-only installs have no password — nothing to lock down on resume.
+      if (!localStorage.getItem(VAULT_KEY)) {
         useWalletStore.getState().resetLastActivity();
         return;
       }
