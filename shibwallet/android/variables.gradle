@@ -15,8 +15,9 @@ ext {
     cordovaAndroidVersion = '14.0.1'
     // Kotlin support added for the Tangem hardware-wallet plugin.
     kotlinVersion = '2.0.21'
-    // Tangem SDK via JitPack. release-app_5.16-390 is the latest known
-    // JitPack-built tag at integration time. See:
-    // https://jitpack.io/#tangem/tangem-sdk-android
-    tangemSdkVersion = 'release-app_5.16-390'
+    // Tangem SDK via GitHub Packages (Tangem doesn't publish to JitPack despite the badge).
+    // To build, the project needs read:packages access for github.com/tangem/tangem-sdk-android,
+    // supplied as `gpr.user` + `gpr.key` in ~/.gradle/gradle.properties OR
+    // `GITHUB_ACTOR` + `GITHUB_TOKEN` env vars. See android/build.gradle repositories block.
+    tangemSdkVersion = 'releases-5.37-608'
 }

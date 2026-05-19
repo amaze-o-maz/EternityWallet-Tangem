@@ -71,11 +71,11 @@ dependencies {
     // androidx.activity is required by the Tangem SDK init extension which takes a ComponentActivity.
     implementation "androidx.activity:activity:$androidxActivityVersion"
 
-    // Tangem SDK — hardware-wallet NFC interaction. JitPack-hosted multi-module
-    // artifact. tangem-sdk-android pulls in the NFC and UI layer; tangem-sdk-core
-    // is the platform-agnostic crypto + APDU core.
-    implementation "com.github.tangem.tangem-sdk-android:tangem-sdk-android:$tangemSdkVersion"
-    implementation "com.github.tangem.tangem-sdk-android:tangem-sdk-core:$tangemSdkVersion"
+    // Tangem SDK — hardware-wallet NFC interaction. Hosted on GitHub Packages;
+    // see android/build.gradle for auth setup. :android is the NFC + UI layer,
+    // :core is the platform-agnostic crypto + APDU core.
+    implementation "com.tangem.tangem-sdk-kotlin:android:$tangemSdkVersion"
+    implementation "com.tangem.tangem-sdk-kotlin:core:$tangemSdkVersion"
 }
 
 apply from: 'capacitor.build.gradle'
