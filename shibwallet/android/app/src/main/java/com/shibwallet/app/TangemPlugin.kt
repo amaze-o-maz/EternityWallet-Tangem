@@ -3,6 +3,8 @@ package com.shibwallet.app
 import android.content.Context
 import android.content.pm.PackageManager
 import android.nfc.NfcAdapter
+import android.os.Handler
+import android.os.Looper
 
 import androidx.activity.ComponentActivity
 
@@ -21,6 +23,9 @@ import com.tangem.common.core.TangemSdkError
 import com.tangem.operations.sign.SignResponse
 import com.tangem.operations.wallet.CreateWalletResponse
 import com.tangem.sdk.extensions.init
+
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Capacitor bridge for the Tangem SDK. This is intentionally a thin
@@ -44,11 +49,33 @@ class TangemPlugin : Plugin() {
 
     private val sdkLock = Any()
     private var _sdk: TangemSdk? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
-     * Lazily build the SDK against the host Activity. The Tangem SDK draws
-     * its own NFC bottom-sheet on top of the current Activity, so we need
-     * an Activity-bound instance.
+     * Eagerly initialize the Tangem SDK on the main thread. `load()` is
+     * invoked by the Capacitor bridge during plugin registration, which
+     * happens on the UI thread — perfect for the SDK's internal
+     * LifecycleObserver registration (which contractually must run on
+     * the main thread; calling it from a background thread throws
+     * "method addObserver must be called on the main thread").
+     */
+    override fun load() {
+        super.load()
+        val activity = activity as? ComponentActivity ?: return
+        try {
+            _sdk = TangemSdk.init(activity)
+        } catch (e: Throwable) {
+            // Fall back to lazy init in sdk() — we'll retry on the first call.
+            _sdk = null
+        }
+    }
+
+    /**
+     * Returns the SDK instance, initializing it on the main thread if
+     * load() didn't manage to (e.g. activity wasn't a ComponentActivity
+     * at registration time, or init threw). Plugin methods run on a
+     * background thread, so we dispatch initialization to the main
+     * thread and block until it completes.
      */
     private fun sdk(): TangemSdk {
         val existing = _sdk
@@ -57,7 +84,26 @@ class TangemPlugin : Plugin() {
             _sdk?.let { return it }
             val activity = activity as? ComponentActivity
                 ?: throw IllegalStateException("Tangem requires a ComponentActivity host")
-            val created = TangemSdk.init(activity)
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                val created = TangemSdk.init(activity)
+                _sdk = created
+                return created
+            }
+            val ref = AtomicReference<Any>()
+            val latch = CountDownLatch(1)
+            mainHandler.post {
+                try {
+                    ref.set(TangemSdk.init(activity))
+                } catch (e: Throwable) {
+                    ref.set(e)
+                } finally {
+                    latch.countDown()
+                }
+            }
+            latch.await()
+            val result = ref.get()
+            if (result is Throwable) throw result
+            val created = result as TangemSdk
             _sdk = created
             return created
         }
@@ -115,32 +161,35 @@ class TangemPlugin : Plugin() {
 
     @PluginMethod
     fun scanCard(call: PluginCall) {
-        val sdk = try {
-            sdk()
-        } catch (e: Throwable) {
-            call.reject("Tangem SDK not initialized: ${e.message}", "not_initialized")
-            return
-        }
-        sdk.scanCard(initialMessage = null) { result ->
-            when (result) {
-                is CompletionResult.Success -> {
-                    val card = result.data
-                    val wallets = JSArray()
-                    for (w in card.wallets) {
-                        val obj = JSObject().apply {
-                            put("publicKey", bytesToHex(w.publicKey))
-                            put("curve", w.curve.curve)
-                            put("index", w.index)
+        // SDK shows an NFC bottom sheet — must launch from main thread.
+        mainHandler.post {
+            val sdk = try {
+                sdk()
+            } catch (e: Throwable) {
+                call.reject("Tangem SDK not initialized: ${e.message}", "not_initialized")
+                return@post
+            }
+            sdk.scanCard(initialMessage = null) { result ->
+                when (result) {
+                    is CompletionResult.Success -> {
+                        val card = result.data
+                        val wallets = JSArray()
+                        for (w in card.wallets) {
+                            val obj = JSObject().apply {
+                                put("publicKey", bytesToHex(w.publicKey))
+                                put("curve", w.curve.curve)
+                                put("index", w.index)
+                            }
+                            wallets.put(obj)
                         }
-                        wallets.put(obj)
+                        val response = JSObject().apply {
+                            put("cardId", card.cardId)
+                            put("wallets", wallets)
+                        }
+                        call.resolve(response)
                     }
-                    val response = JSObject().apply {
-                        put("cardId", card.cardId)
-                        put("wallets", wallets)
-                    }
-                    call.resolve(response)
+                    is CompletionResult.Failure -> rejectWithError(call, result.error)
                 }
-                is CompletionResult.Failure -> rejectWithError(call, result.error)
             }
         }
     }
@@ -157,24 +206,26 @@ class TangemPlugin : Plugin() {
             it.curve.equals(curveName, ignoreCase = true)
         } ?: EllipticCurve.Secp256k1
 
-        val sdk = try {
-            sdk()
-        } catch (e: Throwable) {
-            call.reject("Tangem SDK not initialized: ${e.message}", "not_initialized")
-            return
-        }
-        sdk.createWallet(curve = curve, cardId = cardId, initialMessage = null) { result ->
-            when (result) {
-                is CompletionResult.Success -> {
-                    val data: CreateWalletResponse = result.data
-                    val response = JSObject().apply {
-                        put("cardId", data.cardId)
-                        put("publicKey", bytesToHex(data.wallet.publicKey))
-                        put("curve", data.wallet.curve.curve)
+        mainHandler.post {
+            val sdk = try {
+                sdk()
+            } catch (e: Throwable) {
+                call.reject("Tangem SDK not initialized: ${e.message}", "not_initialized")
+                return@post
+            }
+            sdk.createWallet(curve = curve, cardId = cardId, initialMessage = null) { result ->
+                when (result) {
+                    is CompletionResult.Success -> {
+                        val data: CreateWalletResponse = result.data
+                        val response = JSObject().apply {
+                            put("cardId", data.cardId)
+                            put("publicKey", bytesToHex(data.wallet.publicKey))
+                            put("curve", data.wallet.curve.curve)
+                        }
+                        call.resolve(response)
                     }
-                    call.resolve(response)
+                    is CompletionResult.Failure -> rejectWithError(call, result.error)
                 }
-                is CompletionResult.Failure -> rejectWithError(call, result.error)
             }
         }
     }
@@ -222,34 +273,36 @@ class TangemPlugin : Plugin() {
             return
         }
 
-        val sdk = try {
-            sdk()
-        } catch (e: Throwable) {
-            call.reject("Tangem SDK not initialized: ${e.message}", "not_initialized")
-            return
-        }
+        mainHandler.post {
+            val sdk = try {
+                sdk()
+            } catch (e: Throwable) {
+                call.reject("Tangem SDK not initialized: ${e.message}", "not_initialized")
+                return@post
+            }
 
-        sdk.sign(
-            hashes = hashes,
-            walletPublicKey = walletPublicKey,
-            cardId = cardId,
-            derivationPath = null,
-            initialMessage = null,
-        ) { result ->
-            when (result) {
-                is CompletionResult.Success -> {
-                    val data: SignResponse = result.data
-                    val sigs = JSArray()
-                    for (sig in data.signatures) {
-                        sigs.put(bytesToHex(sig))
+            sdk.sign(
+                hashes = hashes,
+                walletPublicKey = walletPublicKey,
+                cardId = cardId,
+                derivationPath = null,
+                initialMessage = null,
+            ) { result ->
+                when (result) {
+                    is CompletionResult.Success -> {
+                        val data: SignResponse = result.data
+                        val sigs = JSArray()
+                        for (sig in data.signatures) {
+                            sigs.put(bytesToHex(sig))
+                        }
+                        val response = JSObject().apply {
+                            put("cardId", data.cardId)
+                            put("signatures", sigs)
+                        }
+                        call.resolve(response)
                     }
-                    val response = JSObject().apply {
-                        put("cardId", data.cardId)
-                        put("signatures", sigs)
-                    }
-                    call.resolve(response)
+                    is CompletionResult.Failure -> rejectWithError(call, result.error)
                 }
-                is CompletionResult.Failure -> rejectWithError(call, result.error)
             }
         }
     }
