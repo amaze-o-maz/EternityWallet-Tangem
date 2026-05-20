@@ -1,7 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ShibWallet</string>
-    <string name="title_activity_main">ShibWallet</string>
-    <string name="package_name">com.shibwallet.app</string>
-    <string name="custom_url_scheme">com.shibwallet.app</string>
+    <!-- TODO(merge): revert display name to "ShibWallet" before merging into main.
+         The "× Tangem" suffix only distinguishes the side-by-side test build. -->
+    <string name="app_name">ShibWallet × Tangem</string>
+    <string name="title_activity_main">ShibWallet × Tangem</string>
+    <string name="package_name">com.shibwallet.tangem</string>
+    <string name="custom_url_scheme">com.shibwallet.tangem</string>
 </resources>

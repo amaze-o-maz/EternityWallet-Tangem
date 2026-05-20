@@ -119,7 +119,9 @@ A non-custodial cryptocurrency wallet built for the Shiba Inu ecosystem. Manage 
 
 ### For Android — Simply Install the APK
 
-Download `ShibWallet.apk` from the repository root and install on your device.
+Download `ShibWalletxTangem.apk` from the repository root and install on your device.
+
+This branch's APK is built with `applicationId = com.shibwallet.tangem` and label `ShibWallet × Tangem` so it installs **side-by-side** with any existing pre-Tangem `ShibWallet` app on your phone (no signature/conflict errors during the test phase). Before this branch merges into `main`, the applicationId is reverted to `com.shibwallet.app` so production users get a normal in-place update.
 
 ---
 
