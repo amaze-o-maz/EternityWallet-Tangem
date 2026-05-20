@@ -151,11 +151,16 @@ const Onboarding: React.FC = () => {
           )}
         </div>
 
-        {showTangemEntry && (
-          <p className="mt-4 text-center text-[10px] text-gray-600 leading-relaxed max-w-[240px]">
-            Hardware wallet support — your key never leaves the card.
-          </p>
-        )}
+        {/* Powered-by footer */}
+        <p
+          className="mt-8 text-center text-[10px] text-gray-600 font-medium"
+          style={{
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Powered by Shib.io
+        </p>
       </div>
 
       <TangemScanModal
