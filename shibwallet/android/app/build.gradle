@@ -5,7 +5,11 @@ android {
     namespace = "com.shibwallet.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.shibwallet.app"
+        // TODO(merge): Before merging this PR into main, revert applicationId to
+        // "com.shibwallet.app" so existing users get a seamless update instead of
+        // a side-by-side install. This temporary ID lets testers run the Tangem
+        // build alongside their current pre-Tangem ShibWallet install.
+        applicationId "com.shibwallet.tangem"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
